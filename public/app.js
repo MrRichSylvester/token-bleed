@@ -79,20 +79,20 @@ function _initTooltip() {
     const el = e.target.closest('[data-tip]');
     if (el) {
       _tt.textContent = el.dataset.tip;
-      _tt.style.display = 'block';
+      _tt.classList.add('visible');
     } else {
-      _tt.style.display = 'none';
+      _tt.classList.remove('visible');
     }
   });
   content.addEventListener('mousemove', e => {
-    if (_tt.style.display === 'block') {
+    if (_tt.classList.contains('visible')) {
       const x = Math.min(e.clientX + 14, window.innerWidth - 260);
       const y = Math.max(e.clientY - 44, 8);
       _tt.style.left = x + 'px';
       _tt.style.top = y + 'px';
     }
   });
-  content.addEventListener('mouseleave', () => { _tt.style.display = 'none'; });
+  content.addEventListener('mouseleave', () => { _tt.classList.remove('visible'); });
 }
 
 // ── API client ─────────────────────────────────────────────────
@@ -1272,7 +1272,7 @@ function renderCompCard(m, isWinner, isLoser, savingsPct, vsModel) {
             <div class="comp-stat-value">${fmtTokens(totalTokens)}</div>
           </div>
           <div class="comp-stat">
-            <div class="comp-stat-label">Input Tokens${m.isLocal ? ' <span class="local-token-note" title="Local models report the full context each turn, not just new tokens">*</span>' : ''}</div>
+            <div class="comp-stat-label">Input Tokens${m.isLocal ? ` <span class="local-token-note" data-tip="${LOCAL_TOKEN_TIP}">*</span>` : ''}</div>
             <div class="comp-stat-value">${fmtTokens(m.inputTokens)}</div>
           </div>
           <div class="comp-stat">
@@ -1317,6 +1317,8 @@ function renderCompCard(m, isWinner, isLoser, savingsPct, vsModel) {
     </div>
   `;
 }
+
+const LOCAL_TOKEN_TIP = 'Local models send the full conversation context each turn rather than tracking cache reads separately. This inflates input counts vs. Claude sessions.';
 
 // ── Session Comparison ─────────────────────────────────────────
 
@@ -1469,12 +1471,12 @@ function renderSessionComparisonTable() {
 
   function isLocal(s) { return s.cost === 0 && (s.usage.inputTokens + s.usage.outputTokens) > 0; }
 
-  const localTooltip = 'Local models send the full conversation context each turn rather than tracking cache reads separately. This inflates input counts vs. Claude sessions.';
+  const localTooltip = LOCAL_TOKEN_TIP;
 
   const allMetrics = [
     { key: 'cost',          label: 'Cost',           val: s => s.cost,                                                                                             fmt: s => { const local = isLocal(s); return local ? '<span class="amber">local</span>' : fmtCost(s.cost); }, lowerBetter: true,  skipLocal: true },
     { key: 'totalTokens',   label: 'Total Tokens',   val: s => s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens, fmt: s => fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens), lowerBetter: true  },
-    { key: 'inputTokens',   label: 'Input Tokens',   val: s => s.usage.inputTokens,           fmt: s => isLocal(s) ? `${fmtTokens(s.usage.inputTokens)} <span class="sc-metric-info" data-tooltip="${escHtml(localTooltip)}">?</span>` : fmtTokens(s.usage.inputTokens), lowerBetter: true  },
+    { key: 'inputTokens',   label: 'Input Tokens',   val: s => s.usage.inputTokens,           fmt: s => isLocal(s) ? `${fmtTokens(s.usage.inputTokens)} <span class="sc-metric-info" data-tip="${escHtml(localTooltip)}">?</span>` : fmtTokens(s.usage.inputTokens), lowerBetter: true  },
     { key: 'outputTokens',  label: 'Output Tokens',  val: s => s.usage.outputTokens,          fmt: s => fmtTokens(s.usage.outputTokens),          lowerBetter: true  },
     { key: 'cacheRead',     label: 'Cache Read',     val: s => s.usage.cacheReadTokens,       fmt: s => fmtTokens(s.usage.cacheReadTokens),       lowerBetter: false },
     { key: 'cacheWrite',    label: 'Cache Write',    val: s => s.usage.cacheCreationTokens,   fmt: s => fmtTokens(s.usage.cacheCreationTokens),   lowerBetter: true  },
