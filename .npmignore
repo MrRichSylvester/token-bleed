@@ -1,0 +1,11 @@
+.env
+*.env
+*.pid
+.git
+test/
+*.test.js
+.DS_Store
+node_modules
+src/
+tsconfig.json
+images/

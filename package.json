@@ -1,18 +1,49 @@
 {
-  "name": "burn-rate",
+  "name": "token-bleed",
   "version": "0.1.0",
-  "private": true,
+  "description": "See exactly what your Claude Code sessions cost. Per prompt. Per session. Per project.",
   "type": "module",
+  "bin": {
+    "token-bleed": "./bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "public/",
+    "dist/",
+    "README.md"
+  ],
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "build": "tsc",
-    "build:start": "node dist/server.js"
+    "build:start": "node dist/server.js",
+    "prepublishOnly": "npm run build"
+  },
+  "author": "Richard Sylvester <richard@airevenueclub.com>",
+  "license": "MIT",
+  "homepage": "https://tokenbleed.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mrrichsylvester/token-bleed"
+  },
+  "keywords": [
+    "claude-code",
+    "token",
+    "usage",
+    "cost",
+    "ai",
+    "dashboard",
+    "llm",
+    "anthropic"
+  ],
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
     "@fastify/static": "^7.0.4",
-    "fastify": "^4.28.1"
+    "fastify": "^4.28.1",
+    "open": "^9.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

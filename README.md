@@ -11,6 +11,34 @@
 
 ---
 
+## Installation
+
+### Quick start (recommended)
+```bash
+npx token-bleed
+```
+
+### Install permanently
+```bash
+npm install -g token-bleed
+token-bleed
+```
+
+### Run on login (Mac)
+```bash
+npm install -g token-bleed
+token-bleed install
+# Token Bleed now starts automatically.
+# Open http://localhost:3847 anytime.
+```
+
+### Fix log retention (do this once)
+```bash
+token-bleed fix-retention
+```
+
+---
+
 ## The problem
 
 Claude Code is productive. It's also expensive when you're not watching.
@@ -67,20 +95,7 @@ Surfaces patterns in your usage: sessions with no cache hits, high tool call cou
 
 Claude Code writes a `.jsonl` file for every session to `~/.claude/projects/`. Token Bleed reads those files on startup, parses token usage and model info from each assistant turn, and computes cost using Anthropic's published pricing.
 
-No network requests. No accounts. Runs at `localhost:3000`.
-
----
-
-## Quick start
-
-```bash
-git clone https://github.com/mrrichsylvester/token-bleed
-cd token-bleed
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
+No network requests. No accounts. Runs at `localhost:3847`.
 
 Data refreshes from disk every 5 minutes or on demand via the Refresh button.
 
@@ -138,11 +153,9 @@ All list endpoints accept a `?since=YYYY-MM-DD` query param to filter by date.
 
 ## Stack
 
-- **Runtime:** Node.js with [tsx](https://github.com/privatenumber/tsx)
+- **Runtime:** Node.js 18+
 - **Server:** [Fastify](https://fastify.dev/)
 - **Frontend:** Vanilla TypeScript, no framework
-
-No build step required for the frontend. Static files are served directly from `public/`.
 
 ---
 

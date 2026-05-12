@@ -515,6 +515,60 @@ html[data-size="large"]  { font-size: 17px; }
   color: var(--text-secondary);
 }
 
+.metric-help {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border-2);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: help;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: border-color 0.15s, color 0.15s;
+  z-index: 1;
+}
+
+.metric-help:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-secondary);
+}
+
+.metric-help::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 240px;
+  padding: 10px 12px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.55;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 100;
+  text-transform: none;
+  letter-spacing: 0;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+.metric-help:hover::after {
+  opacity: 1;
+}
+
 /* ── Cards ── */
 .card {
   background: var(--surface);

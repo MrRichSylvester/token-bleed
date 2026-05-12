@@ -573,16 +573,19 @@ async function renderOverview() {
 
       <div class="overview-top">
         <div class="metric-card accent-left">
+          <span class="metric-help" data-tooltip="Sum of all token costs in the selected period. Calculated from input, output, cache write, and cache read tokens using Anthropic&#39;s published per-million-token rates.">?</span>
           <div class="metric-label">Total Cost</div>
           <div class="metric-value mono">${fmtCost(stats.totalCost)}</div>
           <div class="metric-sub">${daily.length > 0 ? fmtCost(stats.totalCost / daily.length) + '/day avg' : '—'}</div>
         </div>
         <div class="metric-card accent-left">
+          <span class="metric-help" data-tooltip="Total cost divided by sessions that used a paid model. Sessions using local or custom models (which report $0) are excluded from the denominator.">?</span>
           <div class="metric-label">Avg Cost / Session</div>
           <div class="metric-value mono">${stats.totalSessions > 0 ? fmtCost(stats.totalCost / stats.totalSessions) : '—'}</div>
           <div class="metric-sub">per paid session</div>
         </div>
         <div class="metric-card">
+          <span class="metric-help" data-tooltip="Number of Claude Code sessions in the selected period. Each session is one conversation stored as a .jsonl file in ~/.claude/projects/.">?</span>
           <div class="metric-label">Sessions</div>
           <div class="metric-value mono">${stats.totalSessions.toLocaleString()}</div>
           <div class="metric-sub">${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</div>
@@ -591,16 +594,19 @@ async function renderOverview() {
           ${renderUsageGrid(dailyAll)}
         </div>
         <div class="metric-card">
+          <span class="metric-help" data-tooltip="Number of user messages sent across all sessions in the selected period. Each time you send a prompt in Claude Code counts as one.">?</span>
           <div class="metric-label">Total Prompts</div>
           <div class="metric-value mono">${stats.totalMessages.toLocaleString()}</div>
           <div class="metric-sub">${stats.totalSessions > 0 ? '~' + Math.round(stats.totalMessages / stats.totalSessions) + ' per session' : '—'}</div>
         </div>
         <div class="metric-card">
+          <span class="metric-help" data-tooltip="Raw token volume across all sessions: input + output + cache writes + cache reads. This is not your billed amount — billing applies different per-token rates to each category.">?</span>
           <div class="metric-label">Total Tokens</div>
           <div class="metric-value mono">${fmtTokens(stats.totalTokens)}</div>
           <div class="metric-sub">across all sessions</div>
         </div>
         <div class="metric-card">
+          <span class="metric-help" data-tooltip="Percentage of input tokens served from Claude&#39;s prompt cache instead of being re-processed. Calculated as cache_read ÷ (input + cache_write + cache_read). Higher means more savings.">?</span>
           <div class="metric-label">Cache Hit Rate</div>
           <div class="metric-value">${fmtPct(stats.cacheHitRate)}</div>
           <div class="metric-sub">${fmtTokens(stats.cacheReadTokens)} read tokens</div>
@@ -2880,9 +2886,10 @@ init();
   let eggCount = 0;
   let audioCtx = null;
 
-  function playBleedSplat(count) {
+  async function playBleedSplat(count) {
     try {
       if (!audioCtx) audioCtx = new (window.AudioContext || /** @type {any} */ (window).webkitAudioContext)();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
       const ctx = audioCtx;
       const now = ctx.currentTime;
       const intensity = Math.min(count, 6);
