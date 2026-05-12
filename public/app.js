@@ -377,8 +377,27 @@ function renderUsageGrid(dailyAll, meta) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  // Apply view window filter (local only, never touches Claude settings)
+  const savedView = localStorage.getItem('activity-view') || 'All';
+  const VIEW_OPTIONS = [
+    { label: 'All',  days: null },
+    { label: '6mo',  days: 180 },
+    { label: '3mo',  days: 90  },
+    { label: '30d',  days: 30  },
+    { label: '14d',  days: 14  },
+    { label: '7d',   days: 7   },
+  ];
+  const viewOpt = VIEW_OPTIONS.find(o => o.label === savedView) || VIEW_OPTIONS[0];
+  let daily = dailyAll;
+  if (viewOpt.days !== null) {
+    const cutoff = new Date(today);
+    cutoff.setDate(today.getDate() - viewOpt.days + 1);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    daily = dailyAll.filter(d => d.date >= cutoffStr);
+  }
+
   // Grid starts at the actual earliest log date from the server
-  const earliestStr = meta?.earliestDate || (dailyAll.length > 0 ? dailyAll[0].date : null);
+  const earliestStr = (daily.length > 0 ? daily[0].date : null) || meta?.earliestDate;
   if (!earliestStr) return '';
 
   const gridStart = new Date(earliestStr);
@@ -449,8 +468,9 @@ function renderUsageGrid(dailyAll, meta) {
     return `<span class="usage-month-label" style="left:${offset}px;width:${width}px">${m.label}</span>`;
   }).join('');
 
-  const sinceLabel = gridStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const cleanupDays = meta?.cleanupPeriodDays ?? 30;
+  const viewBtns = VIEW_OPTIONS.map(o =>
+    `<button class="activity-view-btn${o.label === savedView ? ' active' : ''}" data-view="${o.label}">${o.label}</button>`
+  ).join('');
 
   return `
     <div class="usage-grid-wrap" data-weeks="${WEEKS}">
@@ -458,21 +478,7 @@ function renderUsageGrid(dailyAll, meta) {
         <span class="usage-grid-title">Activity</span>
         <div class="usage-grid-top-right">
           <span class="usage-grid-meta">${activeDays} active day${activeDays !== 1 ? 's' : ''} · ${spanDays} day${spanDays !== 1 ? 's' : ''} of logs</span>
-          <button class="usage-config-btn" id="usage-config-toggle" title="Log retention settings">⚙</button>
-        </div>
-      </div>
-      <div class="usage-config-panel" id="usage-config-panel" style="display:none">
-        <div class="usage-retention-info">
-          Logs start <strong>${sinceLabel}</strong>. Claude Code deletes sessions older than <strong>${cleanupDays} days</strong>.
-        </div>
-        <div class="usage-retention-controls">
-          <span class="usage-config-label">Keep logs for</span>
-          <input class="usage-config-input" id="usage-retention-input" type="number" min="1" max="3650" value="${cleanupDays}">
-          <span class="usage-config-label">days</span>
-          <button class="usage-config-save" id="usage-retention-save">Save</button>
-        </div>
-        <div class="usage-retention-warning" id="usage-zero-warning" style="display:none">
-          ⚠ 0 disables transcript writing entirely. Setting to 1 instead.
+          <div class="activity-view-btns">${viewBtns}</div>
         </div>
       </div>
       <div class="usage-grid-layout">
@@ -498,48 +504,11 @@ function renderUsageGrid(dailyAll, meta) {
 }
 
 function bindUsageGridConfig() {
-  const toggle = document.getElementById('usage-config-toggle');
-  const panel = document.getElementById('usage-config-panel');
-  const input = document.getElementById('usage-retention-input');
-  const save = document.getElementById('usage-retention-save');
-  const warning = document.getElementById('usage-zero-warning');
-  if (!toggle || !panel) return;
-
-  toggle.addEventListener('click', () => {
-    panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
-    if (panel.style.display !== 'none') input.focus();
-  });
-
-  save.addEventListener('click', async () => {
-    let v = parseInt(input.value, 10);
-    if (!Number.isFinite(v) || v < 0) return;
-    if (v === 0) {
-      warning.style.display = 'block';
-      v = 1;
-      input.value = '1';
-      return;
-    }
-    warning.style.display = 'none';
-    save.disabled = true;
-    save.textContent = 'Saving…';
-    try {
-      const result = await api.saveSetting('cleanupPeriodDays', v);
-      if (result.corrected) {
-        warning.style.display = 'block';
-        input.value = '1';
-      }
-      panel.style.display = 'none';
+  document.querySelectorAll('.activity-view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      localStorage.setItem('activity-view', btn.dataset.view);
       renderOverview();
-    } finally {
-      save.disabled = false;
-      save.textContent = 'Save';
-    }
-  });
-
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') save.click(); });
-  input.addEventListener('input', () => {
-    if (parseInt(input.value, 10) === 0) warning.style.display = 'block';
-    else warning.style.display = 'none';
+    });
   });
 }
 
@@ -1561,10 +1530,10 @@ function renderPeriodSelector() {
   });
 }
 
-// ── Onboarding ─────────────────────────────────────────────────
+// ── Onboarding / Settings modal ────────────────────────────────
 
-function showOnboardingIfNeeded(meta) {
-  if (localStorage.getItem('br-onboarded')) return;
+function showSettingsModal(meta) {
+  if (document.getElementById('onboarding-overlay')) return;
   const cleanupDays = meta?.cleanupPeriodDays ?? 30;
 
   const overlay = document.createElement('div');
@@ -1572,9 +1541,9 @@ function showOnboardingIfNeeded(meta) {
   overlay.className = 'onboarding-overlay';
   overlay.innerHTML = `
     <div class="onboarding-card">
-      <div class="onboarding-title">One thing before you dig in</div>
+      <div class="onboarding-title">Log retention</div>
       <p class="onboarding-text">
-        Token Bleed tracks your Claude Code usage by reading local session logs.
+        Token Bleed reads local Claude Code session logs.
         Those logs are currently kept for <strong>${cleanupDays} days</strong> —
         after that Claude Code deletes them and they're gone from this dashboard too.
       </p>
@@ -1591,8 +1560,7 @@ function showOnboardingIfNeeded(meta) {
         ⚠ 0 disables transcript writing entirely. Setting to 1 instead.
       </div>
       <div class="onboarding-footer">
-        <span class="onboarding-hint">You can change this anytime with the <span class="onboarding-gear">⚙</span> in the Activity card.</span>
-        <button class="onboarding-dismiss" id="ob-dismiss">Got it</button>
+        <button class="onboarding-dismiss" id="ob-dismiss">Close</button>
       </div>
     </div>
   `;
@@ -1604,10 +1572,11 @@ function showOnboardingIfNeeded(meta) {
   const dismissBtn = overlay.querySelector('#ob-dismiss');
 
   function dismiss() {
-    localStorage.setItem('br-onboarded', '1');
     overlay.classList.add('onboarding-out');
     overlay.addEventListener('animationend', () => overlay.remove(), { once: true });
   }
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) dismiss(); });
 
   input.addEventListener('input', () => {
     warning.style.display = parseInt(input.value, 10) === 0 ? 'block' : 'none';
@@ -1632,6 +1601,12 @@ function showOnboardingIfNeeded(meta) {
 
   dismissBtn.addEventListener('click', dismiss);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') saveBtn.click(); });
+}
+
+function showOnboardingIfNeeded(meta) {
+  if (localStorage.getItem('br-onboarded')) return;
+  localStorage.setItem('br-onboarded', '1');
+  showSettingsModal(meta);
 }
 
 // ── Bootstrap ──────────────────────────────────────────────────
@@ -1663,6 +1638,12 @@ function init() {
       state.sessionsPage = 0;
       navigate(el.dataset.view);
     });
+  });
+
+  // Global settings button
+  document.getElementById('global-settings-btn').addEventListener('click', async () => {
+    const meta = await api.meta();
+    showSettingsModal(meta);
   });
 
   // Refresh button
