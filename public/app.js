@@ -187,6 +187,7 @@ const state = {
   compModel2: '',
   compSession1Id: '',
   compSession2Id: '',
+  compSelection: [], // [{id, label}] max 2
   data: {
     stats: null,
     daily: null,
@@ -530,8 +531,9 @@ async function toggleProject(projectId, cardEl) {
     if (sessions.length === 0) {
       panel.innerHTML = '<div class="empty-state" style="min-height:60px"><div class="empty-msg">No sessions found</div></div>';
     } else {
-      panel.innerHTML = renderSessionsTable(sessions, { compact: true });
+      panel.innerHTML = renderSessionsTable(sessions, { compact: true, selectable: true });
       bindSessionExpansion(panel);
+      bindSelectableRows(panel, sessions);
     }
   } catch (e) {
     panel.innerHTML = `<div class="empty-state"><div class="empty-msg">Error: ${escHtml(e.message)}</div></div>`;
@@ -627,12 +629,14 @@ async function renderSessions() {
       </div>
 
       <div class="table-wrap" id="sessions-table-wrap">
-        ${renderSessionsTable(sessions)}
+        ${renderSessionsTable(sessions, { selectable: true })}
         ${totalPages > 1 ? renderPagination(curPage, totalPages) : ''}
       </div>
     `;
 
-    bindSessionExpansion(document.getElementById('sessions-table-wrap'));
+    const tableWrap = document.getElementById('sessions-table-wrap');
+    bindSessionExpansion(tableWrap);
+    bindSelectableRows(tableWrap, sessions);
 
     document.getElementById('filter-project').addEventListener('change', e => {
       state.sessionsFilter.projectId = e.target.value;
@@ -662,15 +666,21 @@ function renderSessionsTable(sessions, opts = {}) {
     return `<div class="empty-state"><div class="empty-icon">◎</div><div class="empty-msg">No sessions found</div></div>`;
   }
 
-  const colCount = opts.compact ? 8 : 9;
+  const checkCol = opts.selectable ? 1 : 0;
+  const colCount = (opts.compact ? 8 : 9) + checkCol;
 
   const rows = sessions.map(s => {
     const local = s.cost === 0 && s.usage.inputTokens + s.usage.outputTokens > 0;
     const costCell = local
       ? `<span class="amber mono">${fmtTokens(s.usage.inputTokens + s.usage.outputTokens)}</span>`
       : `<span class="mono">${fmtCost(s.cost)}</span>`;
+    const isChecked = state.compSelection.some(x => x.id === s.id);
+    const checkCell = opts.selectable
+      ? `<td class="check-cell"><input type="checkbox" class="session-check" data-session-id="${escHtml(s.id)}" ${isChecked ? 'checked' : ''}></td>`
+      : '';
 
     return `<tr class="session-row" data-session-id="${escHtml(s.id)}" data-project-id="${escHtml(s.projectId)}">
+      ${checkCell}
       <td class="muted nowrap" style="font-size:12px">${fmtDateTime(s.startTime)}</td>
       ${opts.compact ? '' : `<td class="secondary" style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(s.projectName)}</td>`}
       <td class="prompt"><span title="${escHtml(s.firstPrompt)}">${escHtml(s.firstPrompt)}</span></td>
@@ -689,10 +699,12 @@ function renderSessionsTable(sessions, opts = {}) {
   }).join('');
 
   const projectCol = opts.compact ? '' : '<th>Project</th>';
+  const checkHead = opts.selectable ? '<th class="check-cell"></th>' : '';
 
   return `<table>
     <thead>
       <tr>
+        ${checkHead}
         <th>Started</th>
         ${projectCol}
         <th>Prompt</th>
@@ -710,8 +722,102 @@ function renderSessionsTable(sessions, opts = {}) {
 
 function bindSessionExpansion(container) {
   container.querySelectorAll('.session-row').forEach(row => {
-    row.addEventListener('click', () => toggleSession(row, container));
+    row.addEventListener('click', e => {
+      if (e.target.closest('.check-cell')) return;
+      toggleSession(row, container);
+    });
   });
+}
+
+function bindSelectableRows(container, sessions) {
+  container.querySelectorAll('.session-check').forEach(cb => {
+    cb.addEventListener('click', e => e.stopPropagation());
+    cb.addEventListener('change', () => {
+      const id = cb.dataset.sessionId;
+      const s = sessions.find(x => x.id === id);
+      if (!s) return;
+      const label = `${s.projectName} · ${fmtDate(s.startTime)}`;
+      const idx = state.compSelection.findIndex(x => x.id === id);
+      if (cb.checked) {
+        if (state.compSelection.length >= 2) state.compSelection.shift();
+        state.compSelection.push({ id, label });
+      } else {
+        if (idx !== -1) state.compSelection.splice(idx, 1);
+      }
+      syncAllCheckboxes();
+      renderCompareBar();
+    });
+  });
+}
+
+function syncAllCheckboxes() {
+  document.querySelectorAll('.session-check').forEach(cb => {
+    cb.checked = state.compSelection.some(x => x.id === cb.dataset.sessionId);
+  });
+}
+
+function renderCompareBar() {
+  let bar = document.getElementById('compare-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'compare-bar';
+    document.body.appendChild(bar);
+  }
+
+  if (state.compSelection.length === 0) {
+    bar.className = 'compare-bar compare-bar--hidden';
+    bar.innerHTML = '';
+    return;
+  }
+
+  const [a, b] = state.compSelection;
+  const canCompare = state.compSelection.length === 2;
+
+  bar.className = 'compare-bar';
+  bar.innerHTML = `
+    <div class="compare-bar-inner">
+      <div class="compare-bar-slots">
+        ${slotHtml(a, 'A', 0)}
+        <span class="compare-bar-vs">vs</span>
+        ${b ? slotHtml(b, 'B', 1) : '<div class="compare-slot compare-slot--empty"><span class="compare-slot-placeholder">Pick a second session</span></div>'}
+      </div>
+      ${canCompare ? '<button class="compare-go-btn" id="compare-go-btn">Compare →</button>' : ''}
+      <button class="compare-bar-dismiss" id="compare-bar-dismiss" title="Clear selection">✕</button>
+    </div>
+  `;
+
+  bar.querySelectorAll('[data-clear]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      state.compSelection.splice(parseInt(btn.dataset.clear), 1);
+      syncAllCheckboxes();
+      renderCompareBar();
+    });
+  });
+
+  const goBtn = bar.querySelector('#compare-go-btn');
+  if (goBtn) {
+    goBtn.addEventListener('click', () => {
+      state.compSession1Id = state.compSelection[0].id;
+      state.compSession2Id = state.compSelection[1].id;
+      state.data.allSessions = null;
+      navigate('session-compare');
+    });
+  }
+
+  bar.querySelector('#compare-bar-dismiss').addEventListener('click', () => {
+    state.compSelection = [];
+    syncAllCheckboxes();
+    renderCompareBar();
+  });
+}
+
+function slotHtml(entry, letter, idx) {
+  return `<div class="compare-slot compare-slot--filled">
+    <span class="compare-slot-letter">${letter}</span>
+    <span class="compare-slot-name">${escHtml(entry.label)}</span>
+    <button class="compare-slot-clear" data-clear="${idx}" title="Remove">×</button>
+  </div>`;
 }
 
 async function toggleSession(row, container) {
@@ -1092,6 +1198,7 @@ function renderSessionCompCard(s, isWinner, isLoser, isLocal, pctDiff) {
         <div>
           <div class="comp-session-date">${fmtDateTime(s.startTime)}</div>
           <div class="comp-model-name">${escHtml(s.projectName)}</div>
+          <div style="margin-top:6px">${modelBadgeHtml(s.primaryModel, isLocal)}</div>
         </div>
         ${badge}
       </div>
@@ -1133,10 +1240,6 @@ function renderSessionCompCard(s, isWinner, isLoser, isLocal, pctDiff) {
           <div class="comp-eff-item">
             <div class="comp-eff-label">Tool Calls</div>
             <div class="comp-eff-value">${s.toolCallCount}</div>
-          </div>
-          <div class="comp-eff-item">
-            <div class="comp-eff-label">Model</div>
-            <div class="comp-eff-value" style="font-size:11px">${escHtml(shortModelName(s.primaryModel))}</div>
           </div>
           <div class="comp-eff-item">
             <div class="comp-eff-label">Cache Write</div>
@@ -1267,6 +1370,8 @@ function renderPeriodSelector() {
       state.period = 'all';
       state.sessionsPage = 0;
       state.data.allSessions = null;
+      state.compSelection = [];
+      renderCompareBar();
       renderPeriodSelector();
       renderView();
     });
@@ -1278,6 +1383,8 @@ function renderPeriodSelector() {
       state.period = btn.dataset.period;
       state.sessionsPage = 0;
       state.data.allSessions = null;
+      state.compSelection = [];
+      renderCompareBar();
       renderPeriodSelector();
       renderView();
     });
@@ -1303,6 +1410,7 @@ function init() {
 
   // Period selector — rendered dynamically
   renderPeriodSelector();
+  renderCompareBar();
 
   // Nav clicks
   document.querySelectorAll('.nav-item[data-view]').forEach(el => {
