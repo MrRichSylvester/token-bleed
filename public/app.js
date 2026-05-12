@@ -1148,7 +1148,7 @@ function renderPagination(cur, total) {
   return html;
 }
 
-// ── Model Comparison ───────────────────────────────────────────
+// ── Model Compare ───────────────────────────────────────────
 
 async function renderComparison() {
   setLoading();
@@ -1158,7 +1158,7 @@ async function renderComparison() {
 
     if (models.length === 0) {
       document.getElementById('content').innerHTML = `
-        <h1 class="page-title">Model Comparison</h1>
+        <h1 class="page-title">Model Compare</h1>
         <div class="empty-state"><div class="empty-icon">⟷</div><div class="empty-msg">No model data found</div></div>
       `;
       return;
@@ -1169,7 +1169,7 @@ async function renderComparison() {
 
     const content = document.getElementById('content');
     content.innerHTML = `
-      <h1 class="page-title">Model Comparison</h1>
+      <h1 class="page-title">Model Compare</h1>
       <p class="page-subtitle">${periodLabel()} · side-by-side stats per model</p>
 
       <div class="comparison-selectors">

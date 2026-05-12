@@ -53,7 +53,7 @@ Pick any two sessions and diff them side by side. Token counts, cost, cache beha
 
 ### Model Compare
 
-Compare two models across the same workload. Input tokens, output tokens, cache hit rate, total cost. Helps you make the Opus vs Sonnet decision with data instead of instinct.
+Compare two models across the same workload. Input tokens, output tokens, cache hit rate, total cost. Makes the Opus vs Sonnet decision data instead of instinct.
 
 ### Cache hit rate tracking
 
