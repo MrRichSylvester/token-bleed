@@ -125,6 +125,16 @@ const api = {
   appSettings: () => api.fetch('/api/app-settings'),
   saveAppSettings: (patch) => api.fetch('/api/app-settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }),
   tips: () => api.fetch('/api/tips'),
+  providers: () => api.fetch('/api/providers'),
+  providerCheck: (check) => api.fetch('/api/providers/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ check }) }),
+  providerSaveKey: (provider, key) => api.fetch('/api/providers/save-key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, key }) }),
+  providerStartProxy: (provider) => api.fetch('/api/providers/start-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider }) }),
+  providerProxyHealth: (port) => api.fetch(`/api/providers/proxy-health?port=${port}`),
+  providerMarkConfigured: (provider, model) => api.fetch('/api/providers/mark-configured', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, model }) }),
+  providerStopProxy: (provider) => api.fetch('/api/providers/stop-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider }) }),
+  providerRestartProxy: (provider) => api.fetch('/api/providers/restart-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider }) }),
+  ollamaModels: () => api.fetch('/api/providers/ollama-models'),
+  openFile: () => api.fetch('/api/open-file'),
 };
 
 // ── Period helpers ─────────────────────────────────────────────
@@ -1693,7 +1703,7 @@ const PLAN_OPTIONS = [
 async function renderSettings() {
   setLoading();
   try {
-    const [appSettings, meta] = await Promise.all([api.appSettings(), api.meta()]);
+    const [appSettings, meta, providerData] = await Promise.all([api.appSettings(), api.meta(), api.providers()]);
     state.appSettings = appSettings;
 
     const { plan, customPricing, builtinPricing, detectedModels } = appSettings;
@@ -1806,6 +1816,8 @@ async function renderSettings() {
           ⚠ Setting to 0 disables transcript writing entirely. Using 1 instead.
         </div>
       </div>
+
+      ${renderProvidersSectionHtml(providerData)}
     `;
 
     // Plan selector
@@ -1948,9 +1960,543 @@ async function renderSettings() {
       }
     });
 
+    // Provider setup buttons
+    for (const provider of ['openai', 'gemini', 'ollama']) {
+      document.getElementById(`setup-btn-${provider}`)?.addEventListener('click', () => openProviderFlow(provider));
+      document.getElementById(`restart-btn-${provider}`)?.addEventListener('click', () => restartProviderProxy(provider));
+    }
+
   } catch (e) {
     showError(e);
   }
+}
+
+// ── Provider indicator ─────────────────────────────────────────
+
+async function updateProviderIndicator() {
+  try {
+    const data = await api.providers();
+    const el = document.querySelector('#header .header-left');
+    if (el) {
+      el.innerHTML = `<span class="active-provider-chip">via <strong>${escHtml(data.activeProvider)}</strong></span>`;
+    }
+  } catch { /* non-critical */ }
+}
+
+// ── Provider settings section HTML ─────────────────────────────
+
+function renderProvidersSectionHtml(providerData) {
+  const { providers: provs } = providerData;
+
+  function providerRow(id, name, model, status) {
+    const dotClass = status === 'connected' ? 'connected' : status === 'stopped' ? 'stopped' : 'not-configured';
+    const statusText = status === 'connected' ? 'connected' : status === 'stopped' ? 'stopped' : 'not configured';
+    const showSetup = id !== 'claude';
+    const showRestart = (id === 'openai' || id === 'gemini') && status === 'stopped';
+    return `
+      <div class="provider-row">
+        <span class="provider-dot ${dotClass}" id="provider-dot-${id}"></span>
+        <span class="provider-name">${escHtml(name)}</span>
+        ${model ? `<span class="provider-model-note">${escHtml(model)}</span>` : '<span class="provider-model-note"></span>'}
+        <span class="provider-status-text" id="provider-status-${id}">${statusText}</span>
+        ${showRestart ? `<button class="provider-setup-btn" id="restart-btn-${id}">Restart</button>` : ''}
+        ${showSetup ? `<button class="provider-setup-btn" id="setup-btn-${id}">${status === 'connected' ? 'Manage' : 'Setup →'}</button>` : ''}
+      </div>`;
+  }
+
+  return `
+    <div class="settings-section">
+      <div class="settings-section-title">Model Providers</div>
+      <div class="settings-section-desc">
+        Connect alternative providers through LiteLLM to use with Claude Code.
+        The active provider shown in the header is read from <code>~/.claude/settings.json</code>.
+      </div>
+
+      ${providerRow('claude', 'Claude (native)', null, 'connected')}
+
+      ${providerRow('openai', 'OpenAI', 'GPT-4o', provs.openai.status)}
+      <div class="provider-flow" id="provider-flow-openai">
+        <div class="provider-flow-inner" id="provider-flow-openai-inner"></div>
+      </div>
+
+      ${providerRow('gemini', 'Google', 'Gemini Flash', provs.gemini.status)}
+      <div class="provider-flow" id="provider-flow-gemini">
+        <div class="provider-flow-inner" id="provider-flow-gemini-inner"></div>
+      </div>
+
+      ${providerRow('ollama', 'Ollama', 'local models', provs.ollama.status)}
+      <div class="provider-flow" id="provider-flow-ollama">
+        <div class="provider-flow-inner" id="provider-flow-ollama-inner"></div>
+      </div>
+
+      <p class="step-note" style="margin-top:14px">Windows support: coming soon.</p>
+    </div>`;
+}
+
+// ── Provider flow helpers ───────────────────────────────────────
+
+function updateProviderRowStatus(provider, status) {
+  const dot = document.getElementById(`provider-dot-${provider}`);
+  const txt = document.getElementById(`provider-status-${provider}`);
+  if (dot) {
+    dot.className = `provider-dot ${status === 'connected' ? 'connected' : status === 'stopped' ? 'stopped' : 'not-configured'}`;
+  }
+  if (txt) {
+    txt.textContent = status === 'connected' ? 'connected' : status === 'stopped' ? 'stopped' : 'not configured';
+  }
+}
+
+function openProviderFlow(provider) {
+  // Collapse any other open flow first
+  document.querySelectorAll('.provider-flow.open').forEach(el => {
+    if (el.id !== `provider-flow-${provider}`) {
+      el.classList.remove('open');
+      const otherId = el.id.replace('provider-flow-', '');
+      const btn = document.getElementById(`setup-btn-${otherId}`);
+      if (btn && btn.textContent === 'Close ✕') btn.textContent = 'Setup →';
+    }
+  });
+
+  const flow = document.getElementById(`provider-flow-${provider}`);
+  if (!flow) return;
+
+  const isOpen = flow.classList.contains('open');
+  flow.classList.toggle('open');
+  const btn = document.getElementById(`setup-btn-${provider}`);
+  if (btn) btn.textContent = isOpen ? 'Setup →' : 'Close ✕';
+
+  if (!isOpen && !flow.dataset.initialized) {
+    flow.dataset.initialized = '1';
+    if (provider === 'openai') initKeyedProviderFlow({ provider: 'openai', keyLabel: 'OpenAI API Key', keyPlaceholder: 'sk-...', keyValidate: k => k.startsWith('sk-') && k.length >= 40, proxyPort: 4001, proxyKey: 'token-bleed-proxy' });
+    else if (provider === 'gemini') initKeyedProviderFlow({ provider: 'gemini', keyLabel: 'Google API Key', keyPlaceholder: 'AIza...', keyValidate: k => k.startsWith('AIza') && k.length >= 35, proxyPort: 4002, proxyKey: 'token-bleed-proxy' });
+    else if (provider === 'ollama') initOllamaFlow();
+  }
+}
+
+async function restartProviderProxy(provider) {
+  const btn = document.getElementById(`restart-btn-${provider}`);
+  if (btn) { btn.textContent = 'Restarting…'; btn.disabled = true; }
+  try {
+    await api.providerRestartProxy(provider);
+    const port = provider === 'openai' ? 4001 : 4002;
+    let attempts = 0;
+    const poll = async () => {
+      attempts++;
+      try {
+        const h = await api.providerProxyHealth(port);
+        if (h.ok) { updateProviderRowStatus(provider, 'connected'); if (btn) { btn.textContent = 'Manage'; btn.disabled = false; } return; }
+      } catch { /* still starting */ }
+      if (attempts >= 15) { if (btn) { btn.textContent = 'Restart'; btn.disabled = false; } return; }
+      setTimeout(poll, 1000);
+    };
+    setTimeout(poll, 1000);
+  } catch {
+    if (btn) { btn.textContent = 'Restart'; btn.disabled = false; }
+  }
+}
+
+// ── Keyed provider flow (OpenAI / Gemini) ──────────────────────
+
+function initKeyedProviderFlow({ provider, keyLabel, keyPlaceholder, keyValidate, proxyPort, proxyKey }) {
+  const inner = document.getElementById(`provider-flow-${provider}-inner`);
+  if (!inner) return;
+
+  inner.innerHTML = `
+    <div class="provider-step" id="${provider}-step-1">
+      <div class="step-circle active" id="${provider}-s1-circle">1</div>
+      <div class="step-body">
+        <div class="step-label">Check Python</div>
+        <div id="${provider}-s1-result" class="step-result">Checking…</div>
+        <div id="${provider}-s1-actions"></div>
+      </div>
+    </div>
+    <div class="provider-step faded" id="${provider}-step-2">
+      <div class="step-circle pending" id="${provider}-s2-circle">2</div>
+      <div class="step-body">
+        <div class="step-label">Check LiteLLM</div>
+        <div id="${provider}-s2-result" class="step-result"></div>
+        <div id="${provider}-s2-actions"></div>
+      </div>
+    </div>
+    <div class="provider-step faded" id="${provider}-step-3">
+      <div class="step-circle pending" id="${provider}-s3-circle">3</div>
+      <div class="step-body">
+        <div class="step-label">${escHtml(keyLabel)}</div>
+        <div id="${provider}-s3-result" class="step-result"></div>
+        <div id="${provider}-s3-actions"></div>
+      </div>
+    </div>
+    <div class="provider-step faded" id="${provider}-step-4">
+      <div class="step-circle pending" id="${provider}-s4-circle">4</div>
+      <div class="step-body">
+        <div class="step-label">Start LiteLLM Proxy</div>
+        <div id="${provider}-s4-result" class="step-result"></div>
+        <div id="${provider}-s4-actions"></div>
+      </div>
+    </div>
+    <div class="provider-step faded" id="${provider}-step-5">
+      <div class="step-circle pending" id="${provider}-s5-circle">5</div>
+      <div class="step-body">
+        <div class="step-label">Claude Code Configuration</div>
+        <div id="${provider}-s5-result" class="step-result"></div>
+        <div id="${provider}-s5-actions"></div>
+      </div>
+    </div>`;
+
+  function markDone(step) {
+    const c = document.getElementById(`${provider}-s${step}-circle`);
+    if (c) { c.className = 'step-circle done'; c.textContent = '✓'; }
+    document.getElementById(`${provider}-step-${step}`)?.classList.remove('faded');
+  }
+  function markActive(step) {
+    const c = document.getElementById(`${provider}-s${step}-circle`);
+    if (c) { c.className = 'step-circle active'; c.textContent = String(step); }
+    document.getElementById(`${provider}-step-${step}`)?.classList.remove('faded');
+  }
+  function setResult(step, msg, type = '') {
+    const el = document.getElementById(`${provider}-s${step}-result`);
+    if (el) { el.textContent = msg; el.className = `step-result ${type}`.trim(); }
+  }
+  function setActions(step, html) {
+    const el = document.getElementById(`${provider}-s${step}-actions`);
+    if (el) el.innerHTML = html;
+  }
+
+  // Step 1 — Python
+  async function checkPython() {
+    setActions(1, '');
+    setResult(1, 'Checking…');
+    try {
+      const r = await api.providerCheck('python');
+      if (r.found) {
+        markDone(1); setResult(1, `Python ${r.version}`, 'ok'); checkLiteLLM();
+      } else {
+        setResult(1, 'Python 3 is required. Install it from python.org then click Retry.', 'err');
+        setActions(1, `<button class="btn-secondary" id="${provider}-s1-retry">Retry</button>`);
+        document.getElementById(`${provider}-s1-retry`)?.addEventListener('click', checkPython);
+      }
+    } catch {
+      setResult(1, 'Check failed', 'err');
+      setActions(1, `<button class="btn-secondary" id="${provider}-s1-retry">Retry</button>`);
+      document.getElementById(`${provider}-s1-retry`)?.addEventListener('click', checkPython);
+    }
+  }
+
+  // Step 2 — LiteLLM
+  async function checkLiteLLM() {
+    markActive(2); setResult(2, 'Checking…');
+    try {
+      const r = await api.providerCheck('litellm');
+      if (r.found) {
+        markDone(2); setResult(2, `LiteLLM ${r.version}`, 'ok'); showKeyStep();
+      } else {
+        setResult(2, 'LiteLLM is not installed.');
+        setActions(2, `<button class="btn-secondary" id="${provider}-s2-install">Install LiteLLM</button>`);
+        document.getElementById(`${provider}-s2-install`)?.addEventListener('click', installLiteLLM);
+      }
+    } catch {
+      setResult(2, 'Check failed', 'err');
+      setActions(2, `<button class="btn-secondary" id="${provider}-s2-retry">Retry</button>`);
+      document.getElementById(`${provider}-s2-retry`)?.addEventListener('click', checkLiteLLM);
+    }
+  }
+
+  function installLiteLLM() {
+    setActions(2, `<div class="terminal-log" id="${provider}-install-log"></div>`);
+    const logEl = document.getElementById(`${provider}-install-log`);
+    const source = new EventSource('/api/providers/install-litellm');
+    source.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.line && logEl) { logEl.textContent += data.line; logEl.scrollTop = logEl.scrollHeight; }
+      if (data.done) {
+        source.close();
+        if (data.success) {
+          markDone(2); setResult(2, 'LiteLLM installed', 'ok'); setActions(2, ''); showKeyStep();
+        } else {
+          setResult(2, 'Installation failed. See output above.', 'err');
+          setActions(2, `<div class="terminal-log">${escHtml(logEl ? logEl.textContent : '')}</div><button class="btn-secondary" id="${provider}-s2-retry">Retry</button>`);
+          document.getElementById(`${provider}-s2-retry`)?.addEventListener('click', checkLiteLLM);
+        }
+      }
+    };
+    source.onerror = () => {
+      source.close();
+      setResult(2, 'Install stream error', 'err');
+      setActions(2, `<button class="btn-secondary" id="${provider}-s2-retry">Retry</button>`);
+      document.getElementById(`${provider}-s2-retry`)?.addEventListener('click', checkLiteLLM);
+    };
+  }
+
+  // Step 3 — API key
+  function showKeyStep() {
+    markActive(3);
+    setActions(3, `
+      <div class="step-key-input-wrap">
+        <input class="step-key-input" type="password" id="${provider}-key-input" placeholder="${escHtml(keyPlaceholder)}" autocomplete="off">
+        <button class="step-toggle-btn" id="${provider}-key-toggle">Show</button>
+      </div>
+      <div class="step-btn-row">
+        <button class="btn-primary" id="${provider}-key-save">Save &amp; Continue</button>
+        <span id="${provider}-key-status" class="step-result"></span>
+      </div>`);
+    document.getElementById(`${provider}-key-toggle`)?.addEventListener('click', () => {
+      const inp = document.getElementById(`${provider}-key-input`);
+      const btn = document.getElementById(`${provider}-key-toggle`);
+      if (!inp) return;
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+      if (btn) btn.textContent = inp.type === 'password' ? 'Show' : 'Hide';
+    });
+    document.getElementById(`${provider}-key-save`)?.addEventListener('click', async () => {
+      const inp = document.getElementById(`${provider}-key-input`);
+      const statusEl = document.getElementById(`${provider}-key-status`);
+      const key = inp?.value?.trim() ?? '';
+      if (!keyValidate(key)) {
+        if (statusEl) { statusEl.textContent = 'Invalid key format'; statusEl.className = 'step-result err'; }
+        return;
+      }
+      if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.className = 'step-result'; }
+      try {
+        await api.providerSaveKey(provider, key);
+        markDone(3); setResult(3, 'Key saved', 'ok'); setActions(3, ''); showProxyStep();
+      } catch {
+        if (statusEl) { statusEl.textContent = 'Failed to save'; statusEl.className = 'step-result err'; }
+      }
+    });
+  }
+
+  // Step 4 — Start proxy
+  function showProxyStep() {
+    markActive(4);
+    setActions(4, `<button class="btn-primary" id="${provider}-start-proxy">Start Proxy</button>`);
+    document.getElementById(`${provider}-start-proxy`)?.addEventListener('click', startProxy);
+  }
+
+  async function startProxy() {
+    setActions(4, `<div class="proxy-progress"><div class="spinner" style="width:14px;height:14px;border-width:2px"></div> Starting proxy…</div>`);
+    try {
+      await api.providerStartProxy(provider);
+    } catch {
+      setResult(4, 'Failed to start proxy', 'err');
+      setActions(4, `<button class="btn-secondary" id="${provider}-retry-proxy">Retry</button>`);
+      document.getElementById(`${provider}-retry-proxy`)?.addEventListener('click', startProxy);
+      return;
+    }
+    let attempts = 0;
+    const poll = async () => {
+      attempts++;
+      try {
+        const h = await api.providerProxyHealth(proxyPort);
+        if (h.ok) {
+          markDone(4); setResult(4, `Proxy running on port ${proxyPort}`, 'ok'); setActions(4, ''); showConfigStep(); return;
+        }
+      } catch { /* still starting */ }
+      if (attempts >= 15) {
+        setResult(4, 'Proxy did not respond in time.', 'err');
+        setActions(4, `<button class="btn-secondary" id="${provider}-retry-proxy">Retry</button>`);
+        document.getElementById(`${provider}-retry-proxy`)?.addEventListener('click', startProxy);
+        return;
+      }
+      setTimeout(poll, 1000);
+    };
+    setTimeout(poll, 1000);
+  }
+
+  // Step 5 — Config block
+  function showConfigStep() {
+    markActive(5);
+    const configJson = JSON.stringify({ env: { ANTHROPIC_BASE_URL: `http://localhost:${proxyPort}`, ANTHROPIC_API_KEY: proxyKey } }, null, 2);
+    setActions(5, `
+      <pre class="step-config-block">${escHtml(configJson)}</pre>
+      <div class="step-btn-row">
+        <button class="btn-secondary" id="${provider}-copy-config">Copy to clipboard</button>
+        <button class="btn-secondary" id="${provider}-open-settings">Open settings.json</button>
+      </div>
+      <p class="step-note">Remove these env vars when you want to switch back to Claude.</p>
+      <button class="btn-primary" id="${provider}-mark-done" style="margin-top:12px">Mark as configured</button>`);
+    document.getElementById(`${provider}-copy-config`)?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(configJson);
+        const b = document.getElementById(`${provider}-copy-config`);
+        if (b) { b.textContent = 'Copied!'; setTimeout(() => { b.textContent = 'Copy to clipboard'; }, 2000); }
+      } catch { /* denied */ }
+    });
+    document.getElementById(`${provider}-open-settings`)?.addEventListener('click', () => api.openFile().catch(() => {}));
+    document.getElementById(`${provider}-mark-done`)?.addEventListener('click', async () => {
+      try {
+        await api.providerMarkConfigured(provider);
+        markDone(5); setResult(5, 'Provider configured', 'ok'); setActions(5, '');
+        updateProviderRowStatus(provider, 'connected');
+        setTimeout(() => {
+          const flow = document.getElementById(`provider-flow-${provider}`);
+          if (flow) flow.classList.remove('open');
+          const btn = document.getElementById(`setup-btn-${provider}`);
+          if (btn) btn.textContent = 'Manage';
+        }, 1500);
+      } catch {
+        setResult(5, 'Failed to save', 'err');
+      }
+    });
+  }
+
+  checkPython();
+}
+
+// ── Ollama flow ─────────────────────────────────────────────────
+
+function initOllamaFlow() {
+  const inner = document.getElementById('provider-flow-ollama-inner');
+  if (!inner) return;
+
+  inner.innerHTML = `
+    <div class="provider-step" id="ollama-step-1">
+      <div class="step-circle active" id="ollama-s1-circle">1</div>
+      <div class="step-body">
+        <div class="step-label">Check Ollama</div>
+        <div id="ollama-s1-result" class="step-result">Checking…</div>
+        <div id="ollama-s1-actions"></div>
+      </div>
+    </div>
+    <div class="provider-step faded" id="ollama-step-2">
+      <div class="step-circle pending" id="ollama-s2-circle">2</div>
+      <div class="step-body">
+        <div class="step-label">Available Models</div>
+        <div id="ollama-s2-result" class="step-result"></div>
+        <div id="ollama-s2-actions"></div>
+      </div>
+    </div>
+    <div class="provider-step faded" id="ollama-step-3">
+      <div class="step-circle pending" id="ollama-s3-circle">3</div>
+      <div class="step-body">
+        <div class="step-label">Connect</div>
+        <div id="ollama-s3-result" class="step-result"></div>
+        <div id="ollama-s3-actions"></div>
+      </div>
+    </div>`;
+
+  let selectedModel = null;
+
+  function markDone(step) {
+    const c = document.getElementById(`ollama-s${step}-circle`);
+    if (c) { c.className = 'step-circle done'; c.textContent = '✓'; }
+    document.getElementById(`ollama-step-${step}`)?.classList.remove('faded');
+  }
+  function markActive(step) {
+    const c = document.getElementById(`ollama-s${step}-circle`);
+    if (c) { c.className = 'step-circle active'; c.textContent = String(step); }
+    document.getElementById(`ollama-step-${step}`)?.classList.remove('faded');
+  }
+  function setResult(step, msg, type = '') {
+    const el = document.getElementById(`ollama-s${step}-result`);
+    if (el) { el.textContent = msg; el.className = `step-result ${type}`.trim(); }
+  }
+  function setActions(step, html) {
+    const el = document.getElementById(`ollama-s${step}-actions`);
+    if (el) el.innerHTML = html;
+  }
+
+  async function checkOllama() {
+    setResult(1, 'Checking…');
+    try {
+      const r = await api.providerCheck('ollama');
+      if (r.found) {
+        markDone(1); setResult(1, `Ollama ${r.version}`, 'ok'); checkModels();
+      } else {
+        setResult(1, 'Install Ollama from ollama.com', 'err');
+        setActions(1, `<div class="step-btn-row">
+          <button class="btn-secondary" id="ollama-open-site">Open ollama.com</button>
+          <button class="btn-secondary" id="ollama-s1-retry">Retry</button>
+        </div>`);
+        document.getElementById('ollama-open-site')?.addEventListener('click', () => window.open('https://ollama.com', '_blank', 'noopener'));
+        document.getElementById('ollama-s1-retry')?.addEventListener('click', checkOllama);
+      }
+    } catch {
+      setResult(1, 'Check failed', 'err');
+      setActions(1, `<button class="btn-secondary" id="ollama-s1-retry">Retry</button>`);
+      document.getElementById('ollama-s1-retry')?.addEventListener('click', checkOllama);
+    }
+  }
+
+  async function checkModels() {
+    markActive(2); setResult(2, 'Loading models…');
+    try {
+      const r = await api.ollamaModels();
+      if (r.models && r.models.length > 0) {
+        const listHtml = r.models.map((m, i) => `
+          <label class="ollama-model-item">
+            <input type="radio" name="ollama-model" value="${escHtml(m.name)}" ${i === 0 ? 'checked' : ''}>
+            <span class="ollama-model-label">${escHtml(m.name)}</span>
+          </label>`).join('');
+        setResult(2, '');
+        setActions(2, `<div class="ollama-model-list">${listHtml}</div>
+          <div class="step-btn-row"><button class="btn-secondary" id="ollama-refresh-models">↺ Refresh</button></div>`);
+        selectedModel = r.models[0].name;
+        inner.querySelectorAll('input[name="ollama-model"]').forEach(inp => {
+          inp.addEventListener('change', (e) => { selectedModel = e.target.value; });
+        });
+        document.getElementById('ollama-refresh-models')?.addEventListener('click', checkModels);
+        markDone(2); showConnectStep();
+      } else {
+        setResult(2, 'No models installed.');
+        setActions(2, `<pre class="step-config-block">ollama pull qwen3</pre>
+          <button class="btn-secondary" id="ollama-refresh-models">↺ Retry</button>`);
+        document.getElementById('ollama-refresh-models')?.addEventListener('click', checkModels);
+      }
+    } catch {
+      setResult(2, 'Failed to list models', 'err');
+      setActions(2, `<button class="btn-secondary" id="ollama-refresh-models">Retry</button>`);
+      document.getElementById('ollama-refresh-models')?.addEventListener('click', checkModels);
+    }
+  }
+
+  function showConnectStep() {
+    markActive(3);
+    setActions(3, `<button class="btn-primary" id="ollama-connect">Use Selected Model</button>`);
+    document.getElementById('ollama-connect')?.addEventListener('click', connectOllama);
+  }
+
+  async function connectOllama() {
+    setActions(3, `<div class="proxy-progress"><div class="spinner" style="width:14px;height:14px;border-width:2px"></div> Checking Ollama…</div>`);
+    try {
+      const h = await api.providerProxyHealth(11434);
+      if (h.ok) {
+        await api.providerMarkConfigured('ollama', selectedModel);
+        const configJson = JSON.stringify({ env: { ANTHROPIC_BASE_URL: 'http://localhost:11434', ANTHROPIC_API_KEY: 'token-bleed-ollama' } }, null, 2);
+        markDone(3); setResult(3, `Connected — ${selectedModel || 'selected model'}`, 'ok');
+        setActions(3, `
+          <pre class="step-config-block">${escHtml(configJson)}</pre>
+          <div class="step-btn-row">
+            <button class="btn-secondary" id="ollama-copy-config">Copy to clipboard</button>
+            <button class="btn-secondary" id="ollama-open-settings">Open settings.json</button>
+          </div>
+          <p class="step-note">Remove these env vars when you want to switch back to Claude.</p>`);
+        document.getElementById('ollama-copy-config')?.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(configJson);
+            const b = document.getElementById('ollama-copy-config');
+            if (b) { b.textContent = 'Copied!'; setTimeout(() => { b.textContent = 'Copy to clipboard'; }, 2000); }
+          } catch { /* denied */ }
+        });
+        document.getElementById('ollama-open-settings')?.addEventListener('click', () => api.openFile().catch(() => {}));
+        updateProviderRowStatus('ollama', 'connected');
+        setTimeout(() => {
+          document.getElementById('provider-flow-ollama')?.classList.remove('open');
+          const btn = document.getElementById('setup-btn-ollama');
+          if (btn) btn.textContent = 'Manage';
+        }, 2000);
+      } else {
+        setResult(3, 'Ollama is not running. Start the Ollama app or run: ollama serve', 'err');
+        setActions(3, `<pre class="step-config-block">ollama serve</pre>
+          <button class="btn-secondary" id="ollama-retry-connect">Retry</button>`);
+        document.getElementById('ollama-retry-connect')?.addEventListener('click', connectOllama);
+      }
+    } catch {
+      setResult(3, 'Connection failed', 'err');
+      setActions(3, `<button class="btn-secondary" id="ollama-retry-connect">Retry</button>`);
+      document.getElementById('ollama-retry-connect')?.addEventListener('click', connectOllama);
+    }
+  }
+
+  checkOllama();
 }
 
 // ── Onboarding / Settings modal ────────────────────────────────
@@ -2176,6 +2722,7 @@ function init() {
   // Period selector — rendered dynamically
   renderPeriodSelector();
   renderCompareBar();
+  updateProviderIndicator();
 
   // Nav clicks
   document.querySelectorAll('.nav-item[data-view]').forEach(el => {

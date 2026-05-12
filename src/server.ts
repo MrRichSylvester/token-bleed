@@ -5,11 +5,18 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { exec, spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { getData, invalidateCache, parseSessionMessages } from './parser.js';
 import { filterByDate, computeProjects, computeStats, computeDaily, computeModelStats } from './aggregator.js';
 import { PRICING, setCustomPricing } from './pricing.js';
 import { computeTips } from './tips.js';
 import type { AppSettings } from './types.js';
+import {
+  readProviders, writeProviders,
+  readPid, writePid, clearPid, isProcessRunning,
+  getActiveProvider, proxyStatus,
+} from './providers.js';
 
 const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
 const APP_SETTINGS_PATH = path.join(os.homedir(), '.burn-rate-settings.json');
@@ -242,6 +249,274 @@ app.get('/api/models/comparison', async (req) => {
   const top2 = modelStats.slice(0, 2);
   return { model1: top2[0] ?? null, model2: top2[1] ?? null };
 });
+
+// ── Provider helpers ────────────────────────────────────────────
+
+const spawnedProxies = new Map<string, ChildProcess>();
+
+function execPromise(cmd: string): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    exec(cmd, (err, stdout, stderr) => {
+      if (err) reject(Object.assign(err, { stdout, stderr }));
+      else resolve({ stdout, stderr });
+    });
+  });
+}
+
+async function checkOllamaReachable(): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 1500);
+    const res = await fetch('http://localhost:11434', { signal: controller.signal });
+    clearTimeout(t);
+    return res.status < 500;
+  } catch {
+    return false;
+  }
+}
+
+// ── Provider API routes ─────────────────────────────────────────
+
+app.get('/api/providers', async () => {
+  const configs = readProviders();
+  const ollamaReachable = configs.ollama.configured ? await checkOllamaReachable() : false;
+
+  return {
+    providers: {
+      claude: { status: 'connected' },
+      openai: {
+        status: proxyStatus('openai'),
+        configured: configs.openai.configured,
+      },
+      gemini: {
+        status: proxyStatus('gemini'),
+        configured: configs.gemini.configured,
+      },
+      ollama: {
+        status: configs.ollama.configured
+          ? (ollamaReachable ? 'connected' : 'stopped')
+          : 'not-configured',
+        configured: configs.ollama.configured,
+        model: configs.ollama.model ?? null,
+      },
+    },
+    activeProvider: getActiveProvider(),
+  };
+});
+
+app.post('/api/providers/check', async (req, reply) => {
+  const { check } = req.body as { check: string };
+
+  if (check === 'python') {
+    try {
+      const { stdout } = await execPromise('python3 --version');
+      const version = stdout.trim().replace('Python ', '') || '3.x';
+      return { found: true, version };
+    } catch {
+      return { found: false };
+    }
+  }
+
+  if (check === 'litellm') {
+    try {
+      const { stdout } = await execPromise('pip3 show litellm');
+      const match = stdout.match(/^Version:\s*(.+)/m);
+      return { found: true, version: match?.[1]?.trim() ?? 'unknown' };
+    } catch {
+      return { found: false };
+    }
+  }
+
+  if (check === 'ollama') {
+    try {
+      const { stdout } = await execPromise('ollama --version');
+      const version = stdout.trim().replace(/^ollama version /i, '');
+      return { found: true, version };
+    } catch {
+      return { found: false };
+    }
+  }
+
+  reply.status(400);
+  return { error: 'Unknown check' };
+});
+
+app.get('/api/providers/install-litellm', (req, reply) => {
+  reply.hijack();
+  const raw = reply.raw;
+  raw.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  const child = spawn('pip3', ['install', 'litellm'], { shell: false });
+  const send = (data: object) => raw.write(`data: ${JSON.stringify(data)}\n\n`);
+
+  child.stdout.on('data', (chunk: Buffer) => send({ line: chunk.toString() }));
+  child.stderr.on('data', (chunk: Buffer) => send({ line: chunk.toString() }));
+  child.on('close', (code: number | null) => {
+    send({ done: true, success: code === 0 });
+    raw.end();
+  });
+  req.raw.on('close', () => child.kill());
+});
+
+app.post('/api/providers/save-key', async (req, reply) => {
+  const { provider, key } = req.body as { provider: string; key: string };
+  if (!['openai', 'gemini'].includes(provider) || !key) {
+    reply.status(400); return { error: 'Invalid request' };
+  }
+  const configs = readProviders();
+  configs[provider as 'openai' | 'gemini'].key = Buffer.from(key).toString('base64');
+  writeProviders(configs);
+  return { ok: true };
+});
+
+const PROXY_CONFIGS: Record<string, { model: string; port: number; apiKey: string }> = {
+  openai: { model: 'gpt-4o', port: 4001, apiKey: 'token-bleed-proxy' },
+  gemini: { model: 'gemini/gemini-2.0-flash', port: 4002, apiKey: 'token-bleed-proxy' },
+};
+
+app.post('/api/providers/start-proxy', async (req, reply) => {
+  const { provider } = req.body as { provider: string };
+  const cfg = PROXY_CONFIGS[provider];
+  if (!cfg) { reply.status(400); return { error: 'Unknown provider' }; }
+
+  const existing = spawnedProxies.get(provider);
+  if (existing) { try { existing.kill(); } catch { /* ignore */ } }
+
+  const providers = readProviders();
+  const encodedKey = providers[provider as 'openai' | 'gemini']?.key;
+  if (!encodedKey) { reply.status(400); return { error: 'No API key saved' }; }
+  const apiKey = Buffer.from(encodedKey, 'base64').toString('utf-8');
+
+  const child = spawn('litellm', [
+    '--model', cfg.model,
+    '--api_key', apiKey,
+    '--port', String(cfg.port),
+  ], { shell: false, detached: false });
+
+  spawnedProxies.set(provider, child);
+  writePid(provider, child.pid!);
+
+  child.on('exit', () => {
+    spawnedProxies.delete(provider);
+  });
+
+  return { ok: true, pid: child.pid };
+});
+
+app.get('/api/providers/proxy-health', async (req) => {
+  const { port } = req.query as { port: string };
+  const portNum = parseInt(port, 10);
+  if (!portNum) return { ok: false };
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch(`http://localhost:${portNum}/health`, { signal: controller.signal });
+    clearTimeout(t);
+    return { ok: res.ok || res.status < 500 };
+  } catch {
+    return { ok: false };
+  }
+});
+
+app.post('/api/providers/mark-configured', async (req, reply) => {
+  const { provider, model } = req.body as { provider: string; model?: string };
+  if (!['openai', 'gemini', 'ollama'].includes(provider)) {
+    reply.status(400); return { error: 'Unknown provider' };
+  }
+  const configs = readProviders();
+  configs[provider as 'openai' | 'gemini' | 'ollama'].configured = true;
+  if (model) configs[provider as 'openai' | 'gemini' | 'ollama'].model = model;
+  writeProviders(configs);
+  return { ok: true };
+});
+
+app.post('/api/providers/stop-proxy', async (req) => {
+  const { provider } = req.body as { provider: string };
+  const child = spawnedProxies.get(provider);
+  if (child) { try { child.kill(); } catch { /* ignore */ } spawnedProxies.delete(provider); }
+  const pid = readPid(provider);
+  if (pid && isProcessRunning(pid)) { try { process.kill(pid, 'SIGTERM'); } catch { /* ignore */ } }
+  clearPid(provider);
+  return { ok: true };
+});
+
+app.post('/api/providers/restart-proxy', async (req, reply) => {
+  const { provider } = req.body as { provider: string };
+  const cfg = PROXY_CONFIGS[provider];
+  if (!cfg) { reply.status(400); return { error: 'Unknown provider' }; }
+
+  const child = spawnedProxies.get(provider);
+  if (child) { try { child.kill(); } catch { /* ignore */ } }
+  const pid = readPid(provider);
+  if (pid && isProcessRunning(pid)) { try { process.kill(pid, 'SIGTERM'); } catch { /* ignore */ } }
+
+  const providers = readProviders();
+  const encodedKey = providers[provider as 'openai' | 'gemini']?.key;
+  if (!encodedKey) { reply.status(400); return { error: 'No API key saved' }; }
+  const apiKey = Buffer.from(encodedKey, 'base64').toString('utf-8');
+
+  const newChild = spawn('litellm', [
+    '--model', cfg.model,
+    '--api_key', apiKey,
+    '--port', String(cfg.port),
+  ], { shell: false, detached: false });
+
+  spawnedProxies.set(provider, newChild);
+  writePid(provider, newChild.pid!);
+  newChild.on('exit', () => spawnedProxies.delete(provider));
+
+  return { ok: true, pid: newChild.pid };
+});
+
+app.get('/api/providers/ollama-models', async () => {
+  try {
+    const { stdout } = await execPromise('ollama list');
+    const lines = stdout.trim().split('\n').slice(1);
+    const models = lines
+      .map(line => line.trim().split(/\s+/)[0])
+      .filter(Boolean)
+      .map(name => ({ name }));
+    return { models };
+  } catch {
+    return { models: [] };
+  }
+});
+
+app.get('/api/open-file', async () => {
+  const CLAUDE_SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
+  if (!fs.existsSync(CLAUDE_SETTINGS)) {
+    fs.writeFileSync(CLAUDE_SETTINGS, '{}\n');
+  }
+  exec(`open "${CLAUDE_SETTINGS}"`);
+  return { ok: true };
+});
+
+// ── Shutdown cleanup ────────────────────────────────────────────
+
+function cleanupProxies() {
+  for (const [provider, child] of spawnedProxies) {
+    try { child.kill(); } catch { /* ignore */ }
+    clearPid(provider);
+  }
+  spawnedProxies.clear();
+  for (const provider of ['openai', 'gemini']) {
+    const pid = readPid(provider);
+    if (pid && isProcessRunning(pid)) {
+      try { process.kill(pid, 'SIGTERM'); } catch { /* ignore */ }
+    }
+    clearPid(provider);
+  }
+}
+
+process.on('SIGINT', () => { cleanupProxies(); process.exit(0); });
+process.on('SIGTERM', () => { cleanupProxies(); process.exit(0); });
+
+// ── Server startup ──────────────────────────────────────────────
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 const HOST = process.env.HOST ?? '127.0.0.1';
