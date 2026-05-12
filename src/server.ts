@@ -3,7 +3,7 @@ import FastifyStatic from '@fastify/static';
 import FastifyCors from '@fastify/cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getData, invalidateCache } from './parser.js';
+import { getData, invalidateCache, parseSessionMessages } from './parser.js';
 import { filterByDate, computeProjects, computeStats, computeDaily, computeModelStats } from './aggregator.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -62,6 +62,14 @@ app.get('/api/sessions/:id', async (req, reply) => {
   const session = sessions.find((s) => s.id === id);
   if (!session) { reply.status(404); return { error: 'Session not found' }; }
   return session;
+});
+
+app.get('/api/sessions/:id/messages', async (req, reply) => {
+  const { id } = req.params as { id: string };
+  const { sessions } = getData();
+  const session = sessions.find((s) => s.id === id);
+  if (!session) { reply.status(404); return { error: 'Session not found' }; }
+  return parseSessionMessages(id, session.projectId);
 });
 
 app.get('/api/models', async (req) => {

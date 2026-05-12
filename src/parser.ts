@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import type { Session, ParsedData, RawEntry, TokenUsage } from './types.js';
+import type { Session, ParsedData, RawEntry, TokenUsage, SessionMessage } from './types.js';
 import { calculateCost } from './pricing.js';
 import { computeProjects, computeStats, computeDaily, computeModelStats } from './aggregator.js';
 
@@ -173,4 +173,97 @@ export function getData(force = false): ParsedData {
 
 export function invalidateCache(): void {
   cache = null;
+}
+
+export function parseSessionMessages(sessionId: string, projectId: string): SessionMessage[] {
+  const filePath = path.join(CLAUDE_PROJECTS_DIR, projectId, `${sessionId}.jsonl`);
+  let raw: string;
+  try {
+    raw = fs.readFileSync(filePath, 'utf-8');
+  } catch {
+    return [];
+  }
+
+  const lines = raw.split('\n').filter(Boolean);
+  const messages: SessionMessage[] = [];
+
+  // Collect user turns, then look ahead for the next assistant turn to get token usage
+  let pendingUser: { index: number; timestamp: string; prompt: string } | null = null;
+  let turnIndex = 0;
+
+  for (const line of lines) {
+    let entry: RawEntry;
+    try {
+      entry = JSON.parse(line) as RawEntry;
+    } catch {
+      continue;
+    }
+
+    if (entry.type === 'user' && !entry.isSidechain && entry.message?.content) {
+      const text = extractText(entry.message.content)
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const isSystemInjected = /^(Caveat:|The messages below|<command|hook output|DO NOT respond)/i.test(text);
+      if (!text || text.length <= 2 || isSystemInjected) continue;
+
+      // Flush any pending user turn without a matched assistant response
+      if (pendingUser) {
+        messages.push({
+          ...pendingUser,
+          model: 'unknown',
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+          cost: 0,
+          toolCalls: 0,
+        });
+      }
+
+      pendingUser = { index: turnIndex++, timestamp: entry.timestamp ?? '', prompt: text.slice(0, 500) };
+    }
+
+    if (entry.type === 'assistant' && entry.message?.usage && pendingUser) {
+      const u = entry.message.usage;
+      const usage: TokenUsage = {
+        inputTokens: u.input_tokens ?? 0,
+        outputTokens: u.output_tokens ?? 0,
+        cacheCreationTokens: u.cache_creation_input_tokens ?? 0,
+        cacheReadTokens: u.cache_read_input_tokens ?? 0,
+      };
+      const model = entry.message.model ?? 'unknown';
+      const toolCalls = Array.isArray(entry.message.content)
+        ? (entry.message.content as Array<{ type?: string }>).filter((c) => c.type === 'tool_use').length
+        : 0;
+
+      messages.push({
+        ...pendingUser,
+        model,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        cacheCreationTokens: usage.cacheCreationTokens,
+        cacheReadTokens: usage.cacheReadTokens,
+        cost: calculateCost(model, usage),
+        toolCalls,
+      });
+      pendingUser = null;
+    }
+  }
+
+  // Flush final user turn if no trailing assistant response
+  if (pendingUser) {
+    messages.push({
+      ...pendingUser,
+      model: 'unknown',
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      cost: 0,
+      toolCalls: 0,
+    });
+  }
+
+  return messages;
 }

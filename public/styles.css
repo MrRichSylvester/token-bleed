@@ -406,6 +406,57 @@ td.muted { color: var(--text-secondary); }
 td.prompt { color: var(--text-secondary); max-width: 280px; }
 td.prompt span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ── Expandable session rows ── */
+.session-row { cursor: pointer; }
+.session-row.expanded { background: var(--surface-2); }
+.session-row.expanded td:first-child { border-left: 2px solid var(--accent); }
+
+.session-detail-row:hover { background: transparent !important; }
+
+.session-detail-cell {
+  padding: 0 0 0 24px !important;
+  background: var(--bg);
+}
+
+.session-messages-wrap {
+  border-left: 2px solid var(--border-2);
+  margin: 8px 0;
+}
+
+.messages-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.messages-table thead th {
+  background: transparent;
+  font-size: 9px;
+  padding: 6px 12px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.messages-table tbody tr {
+  border-top: 1px solid var(--border);
+  transition: background 100ms;
+}
+
+.messages-table tbody tr:first-child { border-top: none; }
+.messages-table tbody tr:hover { background: var(--surface); }
+
+.messages-table tbody td {
+  padding: 7px 12px;
+  vertical-align: top;
+}
+
+td.msg-prompt {
+  color: var(--text-secondary);
+  font-size: 12px;
+  max-width: 420px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ── Model badge ── */
 .model-badge {
   display: inline-block;

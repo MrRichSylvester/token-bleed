@@ -475,7 +475,9 @@ async function renderOverview() {
 
     // Load recent sessions async
     const { sessions } = await api.sessions({ limit: 10, offset: 0 });
-    document.getElementById('recent-sessions-wrap').innerHTML = renderSessionsTable(sessions, { compact: true });
+    const recentWrap = document.getElementById('recent-sessions-wrap');
+    recentWrap.innerHTML = renderSessionsTable(sessions, { compact: true });
+    bindSessionExpansion(recentWrap);
   } catch (e) {
     showError(e);
   }
@@ -526,6 +528,7 @@ async function toggleProject(projectId, cardEl) {
       panel.innerHTML = '<div class="empty-state" style="min-height:60px"><div class="empty-msg">No sessions found</div></div>';
     } else {
       panel.innerHTML = renderSessionsTable(sessions, { compact: true });
+      bindSessionExpansion(panel);
     }
   } catch (e) {
     panel.innerHTML = `<div class="empty-state"><div class="empty-msg">Error: ${escHtml(e.message)}</div></div>`;
@@ -620,11 +623,13 @@ async function renderSessions() {
         <span class="filter-count">${total.toLocaleString()} session${total !== 1 ? 's' : ''}</span>
       </div>
 
-      <div class="table-wrap">
+      <div class="table-wrap" id="sessions-table-wrap">
         ${renderSessionsTable(sessions)}
         ${totalPages > 1 ? renderPagination(curPage, totalPages) : ''}
       </div>
     `;
+
+    bindSessionExpansion(document.getElementById('sessions-table-wrap'));
 
     document.getElementById('filter-project').addEventListener('change', e => {
       state.sessionsFilter.projectId = e.target.value;
@@ -654,13 +659,15 @@ function renderSessionsTable(sessions, opts = {}) {
     return `<div class="empty-state"><div class="empty-icon">◎</div><div class="empty-msg">No sessions found</div></div>`;
   }
 
+  const colCount = opts.compact ? 8 : 9;
+
   const rows = sessions.map(s => {
     const local = s.cost === 0 && s.usage.inputTokens + s.usage.outputTokens > 0;
     const costCell = local
       ? `<span class="amber mono">${fmtTokens(s.usage.inputTokens + s.usage.outputTokens)}</span>`
       : `<span class="mono">${fmtCost(s.cost)}</span>`;
 
-    return `<tr>
+    return `<tr class="session-row" data-session-id="${escHtml(s.id)}" data-project-id="${escHtml(s.projectId)}">
       <td class="muted nowrap" style="font-size:12px">${fmtDateTime(s.startTime)}</td>
       ${opts.compact ? '' : `<td class="secondary" style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(s.projectName)}</td>`}
       <td class="prompt"><span title="${escHtml(s.firstPrompt)}">${escHtml(s.firstPrompt)}</span></td>
@@ -670,6 +677,11 @@ function renderSessionsTable(sessions, opts = {}) {
       <td class="right muted" style="font-size:12px">${fmtPct(s.cacheHitRate)}</td>
       <td class="right muted" style="font-size:12px">${s.messageCount}</td>
       <td class="right muted" style="font-size:12px">${fmtDuration(s.duration)}</td>
+    </tr>
+    <tr class="session-detail-row" data-for="${escHtml(s.id)}" style="display:none">
+      <td colspan="${colCount}" class="session-detail-cell">
+        <div class="session-messages-wrap"></div>
+      </td>
     </tr>`;
   }).join('');
 
@@ -687,6 +699,74 @@ function renderSessionsTable(sessions, opts = {}) {
         <th class="right">Cache%</th>
         <th class="right">Msgs</th>
         <th class="right">Duration</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function bindSessionExpansion(container) {
+  container.querySelectorAll('.session-row').forEach(row => {
+    row.addEventListener('click', () => toggleSession(row, container));
+  });
+}
+
+async function toggleSession(row, container) {
+  const sessionId = row.dataset.sessionId;
+  const detailRow = container.querySelector(`.session-detail-row[data-for="${CSS.escape(sessionId)}"]`);
+  if (!detailRow) return;
+
+  const isOpen = detailRow.style.display !== 'none';
+  if (isOpen) {
+    detailRow.style.display = 'none';
+    row.classList.remove('expanded');
+    return;
+  }
+
+  row.classList.add('expanded');
+  detailRow.style.display = '';
+  const wrap = detailRow.querySelector('.session-messages-wrap');
+  if (wrap.dataset.loaded) return;
+
+  wrap.innerHTML = '<div class="loading-state" style="min-height:60px"><div class="spinner"></div></div>';
+
+  try {
+    const messages = await api.fetch(`/api/sessions/${encodeURIComponent(sessionId)}/messages`);
+    wrap.dataset.loaded = '1';
+    if (!messages || messages.length === 0) {
+      wrap.innerHTML = '<div class="empty-state" style="min-height:40px"><div class="empty-msg">No messages found</div></div>';
+      return;
+    }
+    wrap.innerHTML = renderMessagesTable(messages);
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-msg">Error: ${escHtml(e.message)}</div></div>`;
+  }
+}
+
+function renderMessagesTable(messages) {
+  const rows = messages.map((m, i) => {
+    const totalTok = m.inputTokens + m.outputTokens + m.cacheCreationTokens + m.cacheReadTokens;
+    return `<tr>
+      <td class="muted" style="font-size:11px;width:24px;text-align:right">${i + 1}</td>
+      <td class="muted nowrap" style="font-size:11px">${fmtDateTime(m.timestamp)}</td>
+      <td class="msg-prompt">${escHtml(m.prompt)}</td>
+      <td style="font-size:11px">${modelBadgeHtml(m.model, false)}</td>
+      <td class="right mono muted" style="font-size:11px">${totalTok ? fmtTokens(totalTok) : '—'}</td>
+      <td class="right mono" style="font-size:11px">${m.cost ? fmtCost(m.cost) : '—'}</td>
+      <td class="right muted" style="font-size:11px">${m.toolCalls || '—'}</td>
+    </tr>`;
+  }).join('');
+
+  return `<table class="messages-table">
+    <thead>
+      <tr>
+        <th style="width:24px">#</th>
+        <th>Time</th>
+        <th>Prompt</th>
+        <th>Model</th>
+        <th class="right">Tokens</th>
+        <th class="right">Cost</th>
+        <th class="right">Tools</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>

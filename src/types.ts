@@ -86,6 +86,19 @@ export interface ParsedData {
   computedAt: number;
 }
 
+export interface SessionMessage {
+  index: number;
+  timestamp: string;
+  prompt: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  cost: number;
+  toolCalls: number;
+}
+
 export interface RawEntry {
   type?: string;
   parentUuid?: string;
