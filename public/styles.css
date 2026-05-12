@@ -25,9 +25,9 @@
   --red:         #FF5A5A;
   --red-dim:     rgba(255, 90, 90, 0.08);
 
-  --text-primary:   #EEF2FF;
-  --text-secondary: #7C8DB5;
-  --text-muted:     #3D4E6E;
+  --text-primary:   #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted:     #64748b;
 
   --font-sans: 'Figtree', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
@@ -335,7 +335,7 @@ html, body {
   font-family: 'Outfit', system-ui, sans-serif;
   font-size: 11px;
   font-weight: 400;
-  color: #444;
+  color: #64748b;
   text-decoration: none;
   transition: color 150ms;
 }
@@ -2237,6 +2237,10 @@ td.msg-prompt {
   max-width: 520px;
 }
 
+.about-card .onboarding-text { font-size: 15px; }
+.about-card .onboarding-text:last-of-type { font-size: 14px; }
+.about-card .onboarding-hint { font-size: 12px; }
+
 .about-logo-row {
   display: flex;
   align-items: baseline;
@@ -2326,7 +2330,7 @@ td.msg-prompt {
 .about-attr-handle {
   font-family: 'Outfit', system-ui, sans-serif;
   font-size: 12px;
-  color: #555555;
+  color: #64748b;
   line-height: 1.4;
   margin-top: 2px;
 }
@@ -2334,7 +2338,7 @@ td.msg-prompt {
 .about-attr-link {
   font-family: 'Outfit', system-ui, sans-serif;
   font-size: 11px;
-  color: #555555;
+  color: #64748b;
   text-decoration: none;
   margin-top: 3px;
   display: inline-block;
