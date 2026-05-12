@@ -861,6 +861,9 @@ function renderSessionsTable(sessions, opts = {}) {
     const thinkingBadge = s.thinkingBlocks > 0
       ? `<span class="thinking-badge" title="${s.thinkingBlocks} thinking turn${s.thinkingBlocks !== 1 ? 's' : ''}">💭</span>`
       : '';
+    const subagentBadge = s.entrypoint === 'subagent'
+      ? `<span class="subagent-badge" title="Subagent session">sub</span>`
+      : '';
 
     return `<tr class="session-row" data-session-id="${escHtml(s.id)}" data-project-id="${escHtml(s.projectId)}"
       data-entrypoint="${escHtml(s.entrypoint || '')}"
@@ -873,7 +876,7 @@ function renderSessionsTable(sessions, opts = {}) {
       ${checkCell}
       <td class="muted nowrap" style="font-size:12px">${fmtDateTime(s.startTime)}</td>
       ${opts.compact ? '' : `<td class="secondary" style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(s.projectName)}</td>`}
-      <td class="prompt">${thinkingBadge}<span title="${escHtml(s.firstPrompt)}">${escHtml(displayTitle)}</span></td>
+      <td class="prompt">${thinkingBadge}${subagentBadge}<span title="${escHtml(s.firstPrompt)}">${escHtml(displayTitle)}</span></td>
       <td>${modelBadgeHtml(s.primaryModel, local)}</td>
       <td class="right mono" style="font-size:12px">${fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens)}</td>
       <td class="right">${costCell}</td>
@@ -1024,7 +1027,7 @@ function renderSessionMeta(row) {
   const cache5m = parseInt(d.cache5m || '0', 10);
   const cache1h = parseInt(d.cache1h || '0', 10);
 
-  const entrypointLabel = { 'claude-vscode': 'VS Code', 'cli': 'CLI', 'claude-desktop': 'Desktop' }[entrypoint] || entrypoint;
+  const entrypointLabel = { 'claude-vscode': 'VS Code', 'cli': 'CLI', 'claude-desktop': 'Desktop', 'subagent': 'Subagent' }[entrypoint] || entrypoint;
   const permLabel = perm === 'bypassPermissions' ? 'auto-approve' : perm;
 
   const chips = [

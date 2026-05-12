@@ -676,6 +676,20 @@ td.prompt span { display: block; overflow: hidden; text-overflow: ellipsis; whit
   cursor: default;
 }
 
+.subagent-badge {
+  display: inline-block;
+  margin-right: 5px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  vertical-align: middle;
+  border-radius: 3px;
+  background: var(--blue-dim);
+  color: var(--blue);
+  cursor: default;
+}
+
 .messages-table {
   width: 100%;
   border-collapse: collapse;
