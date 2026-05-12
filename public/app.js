@@ -194,6 +194,7 @@ const state = {
   compSession1Id: '',
   compSession2Id: '',
   compSelection: [], // [{id, label}] max 2
+  scHiddenMetrics: new Set(),
   data: {
     stats: null,
     daily: null,
@@ -1319,6 +1320,20 @@ function renderCompCard(m, isWinner, isLoser, savingsPct, vsModel) {
 
 // ── Session Comparison ─────────────────────────────────────────
 
+const SESSION_COMPARE_METRICS = [
+  { key: 'cost',          label: 'Cost'           },
+  { key: 'totalTokens',   label: 'Total Tokens'   },
+  { key: 'inputTokens',   label: 'Input Tokens'   },
+  { key: 'outputTokens',  label: 'Output Tokens'  },
+  { key: 'cacheRead',     label: 'Cache Read'     },
+  { key: 'cacheWrite',    label: 'Cache Write'    },
+  { key: 'cacheHitRate',  label: 'Cache Hit Rate' },
+  { key: 'duration',      label: 'Duration'       },
+  { key: 'messages',      label: 'Messages'       },
+  { key: 'toolCalls',     label: 'Tool Calls'     },
+  { key: 'thinkingTurns', label: 'Thinking Turns' },
+];
+
 async function renderSessionCompare() {
   setLoading();
   try {
@@ -1368,6 +1383,11 @@ function renderSessionComparePage() {
     </div>
   `).join('');
 
+  const metricToggles = SESSION_COMPARE_METRICS.map(m => {
+    const on = !state.scHiddenMetrics.has(m.key);
+    return `<button class="sc-metric-toggle${on ? ' sc-metric-toggle--on' : ''}" data-metric="${escHtml(m.key)}">${escHtml(m.label)}</button>`;
+  }).join('');
+
   const content = document.getElementById('content');
   content.innerHTML = `
     <h1 class="page-title">Session Compare</h1>
@@ -1383,6 +1403,11 @@ function renderSessionComparePage() {
           </select>
         </div>
       ` : ''}
+    </div>
+
+    <div class="sc-metrics-bar">
+      <span class="sc-metrics-bar-label">Metrics</span>
+      <div class="sc-metric-toggles">${metricToggles}</div>
     </div>
 
     <div id="session-comparison-result"></div>
@@ -1411,6 +1436,20 @@ function renderSessionComparePage() {
     });
   }
 
+  content.querySelectorAll('[data-metric]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.metric;
+      if (state.scHiddenMetrics.has(key)) {
+        state.scHiddenMetrics.delete(key);
+        btn.classList.add('sc-metric-toggle--on');
+      } else {
+        state.scHiddenMetrics.add(key);
+        btn.classList.remove('sc-metric-toggle--on');
+      }
+      renderSessionComparisonTable();
+    });
+  });
+
   renderSessionComparisonTable();
 }
 
@@ -1432,19 +1471,20 @@ function renderSessionComparisonTable() {
 
   const localTooltip = 'Local models send the full conversation context each turn rather than tracking cache reads separately. This inflates input counts vs. Claude sessions.';
 
-  const metrics = [
-    { label: 'Cost',            val: s => s.cost,                                                                                                  fmt: s => { const local = isLocal(s); return local ? '<span class="amber">local</span>' : fmtCost(s.cost); }, lowerBetter: true,  skipLocal: true },
-    { label: 'Total Tokens',    val: s => s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens,      fmt: s => fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens), lowerBetter: true  },
-    { label: 'Input Tokens',    val: s => s.usage.inputTokens,    fmt: s => isLocal(s) ? `${fmtTokens(s.usage.inputTokens)} <span class="sc-metric-info" data-tooltip="${escHtml(localTooltip)}">?</span>` : fmtTokens(s.usage.inputTokens),    lowerBetter: true  },
-    { label: 'Output Tokens',   val: s => s.usage.outputTokens,   fmt: s => fmtTokens(s.usage.outputTokens),   lowerBetter: true  },
-    { label: 'Cache Read',      val: s => s.usage.cacheReadTokens, fmt: s => fmtTokens(s.usage.cacheReadTokens), lowerBetter: false },
-    { label: 'Cache Write',     val: s => s.usage.cacheCreationTokens, fmt: s => fmtTokens(s.usage.cacheCreationTokens), lowerBetter: true },
-    { label: 'Cache Hit Rate',  val: s => s.cacheHitRate,         fmt: s => fmtPct(s.cacheHitRate),            lowerBetter: false },
-    { label: 'Duration',        val: s => s.duration,             fmt: s => fmtDuration(s.duration),           lowerBetter: true  },
-    { label: 'Messages',        val: s => s.messageCount,         fmt: s => s.messageCount.toString(),         lowerBetter: null  },
-    { label: 'Tool Calls',      val: s => s.toolCallCount,        fmt: s => s.toolCallCount.toString(),        lowerBetter: null  },
-    { label: 'Thinking Turns',  val: s => s.thinkingBlocks || 0,  fmt: s => (s.thinkingBlocks || 0).toString(), lowerBetter: null  },
+  const allMetrics = [
+    { key: 'cost',          label: 'Cost',           val: s => s.cost,                                                                                             fmt: s => { const local = isLocal(s); return local ? '<span class="amber">local</span>' : fmtCost(s.cost); }, lowerBetter: true,  skipLocal: true },
+    { key: 'totalTokens',   label: 'Total Tokens',   val: s => s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens, fmt: s => fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens), lowerBetter: true  },
+    { key: 'inputTokens',   label: 'Input Tokens',   val: s => s.usage.inputTokens,           fmt: s => isLocal(s) ? `${fmtTokens(s.usage.inputTokens)} <span class="sc-metric-info" data-tooltip="${escHtml(localTooltip)}">?</span>` : fmtTokens(s.usage.inputTokens), lowerBetter: true  },
+    { key: 'outputTokens',  label: 'Output Tokens',  val: s => s.usage.outputTokens,          fmt: s => fmtTokens(s.usage.outputTokens),          lowerBetter: true  },
+    { key: 'cacheRead',     label: 'Cache Read',     val: s => s.usage.cacheReadTokens,       fmt: s => fmtTokens(s.usage.cacheReadTokens),       lowerBetter: false },
+    { key: 'cacheWrite',    label: 'Cache Write',    val: s => s.usage.cacheCreationTokens,   fmt: s => fmtTokens(s.usage.cacheCreationTokens),   lowerBetter: true  },
+    { key: 'cacheHitRate',  label: 'Cache Hit Rate', val: s => s.cacheHitRate,                fmt: s => fmtPct(s.cacheHitRate),                   lowerBetter: false },
+    { key: 'duration',      label: 'Duration',       val: s => s.duration,                    fmt: s => fmtDuration(s.duration),                  lowerBetter: true  },
+    { key: 'messages',      label: 'Messages',       val: s => s.messageCount,                fmt: s => s.messageCount.toString(),                lowerBetter: null  },
+    { key: 'toolCalls',     label: 'Tool Calls',     val: s => s.toolCallCount,               fmt: s => s.toolCallCount.toString(),               lowerBetter: null  },
+    { key: 'thinkingTurns', label: 'Thinking Turns', val: s => s.thinkingBlocks || 0,         fmt: s => (s.thinkingBlocks || 0).toString(),       lowerBetter: null  },
   ];
+  const metrics = allMetrics.filter(m => !state.scHiddenMetrics.has(m.key));
 
   const colHeaders = selected.map((s, i) => {
     const local = isLocal(s);
@@ -2061,24 +2101,56 @@ function showOnboardingIfNeeded() {
   showAboutModal();
 }
 
-// ── Theme ──────────────────────────────────────────────────────
+// ── Theme & Size ───────────────────────────────────────────────
 
 function initTheme() {
-  const stored = localStorage.getItem('br-theme');
-  const theme = stored === 'light' ? 'light' : 'dark';
+  const theme = localStorage.getItem('br-theme') === 'light' ? 'light' : 'dark';
+  const size  = ['small', 'medium', 'large'].includes(localStorage.getItem('br-size'))
+    ? localStorage.getItem('br-size')
+    : 'small';
   applyTheme(theme);
+  applySize(size);
 }
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  const btn = document.getElementById('theme-toggle-btn');
-  if (btn) {
-    btn.textContent = theme === 'light' ? '☾' : '☀';
-    btn.title = theme === 'light' ? 'Switch to dark' : 'Switch to light';
-  }
   localStorage.setItem('br-theme', theme);
-  // Re-render so charts pick up the new color palette
+  document.querySelectorAll('#theme-opts .appr-opt').forEach(btn => {
+    btn.classList.toggle('appr-opt--active', btn.dataset.theme === theme);
+  });
   if (state.data.stats) renderView();
+}
+
+function applySize(size) {
+  document.documentElement.setAttribute('data-size', size);
+  localStorage.setItem('br-size', size);
+  document.querySelectorAll('#size-opts .appr-opt').forEach(btn => {
+    btn.classList.toggle('appr-opt--active', btn.dataset.size === size);
+  });
+}
+
+function initAppearancePanel() {
+  const btn   = document.getElementById('appr-btn');
+  const panel = document.getElementById('appr-panel');
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    panel.hidden = !panel.hidden;
+  });
+
+  document.addEventListener('click', e => {
+    if (!document.getElementById('appr-wrap').contains(e.target)) {
+      panel.hidden = true;
+    }
+  });
+
+  document.querySelectorAll('#theme-opts .appr-opt').forEach(b => {
+    b.addEventListener('click', () => { applyTheme(b.dataset.theme); });
+  });
+
+  document.querySelectorAll('#size-opts .appr-opt').forEach(b => {
+    b.addEventListener('click', () => { applySize(b.dataset.size); });
+  });
 }
 
 // ── Bootstrap ──────────────────────────────────────────────────
@@ -2113,11 +2185,7 @@ function init() {
     });
   });
 
-  // Theme toggle
-  document.getElementById('theme-toggle-btn').addEventListener('click', () => {
-    const current = document.documentElement.getAttribute('data-theme');
-    applyTheme(current === 'light' ? 'dark' : 'light');
-  });
+  initAppearancePanel();
 
   // Prompt modal
   const promptModal = document.getElementById('prompt-modal');
