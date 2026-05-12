@@ -505,10 +505,9 @@ function scaleUsageGrid() {
 async function renderOverview() {
   setLoading();
   try {
-    const [stats, daily, models, dailyAll, meta] = await Promise.all([
+    const [stats, daily, models, dailyAll] = await Promise.all([
       api.stats(), api.daily(), api.models(),
       api.fetch('/api/daily'),
-      api.meta(),
     ]);
     state.data.stats = stats;
     state.data.daily = daily;
@@ -612,7 +611,7 @@ async function renderOverview() {
       const gridRight = content.querySelector('.overview-activity .usage-grid-right');
       if (gridRight) gridRight.scrollLeft = gridRight.scrollWidth;
     });
-    showOnboardingIfNeeded(meta);
+    showOnboardingIfNeeded();
 
     // Load recent sessions async
     const { sessions } = await api.sessions({ limit: 10, offset: 0 });
@@ -1557,10 +1556,63 @@ function showSettingsModal(meta) {
   input.addEventListener('keydown', e => { if (e.key === 'Enter') saveBtn.click(); });
 }
 
-function showOnboardingIfNeeded(meta) {
-  if (localStorage.getItem('br-onboarded')) return;
-  localStorage.setItem('br-onboarded', '1');
-  showSettingsModal(meta);
+function showAboutModal() {
+  if (document.getElementById('about-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'about-overlay';
+  overlay.className = 'onboarding-overlay';
+  overlay.innerHTML = `
+    <div class="onboarding-card about-card">
+      <div class="about-logo-row">
+        <span class="about-logo-brand">Token <span class="about-logo-bleed">Bleed</span></span>
+        <span class="about-version">open source · MIT</span>
+      </div>
+      <p class="onboarding-text">
+        Every time Claude Code writes a line of code, it burns tokens.
+        Those tokens cost money — but Claude gives you almost no way to
+        see where it's all going.
+      </p>
+      <p class="onboarding-text">
+        Token Bleed reads the session logs Claude Code writes to your
+        machine and shows you exactly what burned, what it cost, and
+        which AI model gave you the most for your money. Per prompt.
+        Per session. Per project.
+      </p>
+      <p class="onboarding-text">
+        No cloud. No account. No data leaves your machine.
+        Just your numbers, finally readable.
+      </p>
+      <p class="onboarding-text">
+        Built and maintained by <strong>Richard Sylvester</strong> · Free forever ·
+        Every line of code is on GitHub.
+      </p>
+      <div class="about-links-row">
+        <a class="about-pill" href="https://github.com/mrrichsylvester/burn-rate" target="_blank" rel="noopener">GitHub →</a>
+        <a class="about-pill" href="https://youtube.com/@MrRichSylvester" target="_blank" rel="noopener">YouTube →</a>
+        <a class="about-pill" href="https://airevenueclub.com" target="_blank" rel="noopener">Community →</a>
+      </div>
+      <div class="onboarding-footer">
+        <span class="onboarding-hint">Use ⚙ in the header to adjust log retention settings.</span>
+        <button class="onboarding-dismiss" id="about-dismiss">Got it</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  function dismiss() {
+    overlay.classList.add('onboarding-out');
+    overlay.addEventListener('animationend', () => overlay.remove(), { once: true });
+  }
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) dismiss(); });
+  overlay.querySelector('#about-dismiss').addEventListener('click', dismiss);
+}
+
+function showOnboardingIfNeeded() {
+  if (localStorage.getItem('br-seen-about')) return;
+  localStorage.setItem('br-seen-about', '1');
+  showAboutModal();
 }
 
 // ── Bootstrap ──────────────────────────────────────────────────
@@ -1594,6 +1646,9 @@ function init() {
     });
   });
 
+  // About button
+  document.getElementById('about-btn').addEventListener('click', showAboutModal);
+
   // Global settings button
   document.getElementById('global-settings-btn').addEventListener('click', async () => {
     const meta = await api.meta();
@@ -1622,7 +1677,7 @@ init();
 
 // Inject drip strands into the bleed word
 (function initBleed() {
-  const word = document.querySelector('.bleed-word');
+  const word = document.querySelector('.sidebar-token-bleed .bleed-word');
   if (!word) return;
   const drips = [
     { x: '18%', w: '2px', dur: '4.8s', delay: '0.3s',  len: '20px' },
@@ -1642,7 +1697,7 @@ init();
 
 // Easter egg: click "Bleed" to trigger a hemorrhage
 (function initBleedEgg() {
-  const word = document.querySelector('.bleed-word');
+  const word = document.querySelector('.sidebar-token-bleed .bleed-word');
   if (!word) return;
 
   const messages = [

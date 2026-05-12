@@ -88,20 +88,22 @@ html, body {
   gap: 8px;
 }
 
-.header-brand {
-  font-weight: 700;
-  font-size: 16px;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
+.header-club-brand {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 150ms;
 }
 
-.token-bleed-logo {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+.header-club-brand:hover {
+  opacity: 0.8;
 }
 
 /* ── Bleed word animation ── */
@@ -213,26 +215,20 @@ html, body {
   padding-top: 0;
 }
 
-.sidebar-club-brand {
+.sidebar-token-bleed {
   font-family: 'Outfit', system-ui, sans-serif;
   font-weight: 800;
-  font-size: 13px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 15px;
+  letter-spacing: -0.02em;
   height: 54px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   padding: 0 16px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  text-decoration: none;
-  cursor: pointer;
-  transition: opacity 150ms;
-}
-
-.sidebar-club-brand:hover {
-  opacity: 0.8;
+  color: var(--text-primary);
+  user-select: none;
 }
 
 .club-ai,
@@ -310,6 +306,42 @@ html, body {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-dim);
+}
+
+.sidebar-credits {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.sidebar-credits-club {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 150ms;
+}
+
+.sidebar-credits-club:hover {
+  color: var(--text-secondary);
+}
+
+.sidebar-credits-handle {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  color: #444;
+  text-decoration: none;
+  transition: color 150ms;
+}
+
+.sidebar-credits-handle:hover {
+  color: var(--text-muted);
 }
 
 /* ── Main ── */
@@ -2177,4 +2209,137 @@ td.msg-prompt {
 
 .onboarding-dismiss:hover {
   opacity: 0.85;
+}
+
+/* ── About button (sidebar footer) ── */
+.about-btn {
+  width: 100%;
+  margin-top: 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  transition: border-color 150ms, color 150ms;
+}
+
+.about-btn:hover {
+  border-color: var(--border-2);
+  color: var(--text-secondary);
+}
+
+/* ── About modal ── */
+.about-card {
+  max-width: 520px;
+}
+
+.about-logo-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.about-logo-brand {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.about-logo-bleed {
+  color: var(--red);
+}
+
+.about-version {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.about-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.about-link:hover {
+  text-decoration: underline;
+}
+
+.about-link-arc {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-weight: 700;
+  color: inherit;
+}
+
+.about-link-arc .club-ai,
+.about-link-arc .club-club { color: #ffffff; }
+.about-link-arc .club-revenue { color: var(--accent); }
+
+.about-links-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 18px 0 0;
+}
+
+.about-pill {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-radius: 20px;
+  padding: 5px 14px;
+  text-decoration: none;
+  transition: border-color 150ms, color 150ms;
+}
+
+.about-pill:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.about-attribution {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #2a2a2a;
+}
+
+.about-attr-club {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #00ff00;
+  line-height: 1.4;
+}
+
+.about-attr-handle {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 12px;
+  color: #555555;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+.about-attr-link {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 11px;
+  color: #555555;
+  text-decoration: none;
+  margin-top: 3px;
+  display: inline-block;
+}
+
+.about-attr-link:hover {
+  text-decoration: underline;
 }

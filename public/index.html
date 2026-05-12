@@ -16,9 +16,9 @@
 <body>
   <div id="app">
     <aside id="sidebar">
-      <a class="sidebar-club-brand" href="https://airevenueclub.com" target="_blank" rel="noopener">
-        <span class="club-ai">AI</span> <span class="club-revenue"> Revenue </span> <span class="club-club">Club</span>
-      </a>
+      <div class="sidebar-token-bleed">
+        Token <span class="bleed-word">Bleed</span>
+      </div>
       <nav>
         <div class="nav-section-label">Overview</div>
         <a class="nav-item" data-view="overview" href="#overview">
@@ -44,20 +44,20 @@
 
       <div class="sidebar-footer">
         <button id="refresh-btn" class="refresh-btn" title="Refresh data">↺ Refresh</button>
+        <button id="about-btn" class="about-btn" title="About Token Bleed">? About</button>
+        <div class="sidebar-credits">
+          <a class="sidebar-credits-club" href="https://airevenueclub.com" target="_blank" rel="noopener"><span class="club-ai">AI</span> <span class="club-revenue">Revenue</span> <span class="club-club">Club</span></a>
+          <a class="sidebar-credits-handle" href="https://youtube.com/@MrRichSylvester" target="_blank" rel="noopener">@MrRichSylvester</a>
+        </div>
       </div>
     </aside>
 
     <div id="main">
       <header id="header">
-        <div class="header-left">
-          <div class="header-logo-row">
-            <span class="header-brand token-bleed-logo">Token <span class="bleed-word">Bleed</span></span>
-          </div>
-        </div>
+        <div class="header-left"></div>
         <div class="header-right" style="display:flex;align-items:center;gap:20px;">
           <div id="period-selector"></div>
           <button id="global-settings-btn" class="global-settings-btn" title="Settings">⚙</button>
-          <span class="header-byline">Built by @MrRichSylvester</span>
         </div>
       </header>
 
