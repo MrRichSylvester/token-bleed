@@ -1575,13 +1575,10 @@ function showAboutModal() {
     <div class="onboarding-card about-card">
 
       <div class="about-hero">
-        <div class="about-hero-eyebrow">
-          <span class="about-version">open source · MIT</span>
-        </div>
-        <div class="about-hero-title">Token <span class="about-logo-bleed">Bleed</span></div>
+        <div class="about-hero-title">Token <span class="about-logo-bleed">Bleed</span> <span class="about-version">open source · MIT</span></div>
         <p class="about-hero-tagline">
           Every time Claude Code writes a line of code, it burns tokens.
-          Those tokens cost money — but Claude gives you almost no way to see where it's all going.
+          Those tokens cost money, but Claude gives you almost no way to see where it's all going.
         </p>
       </div>
 
@@ -1601,6 +1598,11 @@ function showAboutModal() {
             <div class="about-feature-icon">◎</div>
             <div class="about-feature-title">Stays local</div>
             <div class="about-feature-text">No cloud. No account. Reads logs on your machine. Nothing leaves.</div>
+          </div>
+          <div class="about-feature">
+            <div class="about-feature-icon">⧉</div>
+            <div class="about-feature-title">Session compare</div>
+            <div class="about-feature-text">Pick up to 6 sessions and diff them. See exactly which one burned your budget and why.</div>
           </div>
         </div>
 

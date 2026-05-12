@@ -2271,7 +2271,7 @@ td.msg-prompt {
 /* ── About modal ── */
 /* ── About modal redesign ── */
 .about-card {
-  max-width: 660px;
+  max-width: 720px;
   padding: 0;
   overflow: hidden;
 }
@@ -2285,11 +2285,10 @@ td.msg-prompt {
   border-bottom: 1px solid var(--border);
 }
 
-.about-hero-eyebrow {
-  margin-bottom: 12px;
-}
-
 .about-version {
+  vertical-align: middle;
+  position: relative;
+  top: -3px;
   font-size: 11px;
   font-family: var(--font-mono);
   color: var(--text-muted);
@@ -2315,10 +2314,10 @@ td.msg-prompt {
 }
 
 .about-hero-tagline {
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-secondary);
   line-height: 1.65;
-  max-width: 520px;
+  max-width: 560px;
   margin: 0;
 }
 
@@ -2330,7 +2329,7 @@ td.msg-prompt {
 /* Feature cards */
 .about-features {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
   margin-bottom: 24px;
 }
@@ -2358,21 +2357,21 @@ td.msg-prompt {
 }
 
 .about-feature-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: 0.01em;
 }
 
 .about-feature-text {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 /* Attribution */
 .about-attribution-line {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-muted);
   line-height: 1.6;
   margin: 0 0 16px;
