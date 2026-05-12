@@ -539,6 +539,18 @@ async function renderOverview() {
       { label: 'Input',       value: stats.inputTokens,         sub: fmtPct(stats.inputTokens / (stats.totalTokens || 1)),         color: 'amber'  },
     ].filter(r => r.value > 0);
 
+    // Entrypoint breakdown
+    const epLabelMap = { 'claude-vscode': 'VS Code', 'cli': 'CLI', 'claude-desktop': 'Desktop' };
+    const epColorMap = { 'claude-vscode': 'blue', 'cli': 'green', 'claude-desktop': 'violet' };
+    const entrypointRows = Object.entries(stats.entrypointCounts || {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([ep, count]) => ({
+        label: epLabelMap[ep] || ep,
+        value: count,
+        sub: fmtPct(count / (stats.totalSessions || 1)),
+        color: epColorMap[ep] || 'amber',
+      }));
+
     const content = document.getElementById('content');
     content.innerHTML = `
       <h1 class="page-title">Overview</h1>
@@ -601,6 +613,21 @@ async function renderOverview() {
           <div class="hbar-wrap">${renderHorizBars(tokenRows, { fmtVal: fmtTokens })}</div>
         </div>
       </div>
+
+      ${entrypointRows.length > 1 ? `
+      <div class="chart-row-2">
+        <div class="chart-wrap">
+          <div class="chart-title">Sessions by Entrypoint</div>
+          <div class="hbar-wrap">${renderHorizBars(entrypointRows, { fmtVal: n => `${n} sessions` })}</div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">Thinking Sessions</div>
+          <div class="hbar-wrap">${renderHorizBars([
+            { label: 'With thinking',    value: stats.thinkingSessionCount,                          color: 'violet', sub: fmtPct(stats.thinkingSessionCount / (stats.totalSessions || 1)) },
+            { label: 'Without thinking', value: stats.totalSessions - stats.thinkingSessionCount,    color: 'border', sub: fmtPct((stats.totalSessions - stats.thinkingSessionCount) / (stats.totalSessions || 1)) },
+          ].filter(r => r.value > 0), { fmtVal: n => `${n} sessions` })}</div>
+        </div>
+      </div>` : ''}
 
       <div class="section">
         <div class="section-header">
@@ -825,12 +852,25 @@ function renderSessionsTable(sessions, opts = {}) {
     const checkCell = opts.selectable
       ? `<td class="check-cell"><input type="checkbox" class="session-check" data-session-id="${escHtml(s.id)}" ${isChecked ? 'checked' : ''}></td>`
       : '';
+    const displayTitle = s.aiTitle || s.firstPrompt;
+    const thinkingBadge = s.thinkingBlocks > 0
+      ? `<span class="thinking-badge" title="${s.thinkingBlocks} thinking turn${s.thinkingBlocks !== 1 ? 's' : ''}">💭</span>`
+      : '';
 
-    return `<tr class="session-row" data-session-id="${escHtml(s.id)}" data-project-id="${escHtml(s.projectId)}">
+    return `<tr class="session-row" data-session-id="${escHtml(s.id)}" data-project-id="${escHtml(s.projectId)}"
+      data-entrypoint="${escHtml(s.entrypoint || '')}"
+      data-git-branch="${escHtml(s.gitBranch || '')}"
+      data-version="${escHtml(s.version || '')}"
+      data-permission-mode="${escHtml(s.permissionMode || '')}"
+      data-thinking-blocks="${s.thinkingBlocks || 0}"
+      data-first-prompt="${escHtml(s.firstPrompt)}"
+      data-ai-title="${escHtml(s.aiTitle || '')}"
+      data-cache5m="${s.usage.cache5mTokens || 0}"
+      data-cache1h="${s.usage.cache1hTokens || 0}">
       ${checkCell}
       <td class="muted nowrap" style="font-size:12px">${fmtDateTime(s.startTime)}</td>
       ${opts.compact ? '' : `<td class="secondary" style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(s.projectName)}</td>`}
-      <td class="prompt"><span title="${escHtml(s.firstPrompt)}">${escHtml(s.firstPrompt)}</span></td>
+      <td class="prompt">${thinkingBadge}<span title="${escHtml(s.firstPrompt)}">${escHtml(displayTitle)}</span></td>
       <td>${modelBadgeHtml(s.primaryModel, local)}</td>
       <td class="right mono" style="font-size:12px">${fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens)}</td>
       <td class="right">${costCell}</td>
@@ -970,6 +1010,38 @@ function renderCompareBar() {
   });
 }
 
+function renderSessionMeta(row) {
+  const d = row.dataset;
+  const entrypoint = d.entrypoint || '';
+  const branch = d.gitBranch || '';
+  const version = d.version || '';
+  const perm = d.permissionMode || '';
+  const thinking = parseInt(d.thinkingBlocks || '0', 10);
+  const cache5m = parseInt(d.cache5m || '0', 10);
+  const cache1h = parseInt(d.cache1h || '0', 10);
+  const aiTitle = d.aiTitle || '';
+  const firstPrompt = d.firstPrompt || '';
+
+  const entrypointLabel = { 'claude-vscode': 'VS Code', 'cli': 'CLI', 'claude-desktop': 'Desktop' }[entrypoint] || entrypoint;
+  const permLabel = perm === 'bypassPermissions' ? 'auto-approve' : perm;
+
+  const chips = [
+    entrypoint && `<span class="meta-chip">${escHtml(entrypointLabel)}</span>`,
+    branch && `<span class="meta-chip">⎇ ${escHtml(branch)}</span>`,
+    perm && perm !== 'default' && `<span class="meta-chip perm-chip">${escHtml(permLabel)}</span>`,
+    thinking > 0 && `<span class="meta-chip thinking-chip">💭 ${thinking} thinking turn${thinking !== 1 ? 's' : ''}</span>`,
+    (cache5m > 0 || cache1h > 0) && `<span class="meta-chip">cache: ${fmtTokens(cache5m)} 5m · ${fmtTokens(cache1h)} 1h</span>`,
+    version && `<span class="meta-chip muted-chip">v${escHtml(version)}</span>`,
+  ].filter(Boolean).join('');
+
+  const titleLine = aiTitle && aiTitle !== firstPrompt
+    ? `<div class="session-meta-title">${escHtml(aiTitle)}</div>`
+    : '';
+
+  if (!chips && !titleLine) return '';
+  return `<div class="session-meta-strip">${titleLine}${chips ? `<div class="session-meta-chips">${chips}</div>` : ''}</div>`;
+}
+
 async function toggleSession(row, container) {
   const sessionId = row.dataset.sessionId;
   const detailRow = container.querySelector(`.session-detail-row[data-for="${CSS.escape(sessionId)}"]`);
@@ -984,8 +1056,16 @@ async function toggleSession(row, container) {
 
   row.classList.add('expanded');
   detailRow.classList.add('expanded');
+
+  const inner = detailRow.querySelector('.session-detail-inner');
   const wrap = detailRow.querySelector('.session-messages-wrap');
   if (wrap.dataset.loaded) return;
+
+  // Inject metadata strip above messages (once, immediately)
+  const metaHtml = renderSessionMeta(row);
+  if (metaHtml && !inner.querySelector('.session-meta-strip')) {
+    inner.insertAdjacentHTML('afterbegin', metaHtml);
+  }
 
   wrap.innerHTML = '<div class="loading-state" style="min-height:60px"><div class="spinner"></div></div>';
 
@@ -1005,6 +1085,9 @@ async function toggleSession(row, container) {
 function renderMessagesTable(messages) {
   const rows = messages.map((m, i) => {
     const totalTok = m.inputTokens + m.outputTokens + m.cacheCreationTokens + m.cacheReadTokens;
+    const thinkCell = m.hasThinking
+      ? `<td class="right" style="font-size:11px" title="Extended thinking">💭</td>`
+      : `<td class="right muted" style="font-size:11px">—</td>`;
     return `<tr>
       <td class="muted" style="font-size:11px;width:24px;text-align:right">${i + 1}</td>
       <td class="muted nowrap" style="font-size:11px">${fmtDateTime(m.timestamp)}</td>
@@ -1013,6 +1096,7 @@ function renderMessagesTable(messages) {
       <td class="right mono muted" style="font-size:11px">${totalTok ? fmtTokens(totalTok) : '—'}</td>
       <td class="right mono" style="font-size:11px">${m.cost ? fmtCost(m.cost) : '—'}</td>
       <td class="right muted" style="font-size:11px">${m.toolCalls || '—'}</td>
+      ${thinkCell}
     </tr>`;
   }).join('');
 
@@ -1026,6 +1110,7 @@ function renderMessagesTable(messages) {
         <th class="right">Tokens</th>
         <th class="right">Cost</th>
         <th class="right">Tools</th>
+        <th class="right">Think</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -1344,6 +1429,7 @@ function renderSessionComparisonTable() {
     { label: 'Duration',        val: s => s.duration,             fmt: s => fmtDuration(s.duration),           lowerBetter: true  },
     { label: 'Messages',        val: s => s.messageCount,         fmt: s => s.messageCount.toString(),         lowerBetter: null  },
     { label: 'Tool Calls',      val: s => s.toolCallCount,        fmt: s => s.toolCallCount.toString(),        lowerBetter: null  },
+    { label: 'Thinking Turns',  val: s => s.thinkingBlocks || 0,  fmt: s => (s.thinkingBlocks || 0).toString(), lowerBetter: null  },
   ];
 
   function isLocal(s) { return s.cost === 0 && (s.usage.inputTokens + s.usage.outputTokens) > 0; }

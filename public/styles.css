@@ -629,6 +629,53 @@ td.prompt span { display: block; overflow: hidden; text-overflow: ellipsis; whit
   margin: 8px 0;
 }
 
+/* ── Session metadata strip ── */
+.session-meta-strip {
+  padding: 8px 12px 6px;
+  border-left: 2px solid var(--border-2);
+  margin-bottom: 0;
+}
+
+.session-meta-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.session-meta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-2);
+  white-space: nowrap;
+}
+
+.meta-chip.thinking-chip { background: var(--violet-dim); color: var(--violet); border-color: rgba(185,133,244,0.2); }
+.meta-chip.perm-chip     { background: var(--amber-dim);  color: var(--amber);  border-color: rgba(255,181,71,0.2); }
+.meta-chip.muted-chip    { color: var(--text-muted); }
+
+/* ── Thinking badge in session rows ── */
+.thinking-badge {
+  display: inline-block;
+  margin-right: 5px;
+  font-size: 12px;
+  vertical-align: middle;
+  opacity: 0.85;
+  cursor: default;
+}
+
 .messages-table {
   width: 100%;
   border-collapse: collapse;
@@ -1812,6 +1859,15 @@ td.msg-prompt {
 [data-theme="light"] .hbar-track {
   background: rgba(0, 0, 0, 0.07);
 }
+
+[data-theme="light"] .meta-chip {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #475569;
+}
+
+[data-theme="light"] .meta-chip.thinking-chip { background: rgba(124,58,237,0.07); color: #7c3aed; border-color: rgba(124,58,237,0.2); }
+[data-theme="light"] .meta-chip.perm-chip     { background: rgba(180,83,9,0.07);   color: #b45309; border-color: rgba(180,83,9,0.2); }
 
 [data-theme="light"] .bar-col-bg {
   fill: rgba(0, 0, 0, 0.04);

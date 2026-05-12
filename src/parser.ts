@@ -47,13 +47,19 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
   if (lines.length === 0) return null;
 
   let firstPrompt = '';
+  let aiTitle = '';
   let startTime = '';
   let endTime = '';
   let messageCount = 0;
   let toolCallCount = 0;
+  let thinkingBlocks = 0;
   let cwd = '';
+  let entrypoint = '';
+  let gitBranch = '';
+  let version = '';
+  let permissionMode = '';
   const models = new Set<string>();
-  const usage: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 };
+  const usage: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, cache5mTokens: 0, cache1hTokens: 0 };
 
   for (const line of lines) {
     let entry: RawEntry;
@@ -66,6 +72,14 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
     if (!startTime && entry.timestamp) startTime = entry.timestamp;
     if (entry.timestamp) endTime = entry.timestamp;
     if (entry.cwd && !cwd) cwd = entry.cwd;
+    if (entry.entrypoint && !entrypoint) entrypoint = entry.entrypoint;
+    if (entry.gitBranch && !gitBranch) gitBranch = entry.gitBranch;
+    if (entry.version && !version) version = entry.version;
+    if (entry.permissionMode && !permissionMode) permissionMode = entry.permissionMode;
+
+    if (entry.type === 'ai-title' && entry.aiTitle) {
+      aiTitle = entry.aiTitle;
+    }
 
     if (entry.type === 'user') {
       if (entry.isSidechain) continue;
@@ -87,13 +101,15 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
       usage.outputTokens += u.output_tokens ?? 0;
       usage.cacheCreationTokens += u.cache_creation_input_tokens ?? 0;
       usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;
+      usage.cache5mTokens += u.cache_creation?.ephemeral_5m_input_tokens ?? 0;
+      usage.cache1hTokens += u.cache_creation?.ephemeral_1h_input_tokens ?? 0;
 
       if (entry.message.model) models.add(entry.message.model);
 
       if (Array.isArray(entry.message.content)) {
-        toolCallCount += (entry.message.content as Array<{ type?: string }>).filter(
-          (c) => c.type === 'tool_use'
-        ).length;
+        const content = entry.message.content as Array<{ type?: string }>;
+        toolCallCount += content.filter((c) => c.type === 'tool_use').length;
+        if (content.some((c) => c.type === 'thinking')) thinkingBlocks++;
       }
     }
   }
@@ -127,7 +143,13 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
     messageCount,
     toolCallCount,
     firstPrompt: firstPrompt || '(no prompt)',
+    aiTitle,
     cacheHitRate,
+    entrypoint,
+    gitBranch,
+    version,
+    permissionMode,
+    thinkingBlocks,
   };
 }
 
@@ -218,6 +240,7 @@ export function parseSessionMessages(sessionId: string, projectId: string): Sess
           cacheReadTokens: 0,
           cost: 0,
           toolCalls: 0,
+          hasThinking: false,
         });
       }
 
@@ -231,11 +254,15 @@ export function parseSessionMessages(sessionId: string, projectId: string): Sess
         outputTokens: u.output_tokens ?? 0,
         cacheCreationTokens: u.cache_creation_input_tokens ?? 0,
         cacheReadTokens: u.cache_read_input_tokens ?? 0,
+        cache5mTokens: u.cache_creation?.ephemeral_5m_input_tokens ?? 0,
+        cache1hTokens: u.cache_creation?.ephemeral_1h_input_tokens ?? 0,
       };
       const model = entry.message.model ?? 'unknown';
-      const toolCalls = Array.isArray(entry.message.content)
-        ? (entry.message.content as Array<{ type?: string }>).filter((c) => c.type === 'tool_use').length
-        : 0;
+      const content = Array.isArray(entry.message.content)
+        ? (entry.message.content as Array<{ type?: string }>)
+        : [];
+      const toolCalls = content.filter((c) => c.type === 'tool_use').length;
+      const hasThinking = content.some((c) => c.type === 'thinking');
 
       messages.push({
         ...pendingUser,
@@ -246,6 +273,7 @@ export function parseSessionMessages(sessionId: string, projectId: string): Sess
         cacheReadTokens: usage.cacheReadTokens,
         cost: calculateCost(model, usage),
         toolCalls,
+        hasThinking,
       });
       pendingUser = null;
     }
@@ -262,6 +290,7 @@ export function parseSessionMessages(sessionId: string, projectId: string): Sess
       cacheReadTokens: 0,
       cost: 0,
       toolCalls: 0,
+      hasThinking: false,
     });
   }
 

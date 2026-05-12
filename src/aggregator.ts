@@ -2,7 +2,7 @@ import type { Session, ProjectSummary, GlobalStats, DailyActivity, ModelStats, T
 import { isLocalModel } from './pricing.js';
 
 function emptyUsage(): TokenUsage {
-  return { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 };
+  return { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, cache5mTokens: 0, cache1hTokens: 0 };
 }
 
 function addUsage(acc: TokenUsage, s: TokenUsage): void {
@@ -10,6 +10,8 @@ function addUsage(acc: TokenUsage, s: TokenUsage): void {
   acc.outputTokens += s.outputTokens;
   acc.cacheCreationTokens += s.cacheCreationTokens;
   acc.cacheReadTokens += s.cacheReadTokens;
+  acc.cache5mTokens += s.cache5mTokens;
+  acc.cache1hTokens += s.cache1hTokens;
 }
 
 function cacheHitRate(u: TokenUsage): number {
@@ -65,8 +67,10 @@ export function computeStats(sessions: Session[], projects: ProjectSummary[]): G
   const usage = emptyUsage();
   let cost = 0;
   let messages = 0;
+  let thinkingSessionCount = 0;
   const allModels = new Set<string>();
   const modelFreq: Record<string, number> = {};
+  const entrypointCounts: Record<string, number> = {};
 
   for (const s of sessions) {
     addUsage(usage, s.usage);
@@ -74,6 +78,8 @@ export function computeStats(sessions: Session[], projects: ProjectSummary[]): G
     messages += s.messageCount;
     s.models.forEach((m) => allModels.add(m));
     modelFreq[s.primaryModel] = (modelFreq[s.primaryModel] ?? 0) + 1;
+    if (s.entrypoint) entrypointCounts[s.entrypoint] = (entrypointCounts[s.entrypoint] ?? 0) + 1;
+    if (s.thinkingBlocks > 0) thinkingSessionCount++;
   }
 
   const topModel = Object.entries(modelFreq).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'unknown';
@@ -91,6 +97,8 @@ export function computeStats(sessions: Session[], projects: ProjectSummary[]): G
     topModel,
     modelsUsed: [...allModels],
     projectCount: projects.length,
+    entrypointCounts,
+    thinkingSessionCount,
   };
 }
 

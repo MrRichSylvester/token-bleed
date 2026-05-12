@@ -3,6 +3,8 @@ export interface TokenUsage {
   outputTokens: number;
   cacheCreationTokens: number;
   cacheReadTokens: number;
+  cache5mTokens: number;
+  cache1hTokens: number;
 }
 
 export interface Session {
@@ -20,7 +22,13 @@ export interface Session {
   messageCount: number;
   toolCallCount: number;
   firstPrompt: string;
+  aiTitle: string;
   cacheHitRate: number;
+  entrypoint: string;
+  gitBranch: string;
+  version: string;
+  permissionMode: string;
+  thinkingBlocks: number;
 }
 
 export interface ProjectSummary {
@@ -67,6 +75,8 @@ export interface GlobalStats {
   topModel: string;
   modelsUsed: string[];
   projectCount: number;
+  entrypointCounts: Record<string, number>;
+  thinkingSessionCount: number;
 }
 
 export interface DailyActivity {
@@ -97,6 +107,7 @@ export interface SessionMessage {
   cacheReadTokens: number;
   cost: number;
   toolCalls: number;
+  hasThinking: boolean;
 }
 
 export interface RawEntry {
@@ -107,6 +118,11 @@ export interface RawEntry {
   sessionId?: string;
   cwd?: string;
   isSidechain?: boolean;
+  entrypoint?: string;
+  gitBranch?: string;
+  version?: string;
+  permissionMode?: string;
+  aiTitle?: string;
   message?: {
     role?: string;
     model?: string;
@@ -117,6 +133,10 @@ export interface RawEntry {
       output_tokens?: number;
       cache_creation_input_tokens?: number;
       cache_read_input_tokens?: number;
+      cache_creation?: {
+        ephemeral_5m_input_tokens?: number;
+        ephemeral_1h_input_tokens?: number;
+      };
     };
   };
   userType?: string;
