@@ -4,7 +4,7 @@
   "description": "See exactly what your Claude Code sessions cost. Per prompt. Per session. Per project.",
   "type": "module",
   "bin": {
-    "token-bleed": "./bin/cli.js"
+    "token-bleed": "bin/cli.js"
   },
   "files": [
     "bin/",
@@ -24,7 +24,7 @@
   "homepage": "https://tokenbleed.dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mrrichsylvester/token-bleed"
+    "url": "git+https://github.com/mrrichsylvester/token-bleed.git"
   },
   "keywords": [
     "claude-code",
