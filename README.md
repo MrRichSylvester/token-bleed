@@ -65,19 +65,27 @@ PORT=8080 HOST=0.0.0.0 npm start
 
 Token Bleed includes accurate pricing for:
 
-| Model | Input | Output | Cache Write | Cache Read |
-|---|---|---|---|---|
-| claude-opus-4-7 | $15 | $75 | $18.75 | $1.50 |
-| claude-sonnet-4-6 | $3 | $15 | $3.75 | $0.30 |
-| claude-haiku-4-5 | $0.80 | $4 | $1.00 | $0.08 |
-| claude-3-5-sonnet | $3 | $15 | $3.75 | $0.30 |
-| claude-3-5-haiku | $0.80 | $4 | $1.00 | $0.08 |
-| claude-3-opus | $15 | $75 | $18.75 | $1.50 |
-| claude-3-haiku | $0.25 | $1.25 | $0.30 | $0.03 |
+| Model             | Input | Output | Cache Write | Cache Read |
+| ----------------- | ----- | ------ | ----------- | ---------- |
+| claude-opus-4-7   | $15   | $75    | $18.75      | $1.50      |
+| claude-sonnet-4-6 | $3    | $15    | $3.75       | $0.30      |
+| claude-haiku-4-5  | $0.80 | $4     | $1.00       | $0.08      |
+| claude-3-5-sonnet | $3    | $15    | $3.75       | $0.30      |
+| claude-3-5-haiku  | $0.80 | $4     | $1.00       | $0.08      |
+| claude-3-opus     | $15   | $75    | $18.75      | $1.50      |
+| claude-3-haiku    | $0.25 | $1.25  | $0.30       | $0.03      |
 
 Prices per million tokens. Prefix matching handles future versioned model IDs automatically.
 
 Local/custom models show usage data but report $0 cost.
+
+---
+
+## Known quirks with local models
+
+Token Bleed works with any model Claude Code talks to, including local models running via Ollama or similar. Two things to be aware of when reading token counts for those sessions.
+
+**Local models report cumulative input tokens.** The Anthropic API reports incremental input tokens per turn, with cached context tracked separately in `cache_read_input_tokens`. Local model servers (Ollama, etc.) do not implement prompt caching, so they report the full conversation context as `input_tokens` on every turn. Turn 3 includes the full prompt from turns 1 and 2. This means input token totals for local model sessions will be significantly higher than equivalent Claude sessions and are not directly comparable. The session compare and model compare views flag this with a note when a local model is present.
 
 ---
 
@@ -96,19 +104,19 @@ No build step required for the frontend. Static files are served directly from `
 
 The server exposes a REST API if you want to build on top of it.
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/stats` | Global totals and summary |
-| GET | `/api/projects` | Per-project cost and usage |
-| GET | `/api/sessions` | Paginated session list (filterable by project, model) |
-| GET | `/api/sessions/:id` | Single session detail |
-| GET | `/api/sessions/:id/messages` | Per-message breakdown for a session |
-| GET | `/api/models` | Per-model aggregated stats |
-| GET | `/api/models/comparison` | Side-by-side stats for two models |
-| GET | `/api/daily` | Daily cost and activity over time |
-| GET | `/api/meta` | Date range and cleanup period from your Claude settings |
-| GET | `/api/refresh` | Invalidate the in-memory cache |
-| POST | `/api/settings` | Update `cleanupPeriodDays` in `~/.claude/settings.json` |
+| Method | Path                         | Description                                             |
+| ------ | ---------------------------- | ------------------------------------------------------- |
+| GET    | `/api/stats`                 | Global totals and summary                               |
+| GET    | `/api/projects`              | Per-project cost and usage                              |
+| GET    | `/api/sessions`              | Paginated session list (filterable by project, model)   |
+| GET    | `/api/sessions/:id`          | Single session detail                                   |
+| GET    | `/api/sessions/:id/messages` | Per-message breakdown for a session                     |
+| GET    | `/api/models`                | Per-model aggregated stats                              |
+| GET    | `/api/models/comparison`     | Side-by-side stats for two models                       |
+| GET    | `/api/daily`                 | Daily cost and activity over time                       |
+| GET    | `/api/meta`                  | Date range and cleanup period from your Claude settings |
+| GET    | `/api/refresh`               | Invalidate the in-memory cache                          |
+| POST   | `/api/settings`              | Update `cleanupPeriodDays` in `~/.claude/settings.json` |
 
 All list endpoints accept a `?since=YYYY-MM-DD` query param to filter by date.
 

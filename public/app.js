@@ -997,6 +997,7 @@ function renderCompareBar() {
   if (goBtn) {
     goBtn.addEventListener('click', () => {
       state.data.allSessions = null;
+      bar.className = 'compare-bar compare-bar--hidden';
       navigate('session-compare');
     });
   }
@@ -1414,10 +1415,14 @@ function renderSessionComparisonTable() {
     return;
   }
 
+  function isLocal(s) { return s.cost === 0 && (s.usage.inputTokens + s.usage.outputTokens) > 0; }
+
+  const localTooltip = 'Local models send the full conversation context each turn rather than tracking cache reads separately. This inflates input counts vs. Claude sessions.';
+
   const metrics = [
     { label: 'Cost',            val: s => s.cost,                                                                                                  fmt: s => { const local = isLocal(s); return local ? '<span class="amber">local</span>' : fmtCost(s.cost); }, lowerBetter: true,  skipLocal: true },
     { label: 'Total Tokens',    val: s => s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens,      fmt: s => fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens), lowerBetter: true  },
-    { label: 'Input Tokens',    val: s => s.usage.inputTokens,    fmt: s => fmtTokens(s.usage.inputTokens),    lowerBetter: true  },
+    { label: 'Input Tokens',    val: s => s.usage.inputTokens,    fmt: s => isLocal(s) ? `${fmtTokens(s.usage.inputTokens)} <span class="sc-metric-info" data-tooltip="${escHtml(localTooltip)}">?</span>` : fmtTokens(s.usage.inputTokens),    lowerBetter: true  },
     { label: 'Output Tokens',   val: s => s.usage.outputTokens,   fmt: s => fmtTokens(s.usage.outputTokens),   lowerBetter: true  },
     { label: 'Cache Read',      val: s => s.usage.cacheReadTokens, fmt: s => fmtTokens(s.usage.cacheReadTokens), lowerBetter: false },
     { label: 'Cache Write',     val: s => s.usage.cacheCreationTokens, fmt: s => fmtTokens(s.usage.cacheCreationTokens), lowerBetter: true },
@@ -1427,8 +1432,6 @@ function renderSessionComparisonTable() {
     { label: 'Tool Calls',      val: s => s.toolCallCount,        fmt: s => s.toolCallCount.toString(),        lowerBetter: null  },
     { label: 'Thinking Turns',  val: s => s.thinkingBlocks || 0,  fmt: s => (s.thinkingBlocks || 0).toString(), lowerBetter: null  },
   ];
-
-  function isLocal(s) { return s.cost === 0 && (s.usage.inputTokens + s.usage.outputTokens) > 0; }
 
   const colHeaders = selected.map((s, i) => {
     const local = isLocal(s);
@@ -1467,13 +1470,6 @@ function renderSessionComparisonTable() {
     return `<tr><td class="sc-metric-label">${escHtml(m.label)}</td>${cells}</tr>`;
   }).join('');
 
-  const hasLocal = selected.some(s => isLocal(s));
-  const localNote = hasLocal ? `
-    <p class="sc-local-note">
-      Local model input tokens reflect the full conversation context sent each turn, not just new tokens.
-      This inflates input counts compared to hosted APIs that track incremental tokens and cache reads separately.
-    </p>` : '';
-
   wrap.innerHTML = `
     <div class="sc-table-wrap">
       <table class="sc-table">
@@ -1490,7 +1486,6 @@ function renderSessionComparisonTable() {
       <span class="sc-legend-item"><span class="sc-cell-best sc-legend-swatch"></span> Best</span>
       <span class="sc-legend-item"><span class="sc-cell-worst sc-legend-swatch"></span> Worst</span>
     </div>
-    ${localNote}
   `;
 }
 

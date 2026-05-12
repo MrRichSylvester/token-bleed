@@ -61,6 +61,8 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
   const models = new Set<string>();
   const usage: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, cache5mTokens: 0, cache1hTokens: 0 };
   const seenMessageIds = new Set<string>();
+  // Tracks content chars for messages where the API reported output_tokens=0
+  const outputEstimateChars = new Map<string, number>();
 
   for (const line of lines) {
     let entry: RawEntry;
@@ -97,7 +99,7 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
     }
 
     if (entry.type === 'assistant' && entry.message?.usage) {
-      const msgId = entry.message.id;
+      const msgId = entry.message.id ?? '';
       const isNewMessage = !msgId || !seenMessageIds.has(msgId);
 
       if (isNewMessage) {
@@ -109,9 +111,22 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
         usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;
         usage.cache5mTokens += u.cache_creation?.ephemeral_5m_input_tokens ?? 0;
         usage.cache1hTokens += u.cache_creation?.ephemeral_1h_input_tokens ?? 0;
+        // Flag messages where the API didn't report output tokens so we can estimate
+        if ((u.output_tokens ?? 0) === 0 && msgId) outputEstimateChars.set(msgId, 0);
       }
 
       if (entry.message.model) models.add(entry.message.model);
+
+      // Accumulate content chars across all entries for this message to estimate output tokens
+      if (msgId && outputEstimateChars.has(msgId) && Array.isArray(entry.message.content)) {
+        let chars = 0;
+        for (const block of entry.message.content as Array<Record<string, unknown>>) {
+          if (block.type === 'text' && typeof block.text === 'string') chars += block.text.length;
+          if (block.type === 'thinking' && typeof block.thinking === 'string') chars += block.thinking.length;
+          if (block.type === 'tool_use' && block.input) chars += JSON.stringify(block.input).length;
+        }
+        outputEstimateChars.set(msgId, (outputEstimateChars.get(msgId) ?? 0) + chars);
+      }
 
       if (Array.isArray(entry.message.content)) {
         const content = entry.message.content as Array<{ type?: string }>;
@@ -122,6 +137,11 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
   }
 
   if (!startTime) return null;
+
+  // For local models that report output_tokens=0, estimate from content character counts (~4 chars/token)
+  for (const chars of outputEstimateChars.values()) {
+    if (chars > 0) usage.outputTokens += Math.round(chars / 4);
+  }
 
   const primaryModel = models.size > 0 ? [...models][0] : 'unknown';
   const cost = calculateCost(primaryModel, usage);
