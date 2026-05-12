@@ -689,6 +689,7 @@ async function renderOverview() {
     animateHbars(content);
     bindUsageGridConfig();
     requestAnimationFrame(scaleUsageGrid);
+    showOnboardingIfNeeded(meta);
 
     // Load recent sessions async
     const { sessions } = await api.sessions({ limit: 10, offset: 0 });
@@ -1558,6 +1559,79 @@ function renderPeriodSelector() {
       renderView();
     });
   });
+}
+
+// ── Onboarding ─────────────────────────────────────────────────
+
+function showOnboardingIfNeeded(meta) {
+  if (localStorage.getItem('br-onboarded')) return;
+  const cleanupDays = meta?.cleanupPeriodDays ?? 30;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'onboarding-overlay';
+  overlay.className = 'onboarding-overlay';
+  overlay.innerHTML = `
+    <div class="onboarding-card">
+      <div class="onboarding-title">One thing before you dig in</div>
+      <p class="onboarding-text">
+        Burn Rate tracks your Claude Code usage by reading local session logs.
+        Those logs are currently kept for <strong>${cleanupDays} days</strong> —
+        after that Claude Code deletes them and they're gone from this dashboard too.
+      </p>
+      <p class="onboarding-text">
+        Set it to however far back you want history. 90 days is a good default.
+      </p>
+      <div class="onboarding-retention">
+        <span class="usage-config-label">Keep logs for</span>
+        <input class="usage-config-input" id="ob-days-input" type="number" min="1" max="3650" value="${cleanupDays}">
+        <span class="usage-config-label">days</span>
+        <button class="usage-config-save" id="ob-days-save">Save</button>
+      </div>
+      <div class="usage-retention-warning" id="ob-zero-warning" style="display:none">
+        ⚠ 0 disables transcript writing entirely. Setting to 1 instead.
+      </div>
+      <div class="onboarding-footer">
+        <span class="onboarding-hint">You can change this anytime with the <span class="onboarding-gear">⚙</span> in the Activity card.</span>
+        <button class="onboarding-dismiss" id="ob-dismiss">Got it</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const input = overlay.querySelector('#ob-days-input');
+  const saveBtn = overlay.querySelector('#ob-days-save');
+  const warning = overlay.querySelector('#ob-zero-warning');
+  const dismissBtn = overlay.querySelector('#ob-dismiss');
+
+  function dismiss() {
+    localStorage.setItem('br-onboarded', '1');
+    overlay.classList.add('onboarding-out');
+    overlay.addEventListener('animationend', () => overlay.remove(), { once: true });
+  }
+
+  input.addEventListener('input', () => {
+    warning.style.display = parseInt(input.value, 10) === 0 ? 'block' : 'none';
+  });
+
+  saveBtn.addEventListener('click', async () => {
+    let v = parseInt(input.value, 10);
+    if (!Number.isFinite(v) || v < 0) return;
+    if (v === 0) { warning.style.display = 'block'; input.value = '1'; return; }
+    warning.style.display = 'none';
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    try {
+      await api.saveSetting('cleanupPeriodDays', v);
+      dismiss();
+      renderOverview();
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
+  });
+
+  dismissBtn.addEventListener('click', dismiss);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') saveBtn.click(); });
 }
 
 // ── Bootstrap ──────────────────────────────────────────────────
