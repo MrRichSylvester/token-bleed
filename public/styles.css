@@ -140,6 +140,48 @@ html, body {
   50%       { text-shadow: 0 0 16px rgba(255,90,90,0.8), 0 0 32px rgba(255,90,90,0.3); }
 }
 
+/* ── Easter egg ── */
+.bleed-hemorrhage {
+  animation: bleed-glitch 0.5s ease both !important;
+}
+
+@keyframes bleed-glitch {
+  0%   { transform: translate(0, 0)  skewX(0deg); }
+  10%  { transform: translate(-3px, 0) skewX(-6deg); color: #ff2222; }
+  20%  { transform: translate(3px, 0)  skewX(6deg); }
+  30%  { transform: translate(-2px, 1px) skewX(-3deg); color: var(--red); }
+  40%  { transform: translate(2px, -1px) skewX(3deg); }
+  55%  { transform: translate(-4px, 0) skewX(-8deg); color: #ff2222; }
+  65%  { transform: translate(4px, 0)  skewX(8deg); }
+  80%  { transform: translate(-1px, 0) skewX(-2deg); color: var(--red); }
+  100% { transform: translate(0, 0)  skewX(0deg); }
+}
+
+.bleed-egg-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  background: var(--surface-2);
+  border: 1px solid var(--red);
+  color: var(--red);
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 8px 16px;
+  border-radius: 6px;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  z-index: 9999;
+  white-space: nowrap;
+  box-shadow: 0 0 12px rgba(255, 90, 90, 0.25);
+}
+
+.bleed-egg-toast-out {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
+}
+
 .header-product {
   display: none;
 }

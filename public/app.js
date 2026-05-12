@@ -1639,3 +1639,58 @@ init();
     word.appendChild(el);
   });
 }());
+
+// Easter egg: click "Bleed" to trigger a hemorrhage
+(function initBleedEgg() {
+  const word = document.querySelector('.bleed-word');
+  if (!word) return;
+
+  const messages = [
+    'CRITICAL: token hemorrhage detected',
+    'skill issue',
+    'have you tried prompting less?',
+    'your context window is showing',
+    'the model is judging you',
+    'sending your wallet our condolences',
+    'at least the output was good. probably.',
+  ];
+
+  let eggCount = 0;
+
+  word.style.cursor = 'pointer';
+  word.addEventListener('click', () => {
+    eggCount++;
+
+    // Glitch shake the word
+    word.classList.remove('bleed-hemorrhage');
+    void word.offsetWidth;
+    word.classList.add('bleed-hemorrhage');
+    word.addEventListener('animationend', () => word.classList.remove('bleed-hemorrhage'), { once: true });
+
+    // Burst of temporary drips
+    const burstCount = 10 + Math.min(eggCount * 2, 20);
+    for (let i = 0; i < burstCount; i++) {
+      const el = document.createElement('span');
+      el.className = 'bleed-drip bleed-burst-drip';
+      const x = (5 + Math.random() * 90).toFixed(1) + '%';
+      const w = (1.5 + Math.random() * 2.5).toFixed(1) + 'px';
+      const dur = (0.6 + Math.random() * 1.0).toFixed(2) + 's';
+      const delay = (Math.random() * 0.4).toFixed(2) + 's';
+      const len = (16 + Math.random() * 28).toFixed(0) + 'px';
+      el.style.cssText = `--drip-x:${x};--drip-w:${w};--drip-dur:${dur};--drip-delay:${delay};--drip-len:${len}`;
+      word.appendChild(el);
+      setTimeout(() => el.remove(), 2200);
+    }
+
+    // Toast
+    const toast = document.createElement('div');
+    toast.className = 'bleed-egg-toast';
+    const msg = eggCount === 5
+      ? 'you need help. and fewer tokens.'
+      : messages[Math.floor(Math.random() * messages.length)];
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('bleed-egg-toast-out'), 2000);
+    setTimeout(() => toast.remove(), 2400);
+  });
+}());
