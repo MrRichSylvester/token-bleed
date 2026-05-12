@@ -1,0 +1,779 @@
+// ── Formatters ────────────────────────────────────────────────
+
+function fmtCost(n) {
+  if (n === 0) return '$0.00';
+  if (n < 0.001) return `$${n.toFixed(5)}`;
+  if (n < 0.01) return `$${n.toFixed(4)}`;
+  if (n < 1) return `$${n.toFixed(3)}`;
+  if (n < 100) return `$${n.toFixed(2)}`;
+  return `$${n.toFixed(0)}`;
+}
+
+function fmtTokens(n) {
+  if (n === 0) return '0';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return n.toString();
+}
+
+function fmtPct(n) {
+  return `${(n * 100).toFixed(1)}%`;
+}
+
+function fmtDuration(ms) {
+  if (ms < 1000) return '<1s';
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  if (m < 60) return `${m}m ${rem}s`;
+  const h = Math.floor(m / 60);
+  const remMin = m % 60;
+  return `${h}h ${remMin}m`;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function modelBadgeHtml(model, isLocal) {
+  if (!model || model === 'unknown') {
+    return `<span class="model-badge unknown">unknown</span>`;
+  }
+  if (isLocal) {
+    return `<span class="model-badge local">${model}</span>`;
+  }
+  return `<span class="model-badge claude">${model}</span>`;
+}
+
+function shortModelName(model) {
+  // claude-opus-4-7 → Opus 4.7
+  // claude-sonnet-4-6 → Sonnet 4.6
+  // claude-haiku-4-5-20251001 → Haiku 4.5
+  return model
+    .replace('claude-', '')
+    .replace(/-(\d{8})$/, '')
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// ── API client ─────────────────────────────────────────────────
+
+const api = {
+  async fetch(path) {
+    const res = await fetch(path);
+    if (!res.ok) throw new Error(`API error ${res.status}`);
+    return res.json();
+  },
+  sinceParam() {
+    const since = periodToSince(state.period);
+    return since ? `since=${encodeURIComponent(since)}` : '';
+  },
+  withSince(base, extra = {}) {
+    const params = { ...extra };
+    const since = periodToSince(state.period);
+    if (since) params.since = since;
+    const qs = new URLSearchParams(params).toString();
+    return `${base}${qs ? '?' + qs : ''}`;
+  },
+  stats: () => api.fetch(api.withSince('/api/stats')),
+  daily: () => api.fetch(api.withSince('/api/daily')),
+  projects: () => api.fetch(api.withSince('/api/projects')),
+  sessions: (params = {}) => api.fetch(api.withSince('/api/sessions', params)),
+  models: () => api.fetch(api.withSince('/api/models')),
+  comparison: (m1, m2) => {
+    const extra = m1 && m2 ? { model1: m1, model2: m2 } : {};
+    return api.fetch(api.withSince('/api/models/comparison', extra));
+  },
+  refresh: () => api.fetch('/api/refresh'),
+};
+
+// ── Period helpers ─────────────────────────────────────────────
+
+const PERIODS = [
+  { key: 'today', label: 'Today' },
+  { key: 'week',  label: 'This Week' },
+  { key: 'month', label: 'This Month' },
+  { key: '90d',   label: '90 Days' },
+  { key: 'all',   label: 'All Time' },
+];
+
+function periodToSince(period) {
+  const now = new Date();
+  if (period === 'today') {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return d.toISOString();
+  }
+  if (period === 'week') {
+    const d = new Date(now);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Monday
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString();
+  }
+  if (period === 'month') {
+    const d = new Date(now.getFullYear(), now.getMonth(), 1);
+    return d.toISOString();
+  }
+  if (period === '90d') {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 90);
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString();
+  }
+  return undefined; // all time
+}
+
+// ── State ──────────────────────────────────────────────────────
+
+const state = {
+  view: 'overview',
+  period: 'all',
+  sessionsPage: 0,
+  sessionsLimit: 50,
+  sessionsFilter: { projectId: '', model: '' },
+  compModel1: '',
+  compModel2: '',
+  data: {
+    stats: null,
+    daily: null,
+    projects: null,
+    sessions: null,
+    sessionTotal: 0,
+    models: null,
+    comparison: null,
+  },
+};
+
+// ── Router ─────────────────────────────────────────────────────
+
+function getView() {
+  return location.hash.slice(1) || 'overview';
+}
+
+function navigate(view, params = {}) {
+  if (params.projectId) state.sessionsFilter.projectId = params.projectId;
+  location.hash = view;
+}
+
+window.addEventListener('hashchange', () => {
+  state.view = getView();
+  renderView();
+});
+
+// ── Nav ────────────────────────────────────────────────────────
+
+function updateNav() {
+  document.querySelectorAll('.nav-item').forEach(el => {
+    const v = el.dataset.view;
+    el.classList.toggle('active', v === state.view);
+  });
+}
+
+// ── Charts ─────────────────────────────────────────────────────
+
+function renderBarChart(daily, width = 700, height = 120) {
+  if (!daily || daily.length === 0) return '<p class="muted" style="padding:20px 0">No activity data yet.</p>';
+
+  // Show last 60 days
+  const recent = daily.slice(-60);
+  const maxCost = Math.max(...recent.map(d => d.cost), 0.001);
+
+  const BAR_GAP = 2;
+  const barW = Math.max(4, Math.floor((width - BAR_GAP * recent.length) / recent.length));
+  const chartH = height - 24;
+
+  const bars = recent.map((d, i) => {
+    const barH = Math.max(2, Math.floor((d.cost / maxCost) * chartH));
+    const x = i * (barW + BAR_GAP);
+    const y = chartH - barH;
+    const label = d.date.slice(5); // MM-DD
+    const tip = `${d.date}: ${fmtCost(d.cost)} (${d.sessions} sessions)`;
+    return `<rect class="bar-chart-bar" x="${x}" y="${y}" width="${barW}" height="${barH}" rx="1">
+      <title>${tip}</title>
+    </rect>`;
+  }).join('');
+
+  // X labels: show every ~10 bars
+  const step = Math.max(1, Math.floor(recent.length / 8));
+  const labels = recent.map((d, i) => {
+    if (i % step !== 0) return '';
+    const x = i * (barW + BAR_GAP) + barW / 2;
+    return `<text class="chart-axis-label" x="${x}" y="${chartH + 16}" text-anchor="middle">${d.date.slice(5)}</text>`;
+  }).join('');
+
+  // Gridlines
+  const gridlines = [0.25, 0.5, 0.75, 1].map(frac => {
+    const y = chartH - Math.floor(frac * chartH);
+    const cost = maxCost * frac;
+    return `<line class="chart-gridline" x1="0" y1="${y}" x2="${width}" y2="${y}" stroke-dasharray="3,3"/>
+    <text class="chart-axis-label" x="-4" y="${y + 3}" text-anchor="end">${fmtCost(cost)}</text>`;
+  }).join('');
+
+  const svgW = recent.length * (barW + BAR_GAP);
+
+  return `<svg viewBox="0 0 ${svgW + 40} ${height}" width="100%" height="${height}" style="display:block;overflow:visible">
+    <g transform="translate(36,0)">
+      ${gridlines}
+      ${bars}
+      ${labels}
+    </g>
+  </svg>`;
+}
+
+// ── Overview ───────────────────────────────────────────────────
+
+async function renderOverview() {
+  setLoading();
+  try {
+    const [stats, daily] = await Promise.all([api.stats(), api.daily()]);
+    state.data.stats = stats;
+    state.data.daily = daily;
+
+    const content = document.getElementById('content');
+    content.innerHTML = `
+      <h1 class="page-title">Dashboard</h1>
+      <p class="page-subtitle">${periodLabel()} · ${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</p>
+
+      <div class="metric-grid">
+        <div class="metric-card accent-left">
+          <div class="metric-label">Total Cost</div>
+          <div class="metric-value mono">${fmtCost(stats.totalCost)}</div>
+          <div class="metric-sub">${stats.totalSessions} sessions</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Total Tokens</div>
+          <div class="metric-value mono">${fmtTokens(stats.totalTokens)}</div>
+          <div class="metric-sub">${fmtTokens(stats.outputTokens)} output</div>
+        </div>
+        <div class="metric-card accent-left">
+          <div class="metric-label">Cache Hit Rate</div>
+          <div class="metric-value">${fmtPct(stats.cacheHitRate)}</div>
+          <div class="metric-sub">${fmtTokens(stats.cacheReadTokens)} from cache</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Messages</div>
+          <div class="metric-value mono">${stats.totalMessages.toLocaleString()}</div>
+          <div class="metric-sub">${stats.projectCount} projects</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Input Tokens</div>
+          <div class="metric-value mono">${fmtTokens(stats.inputTokens)}</div>
+          <div class="metric-sub">non-cached</div>
+        </div>
+        <div class="metric-card accent-left">
+          <div class="metric-label">Cache Created</div>
+          <div class="metric-value mono">${fmtTokens(stats.cacheCreationTokens)}</div>
+          <div class="metric-sub">write tokens</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Top Model</div>
+          <div class="metric-value" style="font-size:15px">${shortModelName(stats.topModel)}</div>
+          <div class="metric-sub">${stats.modelsUsed.length} model${stats.modelsUsed.length !== 1 ? 's' : ''} used</div>
+        </div>
+      </div>
+
+      <div class="chart-wrap">
+        <div class="chart-title">Daily Cost</div>
+        <div class="chart-svg-wrap">${renderBarChart(daily)}</div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Recent Sessions</div>
+          <a href="#sessions" class="secondary" style="font-size:12px;text-decoration:none">View all →</a>
+        </div>
+        <div id="recent-sessions-wrap">
+          <div class="loading-state"><div class="spinner"></div></div>
+        </div>
+      </div>
+    `;
+
+    // Load recent sessions async
+    const { sessions } = await api.sessions({ limit: 10, offset: 0 });
+    document.getElementById('recent-sessions-wrap').innerHTML = renderSessionsTable(sessions, { compact: true });
+  } catch (e) {
+    showError(e);
+  }
+}
+
+// ── Projects ───────────────────────────────────────────────────
+
+async function renderProjects() {
+  setLoading();
+  try {
+    const projects = await api.projects();
+    state.data.projects = projects;
+
+    const content = document.getElementById('content');
+    content.innerHTML = `
+      <h1 class="page-title">Projects</h1>
+      <p class="page-subtitle">${periodLabel()} · ${projects.length} project${projects.length !== 1 ? 's' : ''}</p>
+      <div class="project-list">${projects.map(renderProjectCard).join('')}</div>
+    `;
+
+    content.querySelectorAll('.project-card[data-project]').forEach(el => {
+      el.addEventListener('click', () => {
+        state.sessionsFilter.projectId = el.dataset.project;
+        state.sessionsPage = 0;
+        navigate('sessions');
+      });
+    });
+  } catch (e) {
+    showError(e);
+  }
+}
+
+function renderProjectCard(p) {
+  const isLocal = !p.totalCost;
+  return `
+    <div class="project-card" data-project="${escHtml(p.id)}">
+      <div>
+        <div class="project-name">${escHtml(p.name)}</div>
+        <div class="project-path">${escHtml(p.path)}</div>
+      </div>
+      <div class="project-meta">
+        ${modelBadgeHtml(p.topModel, isLocal)}
+        <div class="project-stat">
+          <div class="project-stat-value mono">${fmtCost(p.totalCost)}</div>
+          <div class="project-stat-label">Total Cost</div>
+        </div>
+        <div class="project-stat">
+          <div class="project-stat-value mono">${fmtTokens(p.totalTokens)}</div>
+          <div class="project-stat-label">Tokens</div>
+        </div>
+        <div class="project-stat">
+          <div class="project-stat-value">${p.sessionCount}</div>
+          <div class="project-stat-label">Sessions</div>
+        </div>
+        <div class="project-stat">
+          <div class="project-stat-value">${fmtPct(p.cacheHitRate)}</div>
+          <div class="project-stat-label">Cache Hit</div>
+        </div>
+        <div class="project-stat">
+          <div class="project-stat-value secondary" style="font-size:11px">${fmtDate(p.lastActivity)}</div>
+          <div class="project-stat-label">Last Active</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Sessions ───────────────────────────────────────────────────
+
+async function renderSessions() {
+  setLoading();
+  try {
+    const [{ sessions, total }, projects, models] = await Promise.all([
+      api.sessions({
+        limit: state.sessionsLimit,
+        offset: state.sessionsPage * state.sessionsLimit,
+        ...(state.sessionsFilter.projectId ? { projectId: state.sessionsFilter.projectId } : {}),
+        ...(state.sessionsFilter.model ? { model: state.sessionsFilter.model } : {}),
+      }),
+      api.projects(),
+      api.models(),
+    ]);
+
+    state.data.sessions = sessions;
+    state.data.sessionTotal = total;
+    state.data.projects = projects;
+    state.data.models = models;
+
+    const totalPages = Math.ceil(total / state.sessionsLimit);
+    const curPage = state.sessionsPage;
+
+    const projectOptions = projects.map(p =>
+      `<option value="${escHtml(p.id)}" ${state.sessionsFilter.projectId === p.id ? 'selected' : ''}>${escHtml(p.name)}</option>`
+    ).join('');
+
+    const modelOptions = models.map(m =>
+      `<option value="${escHtml(m.model)}" ${state.sessionsFilter.model === m.model ? 'selected' : ''}>${escHtml(m.model)}</option>`
+    ).join('');
+
+    const content = document.getElementById('content');
+    content.innerHTML = `
+      <h1 class="page-title">Sessions</h1>
+      <p class="page-subtitle">${periodLabel()}</p>
+
+      <div class="filter-bar">
+        <select id="filter-project">
+          <option value="">All projects</option>
+          ${projectOptions}
+        </select>
+        <select id="filter-model">
+          <option value="">All models</option>
+          ${modelOptions}
+        </select>
+        <span class="filter-count">${total.toLocaleString()} session${total !== 1 ? 's' : ''}</span>
+      </div>
+
+      <div class="table-wrap">
+        ${renderSessionsTable(sessions)}
+        ${totalPages > 1 ? renderPagination(curPage, totalPages) : ''}
+      </div>
+    `;
+
+    document.getElementById('filter-project').addEventListener('change', e => {
+      state.sessionsFilter.projectId = e.target.value;
+      state.sessionsPage = 0;
+      renderSessions();
+    });
+
+    document.getElementById('filter-model').addEventListener('change', e => {
+      state.sessionsFilter.model = e.target.value;
+      state.sessionsPage = 0;
+      renderSessions();
+    });
+
+    content.querySelectorAll('.page-btn[data-page]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.sessionsPage = parseInt(btn.dataset.page, 10);
+        renderSessions();
+      });
+    });
+  } catch (e) {
+    showError(e);
+  }
+}
+
+function renderSessionsTable(sessions, opts = {}) {
+  if (!sessions || sessions.length === 0) {
+    return `<div class="empty-state"><div class="empty-icon">◎</div><div class="empty-msg">No sessions found</div></div>`;
+  }
+
+  const rows = sessions.map(s => {
+    const local = s.cost === 0 && s.usage.inputTokens + s.usage.outputTokens > 0;
+    const costCell = local
+      ? `<span class="amber mono">${fmtTokens(s.usage.inputTokens + s.usage.outputTokens)}</span>`
+      : `<span class="mono">${fmtCost(s.cost)}</span>`;
+
+    return `<tr>
+      <td class="muted nowrap" style="font-size:12px">${fmtDateTime(s.startTime)}</td>
+      ${opts.compact ? '' : `<td class="secondary" style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(s.projectName)}</td>`}
+      <td class="prompt"><span title="${escHtml(s.firstPrompt)}">${escHtml(s.firstPrompt)}</span></td>
+      <td>${modelBadgeHtml(s.primaryModel, local)}</td>
+      <td class="right mono" style="font-size:12px">${fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens)}</td>
+      <td class="right">${costCell}</td>
+      <td class="right muted" style="font-size:12px">${fmtPct(s.cacheHitRate)}</td>
+      <td class="right muted" style="font-size:12px">${s.messageCount}</td>
+      <td class="right muted" style="font-size:12px">${fmtDuration(s.duration)}</td>
+    </tr>`;
+  }).join('');
+
+  const projectCol = opts.compact ? '' : '<th>Project</th>';
+
+  return `<table>
+    <thead>
+      <tr>
+        <th>Started</th>
+        ${projectCol}
+        <th>Prompt</th>
+        <th>Model</th>
+        <th class="right">Tokens</th>
+        <th class="right">Cost</th>
+        <th class="right">Cache%</th>
+        <th class="right">Msgs</th>
+        <th class="right">Duration</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function renderPagination(cur, total) {
+  const pages = [];
+  const range = 2;
+  for (let i = 0; i < total; i++) {
+    if (i === 0 || i === total - 1 || Math.abs(i - cur) <= range) {
+      pages.push(i);
+    }
+  }
+
+  let html = '<div class="pagination">';
+  html += `<button class="page-btn" data-page="${cur - 1}" ${cur === 0 ? 'disabled' : ''}>← Prev</button>`;
+
+  let prev = -1;
+  for (const p of pages) {
+    if (prev !== -1 && p - prev > 1) html += `<span class="muted" style="padding:0 4px">…</span>`;
+    html += `<button class="page-btn ${p === cur ? 'active' : ''}" data-page="${p}">${p + 1}</button>`;
+    prev = p;
+  }
+
+  html += `<button class="page-btn" data-page="${cur + 1}" ${cur === total - 1 ? 'disabled' : ''}>Next →</button>`;
+  html += '</div>';
+  return html;
+}
+
+// ── Model Comparison ───────────────────────────────────────────
+
+async function renderComparison() {
+  setLoading();
+  try {
+    const models = await api.models();
+    state.data.models = models;
+
+    if (models.length === 0) {
+      document.getElementById('content').innerHTML = `
+        <h1 class="page-title">Model Comparison</h1>
+        <div class="empty-state"><div class="empty-icon">⟷</div><div class="empty-msg">No model data found</div></div>
+      `;
+      return;
+    }
+
+    if (!state.compModel1 && models[0]) state.compModel1 = models[0].model;
+    if (!state.compModel2 && models[1]) state.compModel2 = models[1].model;
+
+    const modelOptions = models.map(m =>
+      `<option value="${escHtml(m.model)}">${escHtml(m.model)} (${m.sessionCount} sessions)</option>`
+    ).join('');
+
+    const content = document.getElementById('content');
+    content.innerHTML = `
+      <h1 class="page-title">Model Comparison</h1>
+      <p class="page-subtitle">${periodLabel()} · side-by-side stats per model</p>
+
+      <div class="comparison-selectors">
+        <select id="comp-model1">
+          ${models.map(m => `<option value="${escHtml(m.model)}" ${m.model === state.compModel1 ? 'selected' : ''}>${escHtml(m.model)}</option>`).join('')}
+        </select>
+        <span class="comparison-vs-label">vs</span>
+        <select id="comp-model2">
+          ${models.map(m => `<option value="${escHtml(m.model)}" ${m.model === state.compModel2 ? 'selected' : ''}>${escHtml(m.model)}</option>`).join('')}
+        </select>
+        <button class="compare-btn" id="compare-btn">Compare</button>
+      </div>
+
+      <div id="comparison-result"></div>
+    `;
+
+    document.getElementById('comp-model1').addEventListener('change', e => { state.compModel1 = e.target.value; });
+    document.getElementById('comp-model2').addEventListener('change', e => { state.compModel2 = e.target.value; });
+    document.getElementById('compare-btn').addEventListener('click', loadComparison);
+
+    await loadComparison();
+  } catch (e) {
+    showError(e);
+  }
+}
+
+async function loadComparison() {
+  const wrap = document.getElementById('comparison-result');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+
+  try {
+    const { model1, model2 } = await api.comparison(state.compModel1, state.compModel2);
+    if (!model1 || !model2) {
+      wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">⟷</div><div class="empty-msg">Select two different models to compare</div></div>`;
+      return;
+    }
+
+    // Determine winner (by cost, unless local)
+    let winner = null;
+    let savingsPct = 0;
+
+    if (!model1.isLocal && !model2.isLocal && model1.totalCost > 0 && model2.totalCost > 0) {
+      // Normalize by sessions count for fair comparison
+      const costPer1 = model1.avgCostPerSession;
+      const costPer2 = model2.avgCostPerSession;
+      winner = costPer1 <= costPer2 ? 'm1' : 'm2';
+      const cheaper = Math.min(costPer1, costPer2);
+      const expensive = Math.max(costPer1, costPer2);
+      savingsPct = expensive > 0 ? ((expensive - cheaper) / expensive) * 100 : 0;
+    }
+
+    wrap.innerHTML = `
+      <div class="comparison-arena">
+        ${renderCompCard(model1, winner === 'm1', winner === 'm2', !model1.isLocal && model2.isLocal ? null : savingsPct, model2.model)}
+        <div class="vs-divider"><div class="vs-circle">VS</div></div>
+        ${renderCompCard(model2, winner === 'm2', winner === 'm1', !model2.isLocal && model1.isLocal ? null : (winner === 'm2' ? savingsPct : null), model1.model)}
+      </div>
+    `;
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-msg">Error loading comparison: ${escHtml(e.message)}</div></div>`;
+  }
+}
+
+function renderCompCard(m, isWinner, isLoser, savingsPct, vsModel) {
+  const totalTokens = m.inputTokens + m.outputTokens + m.cacheCreationTokens + m.cacheReadTokens;
+  const costClass = m.isLocal ? 'local-cost' : isWinner ? 'winner-cost' : isLoser ? 'loser-cost' : '';
+  const costDisplay = m.isLocal
+    ? `${fmtTokens(totalTokens)} tokens`
+    : fmtCost(m.totalCost);
+
+  const winnerBadge = isWinner ? '<span class="badge-winner">Winner</span>' : '';
+  const loserBadge = isLoser ? '<span class="badge-loser">More Expensive</span>' : '';
+  const localBadge = m.isLocal ? '<span class="badge-local">Local</span>' : '';
+  const badge = winnerBadge || loserBadge || localBadge;
+
+  const savingsBlock = isWinner && savingsPct > 0 ? `
+    <div class="comp-savings">
+      <div class="comp-savings-pct">${savingsPct.toFixed(0)}% cheaper</div>
+      <div class="comp-savings-label">per session vs ${shortModelName(vsModel)}</div>
+    </div>
+  ` : '';
+
+  return `
+    <div class="comparison-card ${isWinner ? 'winner' : ''}">
+      <div class="comp-header">
+        <div class="comp-model-name">${escHtml(m.model)}</div>
+        ${badge}
+      </div>
+      <div class="comp-body">
+        <div class="comp-cost ${costClass}">${costDisplay}</div>
+
+        <div class="comp-stats-grid">
+          <div class="comp-stat">
+            <div class="comp-stat-label">Total Tokens</div>
+            <div class="comp-stat-value">${fmtTokens(totalTokens)}</div>
+          </div>
+          <div class="comp-stat">
+            <div class="comp-stat-label">Input Tokens</div>
+            <div class="comp-stat-value">${fmtTokens(m.inputTokens)}</div>
+          </div>
+          <div class="comp-stat">
+            <div class="comp-stat-label">Output Tokens</div>
+            <div class="comp-stat-value">${fmtTokens(m.outputTokens)}</div>
+          </div>
+          <div class="comp-stat">
+            <div class="comp-stat-label">Cache Hits</div>
+            <div class="comp-stat-value">${fmtTokens(m.cacheReadTokens)}</div>
+          </div>
+        </div>
+
+        <div class="comp-efficiency">
+          <div class="comp-eff-item">
+            <div class="comp-eff-label">Cost / Session</div>
+            <div class="comp-eff-value">${m.isLocal ? '—' : fmtCost(m.avgCostPerSession)}</div>
+          </div>
+          <div class="comp-eff-item">
+            <div class="comp-eff-label">Tool Calls</div>
+            <div class="comp-eff-value">${m.totalToolCalls.toLocaleString()}</div>
+          </div>
+          <div class="comp-eff-item">
+            <div class="comp-eff-label">Avg Duration</div>
+            <div class="comp-eff-value">${fmtDuration(m.avgDuration)}</div>
+          </div>
+          <div class="comp-eff-item">
+            <div class="comp-eff-label">Cache Efficiency</div>
+            <div class="comp-eff-value">${fmtPct(m.cacheHitRate)}</div>
+          </div>
+          <div class="comp-eff-item">
+            <div class="comp-eff-label">Sessions</div>
+            <div class="comp-eff-value">${m.sessionCount}</div>
+          </div>
+          <div class="comp-eff-item">
+            <div class="comp-eff-label">Messages</div>
+            <div class="comp-eff-value">${m.totalMessages.toLocaleString()}</div>
+          </div>
+        </div>
+
+        ${savingsBlock}
+      </div>
+    </div>
+  `;
+}
+
+function periodLabel() {
+  return PERIODS.find(p => p.key === state.period)?.label ?? 'All Time';
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function setLoading() {
+  document.getElementById('content').innerHTML =
+    '<div class="loading-state"><div class="spinner"></div><p>Loading...</p></div>';
+}
+
+function showError(e) {
+  document.getElementById('content').innerHTML =
+    `<div class="empty-state"><div class="empty-icon">⚠</div><div class="empty-msg">Error: ${escHtml(e.message)}</div></div>`;
+}
+
+// ── Render dispatch ────────────────────────────────────────────
+
+async function renderView() {
+  updateNav();
+  switch (state.view) {
+    case 'overview':   return renderOverview();
+    case 'projects':   return renderProjects();
+    case 'sessions':   return renderSessions();
+    case 'comparison': return renderComparison();
+    default:           return renderOverview();
+  }
+}
+
+// ── Bootstrap ──────────────────────────────────────────────────
+
+function init() {
+  // Wire up the app layout (sidebar + main side by side)
+  const app = document.getElementById('app');
+  const header = document.getElementById('header');
+  const sidebar = document.getElementById('sidebar');
+  const main = document.getElementById('main');
+
+  // Move sidebar and main into a flex row below header
+  const bodyGrid = document.createElement('div');
+  bodyGrid.className = 'body-grid';
+  bodyGrid.style.cssText = 'display:flex;flex:1;overflow:hidden;';
+  app.appendChild(bodyGrid);
+  bodyGrid.appendChild(sidebar);
+  bodyGrid.appendChild(main);
+
+  // Period selector
+  document.querySelectorAll('.period-btn[data-period]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.period = btn.dataset.period;
+      state.sessionsPage = 0;
+      document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderView();
+    });
+  });
+
+  // Nav clicks
+  document.querySelectorAll('.nav-item[data-view]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      state.sessionsFilter = { projectId: '', model: '' };
+      state.sessionsPage = 0;
+      navigate(el.dataset.view);
+    });
+  });
+
+  // Refresh button
+  document.getElementById('refresh-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('refresh-btn');
+    btn.textContent = '↺ Refreshing…';
+    btn.disabled = true;
+    try {
+      await api.refresh();
+      await renderView();
+    } finally {
+      btn.textContent = '↺ Refresh';
+      btn.disabled = false;
+    }
+  });
+
+  state.view = getView();
+  renderView();
+}
+
+init();

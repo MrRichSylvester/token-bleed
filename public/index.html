@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Token Dashboard — AI Revenue Club</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <nav>
+        <div class="nav-section-label">Overview</div>
+        <a class="nav-item" data-view="overview" href="#overview">
+          <span class="nav-icon">◈</span> Dashboard
+        </a>
+
+        <div class="nav-section-label">Data</div>
+        <a class="nav-item" data-view="projects" href="#projects">
+          <span class="nav-icon">⬡</span> Projects
+        </a>
+        <a class="nav-item" data-view="sessions" href="#sessions">
+          <span class="nav-icon">◎</span> Sessions
+        </a>
+
+        <div class="nav-section-label">Analysis</div>
+        <a class="nav-item" data-view="comparison" href="#comparison">
+          <span class="nav-icon">⟷</span> Model Comparison
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button id="refresh-btn" class="refresh-btn" title="Refresh data">↺ Refresh</button>
+      </div>
+    </aside>
+
+    <div id="main">
+      <header id="header">
+        <div class="header-left">
+          <div class="header-logo-row">
+            <span class="header-brand">AI Revenue Club</span>
+            <span class="header-product">Token Dashboard</span>
+          </div>
+          <div class="header-tagline">Build AI systems that actually make money.</div>
+        </div>
+        <div class="header-right" style="display:flex;align-items:center;gap:20px;">
+          <div class="period-selector" id="period-selector">
+            <button class="period-btn" data-period="today">Today</button>
+            <button class="period-btn" data-period="week">This Week</button>
+            <button class="period-btn" data-period="month">This Month</button>
+            <button class="period-btn" data-period="90d">90 Days</button>
+            <button class="period-btn active" data-period="all">All Time</button>
+          </div>
+          <span class="header-byline">Built by @MrRichSylvester</span>
+        </div>
+      </header>
+
+      <div id="content">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Loading sessions...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
