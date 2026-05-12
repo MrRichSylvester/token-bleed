@@ -476,7 +476,7 @@ td.prompt span { display: block; overflow: hidden; text-overflow: ellipsis; whit
 .hbar-fill {
   height: 100%;
   border-radius: 4px;
-  transition: width 600ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 900ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .hbar-right {
@@ -536,7 +536,7 @@ td.prompt span { display: block; overflow: hidden; text-overflow: ellipsis; whit
 .bar-chart-bar {
   transform-box: fill-box;
   transform-origin: bottom center;
-  animation: barGrow 0.45s cubic-bezier(0.34, 1.15, 0.64, 1) both;
+  animation: barGrow 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
   opacity: 0.82;
   transition: opacity 80ms;
   cursor: crosshair;

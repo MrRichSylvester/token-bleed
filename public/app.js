@@ -242,7 +242,7 @@ function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 160,
     const x = i * (barW + BAR_GAP);
     const y = chartH - barH;
     const tip = `${d.date}  ${fmt(d[valueKey])}`;
-    const delay = 60 + i * 5;
+    const delay = 80 + i * 15;
     return `<rect class="bar-chart-bar" x="${x}" y="${y}" width="${barW}" height="${barH}" rx="2" fill="url(#${gradId})" data-tip="${escHtml(tip)}" style="animation-delay:${delay}ms"></rect>`;
   }).join('');
 
@@ -288,7 +288,7 @@ function renderHorizBars(rows, { fmtVal = (v) => v, color = 'border' } = {}) {
     return `<div class="hbar-row" data-tip="${escHtml(tip)}">
       <div class="hbar-label">${escHtml(r.label)}</div>
       <div class="hbar-track">
-        <div class="hbar-fill" style="width:${pct}%;background:${fillColor};border-right:2px solid ${barColor}"></div>
+        <div class="hbar-fill" style="width:0;background:${fillColor};border-right:2px solid ${barColor}" data-w="${pct}%"></div>
       </div>
       <div class="hbar-right">
         <div class="hbar-value">${fmtVal(r.value)}</div>
@@ -296,6 +296,12 @@ function renderHorizBars(rows, { fmtVal = (v) => v, color = 'border' } = {}) {
       </div>
     </div>`;
   }).join('');
+}
+
+function animateHbars(container) {
+  container.querySelectorAll('.hbar-fill[data-w]').forEach((el, i) => {
+    setTimeout(() => { el.style.width = el.dataset.w; }, 120 + i * 110);
+  });
 }
 
 // ── Overview ───────────────────────────────────────────────────
@@ -399,6 +405,8 @@ async function renderOverview() {
         </div>
       </div>
     `;
+
+    animateHbars(content);
 
     // Load recent sessions async
     const { sessions } = await api.sessions({ limit: 10, offset: 0 });
