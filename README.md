@@ -86,21 +86,6 @@ Data refreshes from disk every 5 minutes or on demand via the Refresh button.
 
 ---
 
-## Production build
-
-```bash
-npm run build
-npm run build:start
-```
-
-Set `PORT` and `HOST` to run on a different address:
-
-```bash
-PORT=8080 HOST=0.0.0.0 npm start
-```
-
----
-
 ## Models supported
 
 Built-in pricing for all current Claude models. Prefix matching handles future versioned IDs automatically.
