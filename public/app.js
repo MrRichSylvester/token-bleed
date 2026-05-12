@@ -259,7 +259,8 @@ function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 160,
     <text class="chart-axis-label" x="-4" y="${y + 3}" text-anchor="end">${fmt(maxVal * frac)}</text>`;
   }).join('');
 
-  return `<svg viewBox="0 0 ${svgW + 40} ${height}" width="100%" height="${height}" style="display:block;overflow:visible">
+  const topPad = 14;
+  return `<svg viewBox="0 ${-topPad} ${svgW + 40} ${height + topPad}" width="100%" height="${height + topPad}" style="display:block;overflow:visible">
     <defs>
       <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="${colorVal}" stop-opacity="0.9"/>
