@@ -218,8 +218,8 @@ html, body {
 .sidebar-token-bleed {
   font-family: 'Outfit', system-ui, sans-serif;
   font-weight: 800;
-  font-size: 15px;
-  letter-spacing: -0.02em;
+  font-size: 22px;
+  letter-spacing: -0.03em;
   height: 54px;
   display: flex;
   align-items: center;
@@ -2233,67 +2233,125 @@ td.msg-prompt {
 }
 
 /* ── About modal ── */
+/* ── About modal redesign ── */
 .about-card {
-  max-width: 520px;
+  max-width: 660px;
+  padding: 0;
+  overflow: hidden;
 }
 
-.about-card .onboarding-text { font-size: 15px; }
-.about-card .onboarding-text:last-of-type { font-size: 14px; }
 .about-card .onboarding-hint { font-size: 12px; }
 
-.about-logo-row {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 18px;
+/* Hero */
+.about-hero {
+  padding: 32px 36px 28px;
+  background: linear-gradient(145deg, var(--surface-2) 0%, rgba(255, 90, 90, 0.06) 100%);
+  border-bottom: 1px solid var(--border);
 }
 
-.about-logo-brand {
-  font-family: 'Outfit', system-ui, sans-serif;
-  font-weight: 800;
-  font-size: 20px;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-}
-
-.about-logo-bleed {
-  color: var(--red);
+.about-hero-eyebrow {
+  margin-bottom: 12px;
 }
 
 .about-version {
   font-size: 11px;
   font-family: var(--font-mono);
   color: var(--text-muted);
-  background: var(--surface-2);
+  background: rgba(255,255,255,0.04);
   border: 1px solid var(--border);
   padding: 2px 8px;
   border-radius: 20px;
 }
 
-.about-link {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.about-link:hover {
-  text-decoration: underline;
-}
-
-.about-link-arc {
+.about-hero-title {
   font-family: 'Outfit', system-ui, sans-serif;
-  font-weight: 700;
-  color: inherit;
+  font-weight: 800;
+  font-size: 32px;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 14px;
 }
 
-.about-link-arc .club-ai,
-.about-link-arc .club-club { color: #ffffff; }
-.about-link-arc .club-revenue { color: var(--accent); }
+.about-logo-bleed {
+  color: var(--red);
+  text-shadow: 0 0 20px rgba(255, 90, 90, 0.4);
+}
 
+.about-hero-tagline {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  max-width: 520px;
+  margin: 0;
+}
+
+/* Body */
+.about-body {
+  padding: 24px 36px 28px;
+}
+
+/* Feature cards */
+.about-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.about-feature {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 200ms;
+}
+
+.about-feature:hover {
+  border-color: var(--border-2);
+}
+
+.about-feature-icon {
+  font-size: 16px;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.about-feature-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.about-feature-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+/* Attribution */
+.about-attribution-line {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0 0 16px;
+}
+
+.about-attribution-line strong {
+  color: var(--text-secondary);
+}
+
+/* Links */
 .about-links-row {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin: 18px 0 0;
+  margin-bottom: 0;
 }
 
 .about-pill {
@@ -2312,6 +2370,33 @@ td.msg-prompt {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* Footer */
+.about-footer {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* Shared link helpers */
+.about-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.about-link:hover {
+  text-decoration: underline;
+}
+
+.about-link-arc {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-weight: 700;
+  color: inherit;
+}
+
+.about-link-arc .club-ai,
+.about-link-arc .club-club { color: #ffffff; }
+.about-link-arc .club-revenue { color: var(--accent); }
 
 .about-attribution {
   margin-top: 20px;

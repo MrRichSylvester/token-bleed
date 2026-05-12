@@ -1564,38 +1564,54 @@ function showAboutModal() {
   overlay.className = 'onboarding-overlay';
   overlay.innerHTML = `
     <div class="onboarding-card about-card">
-      <div class="about-logo-row">
-        <span class="about-logo-brand">Token <span class="about-logo-bleed">Bleed</span></span>
-        <span class="about-version">open source · MIT</span>
+
+      <div class="about-hero">
+        <div class="about-hero-eyebrow">
+          <span class="about-version">open source · MIT</span>
+        </div>
+        <div class="about-hero-title">Token <span class="about-logo-bleed">Bleed</span></div>
+        <p class="about-hero-tagline">
+          Every time Claude Code writes a line of code, it burns tokens.
+          Those tokens cost money — but Claude gives you almost no way to see where it's all going.
+        </p>
       </div>
-      <p class="onboarding-text">
-        Every time Claude Code writes a line of code, it burns tokens.
-        Those tokens cost money — but Claude gives you almost no way to
-        see where it's all going.
-      </p>
-      <p class="onboarding-text">
-        Token Bleed reads the session logs Claude Code writes to your
-        machine and shows you exactly what burned, what it cost, and
-        which AI model gave you the most for your money. Per prompt.
-        Per session. Per project.
-      </p>
-      <p class="onboarding-text">
-        No cloud. No account. No data leaves your machine.
-        Just your numbers, finally readable.
-      </p>
-      <p class="onboarding-text">
-        Built and maintained by <strong>Richard Sylvester</strong> · Free forever ·
-        Every line of code is on GitHub.
-      </p>
-      <div class="about-links-row">
-        <a class="about-pill" href="https://github.com/mrrichsylvester/burn-rate" target="_blank" rel="noopener">GitHub →</a>
-        <a class="about-pill" href="https://youtube.com/@MrRichSylvester" target="_blank" rel="noopener">YouTube →</a>
-        <a class="about-pill" href="https://airevenueclub.com" target="_blank" rel="noopener">Community →</a>
+
+      <div class="about-body">
+        <div class="about-features">
+          <div class="about-feature">
+            <div class="about-feature-icon">◈</div>
+            <div class="about-feature-title">What burned</div>
+            <div class="about-feature-text">Session logs turned into real dollar costs. Per prompt. Per session. Per project.</div>
+          </div>
+          <div class="about-feature">
+            <div class="about-feature-icon">⟷</div>
+            <div class="about-feature-title">Which model wins</div>
+            <div class="about-feature-text">Compare models side-by-side. See which gives you the most output per dollar.</div>
+          </div>
+          <div class="about-feature">
+            <div class="about-feature-icon">◎</div>
+            <div class="about-feature-title">Stays local</div>
+            <div class="about-feature-text">No cloud. No account. Reads logs on your machine. Nothing leaves.</div>
+          </div>
+        </div>
+
+        <p class="about-attribution-line">
+          Built and maintained by <strong>Richard Sylvester</strong> · Free forever ·
+          Every line of code is on GitHub.
+        </p>
+
+        <div class="about-links-row">
+          <a class="about-pill" href="https://github.com/mrrichsylvester/burn-rate" target="_blank" rel="noopener">GitHub →</a>
+          <a class="about-pill" href="https://youtube.com/@MrRichSylvester" target="_blank" rel="noopener">YouTube →</a>
+          <a class="about-pill" href="https://airevenueclub.com" target="_blank" rel="noopener">Community →</a>
+        </div>
+
+        <div class="onboarding-footer about-footer">
+          <span class="onboarding-hint">Use ⚙ in the header to adjust log retention settings.</span>
+          <button class="onboarding-dismiss" id="about-dismiss">Got it</button>
+        </div>
       </div>
-      <div class="onboarding-footer">
-        <span class="onboarding-hint">Use ⚙ in the header to adjust log retention settings.</span>
-        <button class="onboarding-dismiss" id="about-dismiss">Got it</button>
-      </div>
+
     </div>
   `;
   document.body.appendChild(overlay);
