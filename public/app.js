@@ -377,24 +377,11 @@ function renderUsageGrid(dailyAll, meta) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Apply view window filter (local only, never touches Claude settings)
-  const savedView = localStorage.getItem('activity-view') || 'All';
-  const VIEW_OPTIONS = [
-    { label: 'All',  days: null },
-    { label: '6mo',  days: 180 },
-    { label: '3mo',  days: 90  },
-    { label: '30d',  days: 30  },
-    { label: '14d',  days: 14  },
-    { label: '7d',   days: 7   },
-  ];
-  const viewOpt = VIEW_OPTIONS.find(o => o.label === savedView) || VIEW_OPTIONS[0];
-  let daily = dailyAll;
-  if (viewOpt.days !== null) {
-    const cutoff = new Date(today);
-    cutoff.setDate(today.getDate() - viewOpt.days + 1);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
-    daily = dailyAll.filter(d => d.date >= cutoffStr);
-  }
+  // Fixed 365-day window — capped at actual data start
+  const cutoff = new Date(today);
+  cutoff.setDate(today.getDate() - 364);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const daily = dailyAll.filter(d => d.date >= cutoffStr);
 
   // Grid starts at the actual earliest log date from the server
   const earliestStr = (daily.length > 0 ? daily[0].date : null) || meta?.earliestDate;
@@ -408,7 +395,6 @@ function renderUsageGrid(dailyAll, meta) {
 
   const maxCost = Math.max(...dailyAll.map(d => d.cost), 0.001);
   const activeDays = dailyAll.filter(d => d.cost > 0).length;
-  const spanDays = Math.round((today - gridStart) / 86400000) + 1;
 
   // Align back to the Sunday of the week containing gridStart
   const alignedStart = new Date(gridStart);
@@ -468,18 +454,11 @@ function renderUsageGrid(dailyAll, meta) {
     return `<span class="usage-month-label" style="left:${offset}px;width:${width}px">${m.label}</span>`;
   }).join('');
 
-  const viewBtns = VIEW_OPTIONS.map(o =>
-    `<button class="activity-view-btn${o.label === savedView ? ' active' : ''}" data-view="${o.label}">${o.label}</button>`
-  ).join('');
-
   return `
     <div class="usage-grid-wrap" data-weeks="${WEEKS}">
       <div class="usage-grid-top">
         <span class="usage-grid-title">Activity</span>
-        <div class="usage-grid-top-right">
-          <span class="usage-grid-meta">${activeDays} active day${activeDays !== 1 ? 's' : ''} · ${spanDays} day${spanDays !== 1 ? 's' : ''} of logs</span>
-          <div class="activity-view-btns">${viewBtns}</div>
-        </div>
+        <span class="usage-grid-meta">${activeDays} active day${activeDays !== 1 ? 's' : ''} · 365d</span>
       </div>
       <div class="usage-grid-layout">
         <div class="usage-day-col">
@@ -501,15 +480,6 @@ function renderUsageGrid(dailyAll, meta) {
       </div>
     </div>
   `;
-}
-
-function bindUsageGridConfig() {
-  document.querySelectorAll('.activity-view-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      localStorage.setItem('activity-view', btn.dataset.view);
-      renderOverview();
-    });
-  });
 }
 
 function scaleUsageGrid() {
@@ -574,29 +544,39 @@ async function renderOverview() {
       <p class="page-subtitle">${periodLabel()} · ${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</p>
 
       <div class="overview-top">
-        <div class="metric-grid-4">
-          <div class="metric-card accent-left">
-            <div class="metric-label">Total Cost</div>
-            <div class="metric-value mono">${fmtCost(stats.totalCost)}</div>
-            <div class="metric-sub">${daily.length > 0 ? fmtCost(stats.totalCost / daily.length) + '/day avg' : '—'}</div>
-          </div>
-          <div class="metric-card accent-left">
-            <div class="metric-label">Avg Cost / Session</div>
-            <div class="metric-value mono">${stats.totalSessions > 0 ? fmtCost(stats.totalCost / stats.totalSessions) : '—'}</div>
-            <div class="metric-sub">per paid session</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Sessions</div>
-            <div class="metric-value mono">${stats.totalSessions.toLocaleString()}</div>
-            <div class="metric-sub">${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Total Prompts</div>
-            <div class="metric-value mono">${stats.totalMessages.toLocaleString()}</div>
-            <div class="metric-sub">${stats.totalSessions > 0 ? '~' + Math.round(stats.totalMessages / stats.totalSessions) + ' per session' : '—'}</div>
-          </div>
+        <div class="metric-card accent-left">
+          <div class="metric-label">Total Cost</div>
+          <div class="metric-value mono">${fmtCost(stats.totalCost)}</div>
+          <div class="metric-sub">${daily.length > 0 ? fmtCost(stats.totalCost / daily.length) + '/day avg' : '—'}</div>
         </div>
-        ${renderUsageGrid(dailyAll, meta)}
+        <div class="metric-card accent-left">
+          <div class="metric-label">Avg Cost / Session</div>
+          <div class="metric-value mono">${stats.totalSessions > 0 ? fmtCost(stats.totalCost / stats.totalSessions) : '—'}</div>
+          <div class="metric-sub">per paid session</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Sessions</div>
+          <div class="metric-value mono">${stats.totalSessions.toLocaleString()}</div>
+          <div class="metric-sub">${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="metric-card overview-activity">
+          ${renderUsageGrid(dailyAll, meta)}
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Total Prompts</div>
+          <div class="metric-value mono">${stats.totalMessages.toLocaleString()}</div>
+          <div class="metric-sub">${stats.totalSessions > 0 ? '~' + Math.round(stats.totalMessages / stats.totalSessions) + ' per session' : '—'}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Total Tokens</div>
+          <div class="metric-value mono">${fmtTokens(stats.totalTokens)}</div>
+          <div class="metric-sub">across all sessions</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Cache Hit Rate</div>
+          <div class="metric-value">${fmtPct(stats.cacheHitRate)}</div>
+          <div class="metric-sub">${fmtTokens(stats.cacheReadTokens)} read tokens</div>
+        </div>
       </div>
 
       <div class="chart-row-2">
@@ -656,7 +636,6 @@ async function renderOverview() {
 
     initDraggableCards(content);
     animateHbars(content);
-    bindUsageGridConfig();
     requestAnimationFrame(scaleUsageGrid);
     showOnboardingIfNeeded(meta);
 
