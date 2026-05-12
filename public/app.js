@@ -863,8 +863,6 @@ function renderSessionsTable(sessions, opts = {}) {
       data-version="${escHtml(s.version || '')}"
       data-permission-mode="${escHtml(s.permissionMode || '')}"
       data-thinking-blocks="${s.thinkingBlocks || 0}"
-      data-first-prompt="${escHtml(s.firstPrompt)}"
-      data-ai-title="${escHtml(s.aiTitle || '')}"
       data-cache5m="${s.usage.cache5mTokens || 0}"
       data-cache1h="${s.usage.cache1hTokens || 0}">
       ${checkCell}
@@ -1019,8 +1017,6 @@ function renderSessionMeta(row) {
   const thinking = parseInt(d.thinkingBlocks || '0', 10);
   const cache5m = parseInt(d.cache5m || '0', 10);
   const cache1h = parseInt(d.cache1h || '0', 10);
-  const aiTitle = d.aiTitle || '';
-  const firstPrompt = d.firstPrompt || '';
 
   const entrypointLabel = { 'claude-vscode': 'VS Code', 'cli': 'CLI', 'claude-desktop': 'Desktop' }[entrypoint] || entrypoint;
   const permLabel = perm === 'bypassPermissions' ? 'auto-approve' : perm;
@@ -1034,12 +1030,8 @@ function renderSessionMeta(row) {
     version && `<span class="meta-chip muted-chip">v${escHtml(version)}</span>`,
   ].filter(Boolean).join('');
 
-  const titleLine = aiTitle && aiTitle !== firstPrompt
-    ? `<div class="session-meta-title">${escHtml(aiTitle)}</div>`
-    : '';
-
-  if (!chips && !titleLine) return '';
-  return `<div class="session-meta-strip">${titleLine}${chips ? `<div class="session-meta-chips">${chips}</div>` : ''}</div>`;
+  if (!chips) return '';
+  return `<div class="session-meta-strip"><div class="session-meta-chips">${chips}</div></div>`;
 }
 
 async function toggleSession(row, container) {
@@ -1057,28 +1049,32 @@ async function toggleSession(row, container) {
   row.classList.add('expanded');
   detailRow.classList.add('expanded');
 
-  const inner = detailRow.querySelector('.session-detail-inner');
   const wrap = detailRow.querySelector('.session-messages-wrap');
   if (wrap.dataset.loaded) return;
 
-  // Inject metadata strip above messages (once, immediately)
+  // Inject metadata strip first (persists through message load)
   const metaHtml = renderSessionMeta(row);
-  if (metaHtml && !inner.querySelector('.session-meta-strip')) {
-    inner.insertAdjacentHTML('afterbegin', metaHtml);
-  }
+  if (metaHtml) wrap.insertAdjacentHTML('afterbegin', metaHtml);
 
-  wrap.innerHTML = '<div class="loading-state" style="min-height:60px"><div class="spinner"></div></div>';
+  // Append loading spinner after the meta strip rather than replacing wrap contents
+  const loader = document.createElement('div');
+  loader.className = 'loading-state';
+  loader.style.minHeight = '60px';
+  loader.innerHTML = '<div class="spinner"></div>';
+  wrap.appendChild(loader);
 
   try {
     const messages = await api.fetch(`/api/sessions/${encodeURIComponent(sessionId)}/messages`);
+    loader.remove();
     wrap.dataset.loaded = '1';
     if (!messages || messages.length === 0) {
-      wrap.innerHTML = '<div class="empty-state" style="min-height:40px"><div class="empty-msg">No messages found</div></div>';
+      wrap.insertAdjacentHTML('beforeend', '<div class="empty-state" style="min-height:40px"><div class="empty-msg">No messages found</div></div>');
       return;
     }
-    wrap.innerHTML = renderMessagesTable(messages);
+    wrap.insertAdjacentHTML('beforeend', renderMessagesTable(messages));
   } catch (e) {
-    wrap.innerHTML = `<div class="empty-state"><div class="empty-msg">Error: ${escHtml(e.message)}</div></div>`;
+    loader.remove();
+    wrap.insertAdjacentHTML('beforeend', `<div class="empty-state"><div class="empty-msg">Error: ${escHtml(e.message)}</div></div>`);
   }
 }
 
