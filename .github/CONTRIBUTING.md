@@ -5,8 +5,8 @@ Token Bleed is open source and PRs are welcome. Here's how to get running and wh
 ## Running locally
 
 ```bash
-git clone https://github.com/mrrichsylvester/burn-rate
-cd burn-rate
+git clone https://github.com/mrrichsylvester/token-bleed
+cd token-bleed
 npm install
 npm run dev
 ```

@@ -78,8 +78,8 @@ No network requests. No accounts. Runs at `localhost:3000`.
 ## Quick start
 
 ```bash
-git clone https://github.com/mrrichsylvester/burn-rate
-cd burn-rate
+git clone https://github.com/mrrichsylvester/token-bleed
+cd token-bleed
 npm install
 npm run dev
 ```
