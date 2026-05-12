@@ -604,22 +604,15 @@ td.prompt span { display: block; overflow: hidden; text-overflow: ellipsis; whit
 
 .session-detail-row:hover { background: transparent !important; }
 
-@keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to   { opacity: 1; transform: translateY(0); }
+.session-detail-inner {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 280ms cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
 }
 
-@keyframes fadeSlideOut {
-  from { opacity: 1; transform: translateY(0); }
-  to   { opacity: 0; transform: translateY(-10px); }
-}
-
-.session-detail-row.expanding .session-messages-wrap {
-  animation: fadeSlideIn 400ms ease-out forwards;
-}
-
-.session-detail-row.collapsing .session-messages-wrap {
-  animation: fadeSlideOut 280ms ease-in forwards;
+.session-detail-row.expanded .session-detail-inner {
+  grid-template-rows: 1fr;
 }
 
 .session-detail-cell {
@@ -629,6 +622,10 @@ td.prompt span { display: block; overflow: hidden; text-overflow: ellipsis; whit
 
 .session-messages-wrap {
   border-left: 2px solid var(--border-2);
+  min-height: 0;
+}
+
+.session-detail-row.expanded .session-messages-wrap {
   margin: 8px 0;
 }
 

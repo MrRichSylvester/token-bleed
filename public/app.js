@@ -828,9 +828,11 @@ function renderSessionsTable(sessions, opts = {}) {
       <td class="right muted" style="font-size:12px">${s.messageCount}</td>
       <td class="right muted" style="font-size:12px">${fmtDuration(s.duration)}</td>
     </tr>
-    <tr class="session-detail-row" data-for="${escHtml(s.id)}" style="display:none">
+    <tr class="session-detail-row" data-for="${escHtml(s.id)}">
       <td colspan="${colCount}" class="session-detail-cell">
-        <div class="session-messages-wrap"></div>
+        <div class="session-detail-inner">
+          <div class="session-messages-wrap"></div>
+        </div>
       </td>
     </tr>`;
   }).join('');
@@ -963,23 +965,15 @@ async function toggleSession(row, container) {
   const detailRow = container.querySelector(`.session-detail-row[data-for="${CSS.escape(sessionId)}"]`);
   if (!detailRow) return;
 
-  const isOpen = detailRow.style.display !== 'none';
+  const isOpen = row.classList.contains('expanded');
   if (isOpen) {
     row.classList.remove('expanded');
-    detailRow.classList.add('collapsing');
-    setTimeout(() => {
-      detailRow.style.display = 'none';
-      detailRow.classList.remove('collapsing');
-    }, 280);
+    detailRow.classList.remove('expanded');
     return;
   }
 
   row.classList.add('expanded');
-  detailRow.style.display = '';
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    detailRow.classList.add('expanding');
-    setTimeout(() => detailRow.classList.remove('expanding'), 450);
-  }));
+  detailRow.classList.add('expanded');
   const wrap = detailRow.querySelector('.session-messages-wrap');
   if (wrap.dataset.loaded) return;
 
