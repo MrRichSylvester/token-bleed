@@ -31,7 +31,9 @@ Token Bleed fixes that. It reads your local session logs and turns them into a r
 
 Total spend, daily trends, average session cost, and per-message breakdowns. Filtered by time period. Accurate to Anthropic's published pricing including cache write and cache read rates.
 
-Your session history rendered as a contribution-style heatmap — so you can see not just what you spent, but when you were shipping.
+### When you shipped
+
+Your Claude Code sessions rendered as a contribution-style heatmap. See your build cadence at a glance, not just what you spent.
 
 ![Activity Heatmap](images/activity.png)
 
