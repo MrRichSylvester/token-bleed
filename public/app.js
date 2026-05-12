@@ -1092,15 +1092,6 @@ async function renderSessionCompare() {
       return;
     }
 
-    // Seed from compSelection if arriving from Projects/Sessions page
-    if (state.compSelection.length === 0 && allSessions.length >= 2) {
-      state.compSelection = [
-        { id: allSessions[0].id, label: sessionChipLabel(allSessions[0]) },
-        { id: allSessions[1].id, label: sessionChipLabel(allSessions[1]) },
-      ];
-      renderCompareBar();
-    }
-
     renderSessionComparePage();
   } catch (e) {
     showError(e);
