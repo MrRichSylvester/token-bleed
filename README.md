@@ -1,9 +1,5 @@
 # Token Bleed
 
-<p align="center">
-  <img src="images/logo.png" alt="Token Bleed Logo" width="240" />
-</p>
-
 **See exactly what Claude Code is costing you. Per session. Per project. Per prompt.**
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
