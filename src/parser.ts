@@ -60,9 +60,11 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
   let permissionMode = '';
   const models = new Set<string>();
   const usage: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, cache5mTokens: 0, cache1hTokens: 0 };
-  const seenMessageIds = new Set<string>();
-  // Tracks content chars for messages where the API reported output_tokens=0
-  const outputEstimateChars = new Map<string, number>();
+
+  // Per-message deduplication: last entry wins (thinking blocks can report output=0 even when
+  // later entries for the same message_id carry the real output count).
+  type MsgData = { u: NonNullable<NonNullable<RawEntry['message']>['usage']>; contentChars: number };
+  const perMessage = new Map<string, MsgData>();
 
   for (const line of lines) {
     let entry: RawEntry;
@@ -99,11 +101,26 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
     }
 
     if (entry.type === 'assistant' && entry.message?.usage) {
-      const msgId = entry.message.id ?? '';
-      const isNewMessage = !msgId || !seenMessageIds.has(msgId);
+      const msgId = entry.message.id;
+      if (entry.message.model) models.add(entry.message.model);
 
-      if (isNewMessage) {
-        if (msgId) seenMessageIds.add(msgId);
+      if (msgId) {
+        // Accumulate content chars across all blocks for this message (used to estimate output
+        // when the API reports output_tokens=0 for every entry of the message).
+        let chars = 0;
+        if (Array.isArray(entry.message.content)) {
+          for (const block of entry.message.content as Array<Record<string, unknown>>) {
+            if (block.type === 'text' && typeof block.text === 'string') chars += block.text.length;
+            if (block.type === 'thinking' && typeof block.thinking === 'string') chars += block.thinking.length;
+            if (block.type === 'tool_use' && block.input) chars += JSON.stringify(block.input).length;
+          }
+        }
+        const prev = perMessage.get(msgId);
+        // Last-wins for usage so that non-thinking entries (which carry the real output count)
+        // overwrite the thinking entry's usage when they share the same message_id.
+        perMessage.set(msgId, { u: entry.message.usage, contentChars: (prev?.contentChars ?? 0) + chars });
+      } else {
+        // No message_id — count directly.
         const u = entry.message.usage;
         usage.inputTokens += u.input_tokens ?? 0;
         usage.outputTokens += u.output_tokens ?? 0;
@@ -111,21 +128,6 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
         usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;
         usage.cache5mTokens += u.cache_creation?.ephemeral_5m_input_tokens ?? 0;
         usage.cache1hTokens += u.cache_creation?.ephemeral_1h_input_tokens ?? 0;
-        // Flag messages where the API didn't report output tokens so we can estimate
-        if ((u.output_tokens ?? 0) === 0 && msgId) outputEstimateChars.set(msgId, 0);
-      }
-
-      if (entry.message.model) models.add(entry.message.model);
-
-      // Accumulate content chars across all entries for this message to estimate output tokens
-      if (msgId && outputEstimateChars.has(msgId) && Array.isArray(entry.message.content)) {
-        let chars = 0;
-        for (const block of entry.message.content as Array<Record<string, unknown>>) {
-          if (block.type === 'text' && typeof block.text === 'string') chars += block.text.length;
-          if (block.type === 'thinking' && typeof block.thinking === 'string') chars += block.thinking.length;
-          if (block.type === 'tool_use' && block.input) chars += JSON.stringify(block.input).length;
-        }
-        outputEstimateChars.set(msgId, (outputEstimateChars.get(msgId) ?? 0) + chars);
       }
 
       if (Array.isArray(entry.message.content)) {
@@ -138,9 +140,16 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
 
   if (!startTime) return null;
 
-  // For local models that report output_tokens=0, estimate from content character counts (~4 chars/token)
-  for (const chars of outputEstimateChars.values()) {
-    if (chars > 0) usage.outputTokens += Math.round(chars / 4);
+  // Merge per-message usage into totals. When output_tokens is still 0 after last-wins
+  // (local model APIs that never populate the field), estimate from content (~4 chars/token).
+  for (const { u, contentChars } of perMessage.values()) {
+    usage.inputTokens += u.input_tokens ?? 0;
+    usage.cacheCreationTokens += u.cache_creation_input_tokens ?? 0;
+    usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;
+    usage.cache5mTokens += u.cache_creation?.ephemeral_5m_input_tokens ?? 0;
+    usage.cache1hTokens += u.cache_creation?.ephemeral_1h_input_tokens ?? 0;
+    const reported = u.output_tokens ?? 0;
+    usage.outputTokens += reported > 0 ? reported : Math.round(contentChars / 4);
   }
 
   const primaryModel = models.size > 0 ? [...models][0] : 'unknown';
