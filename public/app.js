@@ -199,7 +199,8 @@ function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 120 
   const recent = daily.slice(-60);
   const maxVal = Math.max(...recent.map(d => d[valueKey]), 0.001);
   const BAR_GAP = 2;
-  const barW = 8;
+  const svgW = 560;
+  const barW = Math.max(3, Math.floor((svgW - (recent.length - 1) * BAR_GAP) / recent.length));
   const chartH = height - 24;
 
   const bars = recent.map((d, i) => {
@@ -219,11 +220,10 @@ function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 120 
 
   const gridlines = [0.25, 0.5, 0.75, 1].map(frac => {
     const y = chartH - Math.floor(frac * chartH);
-    return `<line class="chart-gridline" x1="0" y1="${y}" x2="${recent.length * (barW + BAR_GAP)}" y2="${y}" stroke-dasharray="3,3"/>
+    return `<line class="chart-gridline" x1="0" y1="${y}" x2="${svgW}" y2="${y}" stroke-dasharray="3,3"/>
     <text class="chart-axis-label" x="-4" y="${y + 3}" text-anchor="end">${fmt(maxVal * frac)}</text>`;
   }).join('');
 
-  const svgW = recent.length * (barW + BAR_GAP);
   return `<svg viewBox="0 0 ${svgW + 40} ${height}" width="100%" height="${height}" style="display:block;overflow:visible">
     <g transform="translate(36,0)">${gridlines}${bars}${labels}</g>
   </svg>`;
