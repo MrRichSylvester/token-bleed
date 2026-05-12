@@ -263,8 +263,23 @@ html, body {
   transition: border-color 200ms, box-shadow 200ms;
 }
 
+.metric-card[draggable] {
+  cursor: grab;
+  user-select: none;
+}
+
 .metric-card:hover {
   border-color: var(--border-2);
+}
+
+.metric-card.dragging {
+  opacity: 0.35;
+  cursor: grabbing;
+}
+
+.metric-card.drag-over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-dim) inset, 0 0 16px var(--accent-glow);
 }
 
 .metric-card.accent-left {

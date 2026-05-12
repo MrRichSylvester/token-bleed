@@ -304,6 +304,65 @@ function animateHbars(container) {
   });
 }
 
+// ── Metric card drag-and-drop ──────────────────────────────────
+
+function initDraggableCards(container) {
+  const grid = container.querySelector('.metric-grid');
+  if (!grid) return;
+
+  let dragSrc = null;
+
+  grid.querySelectorAll('.metric-card[data-id]').forEach(card => {
+    card.draggable = true;
+
+    card.addEventListener('dragstart', e => {
+      dragSrc = card;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    card.addEventListener('dragend', () => {
+      dragSrc = null;
+      grid.querySelectorAll('.metric-card').forEach(c => {
+        c.classList.remove('dragging', 'drag-over');
+      });
+      const order = [...grid.querySelectorAll('.metric-card[data-id]')].map(c => c.dataset.id);
+      localStorage.setItem('metric-card-order', JSON.stringify(order));
+    });
+
+    card.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (dragSrc && card !== dragSrc) {
+        grid.querySelectorAll('.metric-card').forEach(c => c.classList.remove('drag-over'));
+        card.classList.add('drag-over');
+      }
+    });
+
+    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!dragSrc || dragSrc === card) return;
+      const cards = [...grid.querySelectorAll('.metric-card')];
+      const srcIdx = cards.indexOf(dragSrc);
+      const tgtIdx = cards.indexOf(card);
+      grid.insertBefore(dragSrc, srcIdx < tgtIdx ? card.nextSibling : card);
+    });
+  });
+
+  // Restore saved order
+  const saved = localStorage.getItem('metric-card-order');
+  if (saved) {
+    try {
+      JSON.parse(saved).forEach(id => {
+        const card = grid.querySelector(`[data-id="${id}"]`);
+        if (card) grid.appendChild(card);
+      });
+    } catch {}
+  }
+}
+
 // ── Overview ───────────────────────────────────────────────────
 
 async function renderOverview() {
@@ -336,42 +395,42 @@ async function renderOverview() {
       <p class="page-subtitle">${periodLabel()} · ${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</p>
 
       <div class="metric-grid">
-        <div class="metric-card accent-left">
+        <div class="metric-card accent-left" data-id="total-cost">
           <div class="metric-label">Total Cost</div>
           <div class="metric-value mono">${fmtCost(stats.totalCost)}</div>
           <div class="metric-sub">${daily.length > 0 ? fmtCost(stats.totalCost / daily.length) + '/day avg' : '—'}</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card" data-id="sessions">
           <div class="metric-label">Sessions</div>
           <div class="metric-value mono">${stats.totalSessions.toLocaleString()}</div>
           <div class="metric-sub">${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</div>
         </div>
-        <div class="metric-card accent-left">
+        <div class="metric-card" data-id="cache-hit-rate">
           <div class="metric-label">Cache Hit Rate</div>
           <div class="metric-value">${fmtPct(stats.cacheHitRate)}</div>
           <div class="metric-sub">${fmtTokens(stats.cacheReadTokens)} from cache</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card accent-left" data-id="avg-cost-session">
           <div class="metric-label">Avg Cost / Session</div>
           <div class="metric-value mono">${stats.totalSessions > 0 ? fmtCost(stats.totalCost / stats.totalSessions) : '—'}</div>
           <div class="metric-sub">per paid session</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card" data-id="total-tokens">
           <div class="metric-label">Total Tokens</div>
           <div class="metric-value mono">${fmtTokens(stats.totalTokens)}</div>
           <div class="metric-sub">${fmtTokens(stats.inputTokens)} input</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card" data-id="output-tokens">
           <div class="metric-label">Output Tokens</div>
           <div class="metric-value mono">${fmtTokens(stats.outputTokens)}</div>
           <div class="metric-sub">${fmtPct(stats.outputTokens / (stats.totalTokens || 1))} of total</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card" data-id="messages">
           <div class="metric-label">Messages</div>
           <div class="metric-value mono">${stats.totalMessages.toLocaleString()}</div>
           <div class="metric-sub">${stats.totalSessions > 0 ? '~' + Math.round(stats.totalMessages / stats.totalSessions) + ' per session' : '—'}</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card" data-id="top-model">
           <div class="metric-label">Top Model</div>
           <div class="metric-value" style="font-size:15px">${shortModelName(stats.topModel)}</div>
           <div class="metric-sub">${stats.modelsUsed.length} model${stats.modelsUsed.length !== 1 ? 's' : ''} used</div>
@@ -411,6 +470,7 @@ async function renderOverview() {
       </div>
     `;
 
+    initDraggableCards(content);
     animateHbars(content);
 
     // Load recent sessions async
