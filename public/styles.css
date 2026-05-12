@@ -803,11 +803,55 @@ td.prompt span { display: block; overflow: hidden; text-overflow: ellipsis; whit
 .period-selector {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
+}
+
+.period-mode-toggle {
+  display: flex;
   background: #0d0d0d;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 3px;
+  gap: 2px;
+}
+
+.period-mode-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 4px 9px;
+  border-radius: 4px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.period-mode-btn:hover { color: var(--text-secondary); }
+
+.period-mode-btn.active {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+}
+
+.period-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.period-btns {
+  display: flex;
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px;
+  gap: 2px;
 }
 
 .period-btn {

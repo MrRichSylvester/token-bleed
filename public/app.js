@@ -73,13 +73,9 @@ const api = {
     if (!res.ok) throw new Error(`API error ${res.status}`);
     return res.json();
   },
-  sinceParam() {
-    const since = periodToSince(state.period);
-    return since ? `since=${encodeURIComponent(since)}` : '';
-  },
   withSince(base, extra = {}) {
     const params = { ...extra };
-    const since = periodToSince(state.period);
+    const since = periodToSince(state.periodMode, state.period);
     if (since) params.since = since;
     const qs = new URLSearchParams(params).toString();
     return `${base}${qs ? '?' + qs : ''}`;
@@ -98,43 +94,61 @@ const api = {
 
 // ── Period helpers ─────────────────────────────────────────────
 
-const PERIODS = [
-  { key: 'today', label: 'Today' },
-  { key: 'week',  label: 'This Week' },
-  { key: 'month', label: 'This Month' },
-  { key: '90d',   label: '90 Days' },
-  { key: 'all',   label: 'All Time' },
-];
+const PERIOD_MODES = {
+  calendar: {
+    label: 'Cal',
+    periods: [
+      { key: 'today', label: 'Today' },
+      { key: 'week',  label: 'This Week' },
+      { key: 'month', label: 'This Month' },
+      { key: 'all',   label: 'All Time' },
+    ],
+  },
+  rolling: {
+    label: 'Rolling',
+    periods: [
+      { key: '1d',  label: '1 Day' },
+      { key: '7d',  label: '7 Days' },
+      { key: '30d', label: '30 Days' },
+      { key: '90d', label: '90 Days' },
+      { key: 'all', label: 'All Time' },
+    ],
+  },
+};
 
-function periodToSince(period) {
+function periodToSince(mode, period) {
+  if (period === 'all') return undefined;
   const now = new Date();
-  if (period === 'today') {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return d.toISOString();
+
+  if (mode === 'calendar') {
+    if (period === 'today') return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    if (period === 'week') {
+      const d = new Date(now);
+      d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // back to Monday
+      d.setHours(0, 0, 0, 0);
+      return d.toISOString();
+    }
+    if (period === 'month') return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   }
-  if (period === 'week') {
-    const d = new Date(now);
-    d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Monday
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString();
+
+  if (mode === 'rolling') {
+    const days = { '1d': 1, '7d': 7, '30d': 30, '90d': 90 }[period];
+    if (days) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - days);
+      d.setHours(0, 0, 0, 0);
+      return d.toISOString();
+    }
   }
-  if (period === 'month') {
-    const d = new Date(now.getFullYear(), now.getMonth(), 1);
-    return d.toISOString();
-  }
-  if (period === '90d') {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 90);
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString();
-  }
-  return undefined; // all time
+
+  return undefined;
 }
 
 // ── State ──────────────────────────────────────────────────────
 
 const state = {
   view: 'overview',
+  periodMode: 'calendar',
   period: 'all',
   sessionsPage: 0,
   sessionsLimit: 50,
@@ -683,7 +697,8 @@ function renderCompCard(m, isWinner, isLoser, savingsPct, vsModel) {
 }
 
 function periodLabel() {
-  return PERIODS.find(p => p.key === state.period)?.label ?? 'All Time';
+  const periods = PERIOD_MODES[state.periodMode]?.periods ?? [];
+  return periods.find(p => p.key === state.period)?.label ?? 'All Time';
 }
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -720,6 +735,52 @@ async function renderView() {
   }
 }
 
+// ── Period selector renderer ───────────────────────────────────
+
+function renderPeriodSelector() {
+  const wrap = document.getElementById('period-selector');
+  if (!wrap) return;
+
+  const modeDef = PERIOD_MODES[state.periodMode];
+
+  const modeBtns = Object.entries(PERIOD_MODES).map(([key, def]) =>
+    `<button class="period-mode-btn ${key === state.periodMode ? 'active' : ''}" data-mode="${key}">${def.label}</button>`
+  ).join('');
+
+  const periodBtns = modeDef.periods.map(p =>
+    `<button class="period-btn ${p.key === state.period ? 'active' : ''}" data-period="${p.key}">${p.label}</button>`
+  ).join('');
+
+  wrap.className = 'period-selector';
+  wrap.innerHTML = `
+    <div class="period-mode-toggle">${modeBtns}</div>
+    <div class="period-divider"></div>
+    <div class="period-btns">${periodBtns}</div>
+  `;
+
+  wrap.querySelectorAll('.period-mode-btn[data-mode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.mode === state.periodMode) return;
+      state.periodMode = btn.dataset.mode;
+      // Default to 'all' when switching modes to avoid invalid key crossover
+      state.period = 'all';
+      state.sessionsPage = 0;
+      renderPeriodSelector();
+      renderView();
+    });
+  });
+
+  wrap.querySelectorAll('.period-btn[data-period]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.period === state.period) return;
+      state.period = btn.dataset.period;
+      state.sessionsPage = 0;
+      renderPeriodSelector();
+      renderView();
+    });
+  });
+}
+
 // ── Bootstrap ──────────────────────────────────────────────────
 
 function init() {
@@ -737,16 +798,8 @@ function init() {
   bodyGrid.appendChild(sidebar);
   bodyGrid.appendChild(main);
 
-  // Period selector
-  document.querySelectorAll('.period-btn[data-period]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.period = btn.dataset.period;
-      state.sessionsPage = 0;
-      document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      renderView();
-    });
-  });
+  // Period selector — rendered dynamically
+  renderPeriodSelector();
 
   // Nav clicks
   document.querySelectorAll('.nav-item[data-view]').forEach(el => {
