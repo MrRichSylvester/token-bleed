@@ -113,39 +113,25 @@ html, body {
   animation: bleed-pulse 3.5s ease-in-out infinite;
 }
 
-.bleed-word::after {
-  content: '';
+.bleed-drip {
   position: absolute;
   top: 78%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 3px;
+  width: var(--drip-w, 3px);
+  left: var(--drip-x, 50%);
   height: 0;
   background: linear-gradient(to bottom, var(--red), rgba(255, 90, 90, 0));
   border-radius: 0 0 50% 50%;
-  animation: bleed-drip 3.5s ease-in infinite;
-  animation-delay: 1s;
-}
-
-.bleed-word::before {
-  content: '';
-  position: absolute;
-  top: 78%;
-  left: 35%;
-  width: 2px;
-  height: 0;
-  background: linear-gradient(to bottom, var(--red), rgba(255, 90, 90, 0));
-  border-radius: 0 0 50% 50%;
-  animation: bleed-drip 4.2s ease-in infinite;
-  animation-delay: 2.2s;
+  animation: bleed-drip var(--drip-dur, 3.5s) ease-in infinite;
+  animation-delay: var(--drip-delay, 0s);
+  pointer-events: none;
 }
 
 @keyframes bleed-drip {
   0%   { height: 0; opacity: 0; }
-  5%   { opacity: 1; }
-  40%  { height: 18px; opacity: 0.9; }
-  80%  { height: 28px; opacity: 0.4; }
-  100% { height: 32px; opacity: 0; }
+  6%   { opacity: 1; }
+  45%  { height: var(--drip-len, 24px); opacity: 0.95; }
+  85%  { height: calc(var(--drip-len, 24px) + 10px); opacity: 0.35; }
+  100% { height: calc(var(--drip-len, 24px) + 14px); opacity: 0; }
 }
 
 /* Glow pulse on the bleed word */

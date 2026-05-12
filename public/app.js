@@ -1684,3 +1684,23 @@ function init() {
 }
 
 init();
+
+// Inject drip strands into the bleed word
+(function initBleed() {
+  const word = document.querySelector('.bleed-word');
+  if (!word) return;
+  const drips = [
+    { x: '18%', w: '2px', dur: '4.8s', delay: '0.3s',  len: '20px' },
+    { x: '32%', w: '3px', dur: '3.2s', delay: '1.6s',  len: '28px' },
+    { x: '48%', w: '2px', dur: '5.1s', delay: '0s',    len: '22px' },
+    { x: '62%', w: '3px', dur: '3.7s', delay: '2.4s',  len: '30px' },
+    { x: '75%', w: '2px', dur: '4.3s', delay: '0.9s',  len: '18px' },
+    { x: '88%', w: '2px', dur: '5.6s', delay: '3.1s',  len: '24px' },
+  ];
+  drips.forEach(d => {
+    const el = document.createElement('span');
+    el.className = 'bleed-drip';
+    el.style.cssText = `--drip-x:${d.x};--drip-w:${d.w};--drip-dur:${d.dur};--drip-delay:${d.delay};--drip-len:${d.len}`;
+    word.appendChild(el);
+  });
+}());
