@@ -202,12 +202,31 @@ function parseAll(): ParsedData {
 
   for (const projectId of projectFolders) {
     const projectDir = path.join(CLAUDE_PROJECTS_DIR, projectId);
-    const files = fs.readdirSync(projectDir).filter((f) => f.endsWith('.jsonl'));
+    const entries = fs.readdirSync(projectDir);
 
-    for (const file of files) {
-      const sessionId = file.replace('.jsonl', '');
-      const session = parseSessionFile(sessionId, projectId, path.join(projectDir, file));
-      if (session) sessions.push(session);
+    for (const entry of entries) {
+      if (entry.endsWith('.jsonl')) {
+        const sessionId = entry.replace('.jsonl', '');
+        const session = parseSessionFile(sessionId, projectId, path.join(projectDir, entry));
+        if (session) sessions.push(session);
+        continue;
+      }
+
+      // Subagent sessions live at <projectDir>/<parentSessionId>/subagents/*.jsonl
+      const subagentsDir = path.join(projectDir, entry, 'subagents');
+      try {
+        if (!fs.statSync(subagentsDir).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+      for (const file of fs.readdirSync(subagentsDir).filter((f) => f.endsWith('.jsonl'))) {
+        const sessionId = file.replace('.jsonl', '');
+        const session = parseSessionFile(sessionId, projectId, path.join(subagentsDir, file));
+        if (session) {
+          if (!session.entrypoint) session.entrypoint = 'subagent';
+          sessions.push(session);
+        }
+      }
     }
   }
 
