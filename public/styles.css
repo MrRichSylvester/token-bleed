@@ -248,23 +248,20 @@ html, body {
 
 /* ── Overview top row ── */
 .overview-top {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 20px;
-  align-items: stretch;
   margin-bottom: 28px;
 }
 
 .metric-grid-4 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: 14px;
-  flex: 1;
+  align-content: start;
 }
 
 .overview-top .usage-grid-wrap {
-  flex: 1;
-  min-width: 0;
   margin-bottom: 0;
 }
 
@@ -610,7 +607,13 @@ td.msg-prompt {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+}
+
+.usage-grid-top-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .usage-grid-title {
@@ -625,6 +628,95 @@ td.msg-prompt {
   font-size: 11px;
   color: var(--text-muted);
   font-family: var(--font-mono);
+}
+
+.usage-config-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 150ms, background 150ms;
+}
+
+.usage-config-btn:hover {
+  color: var(--text-primary);
+  background: var(--surface-3);
+}
+
+.usage-config-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.usage-retention-info {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.usage-retention-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.usage-retention-warning {
+  font-size: 11px;
+  color: var(--amber);
+}
+
+.usage-config-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.usage-config-input {
+  background: var(--bg);
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 3px 8px;
+  width: 64px;
+  outline: none;
+}
+
+.usage-config-input:focus {
+  border-color: var(--accent);
+}
+
+.usage-config-save {
+  background: none;
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: border-color 150ms, color 150ms;
+}
+
+.usage-config-save:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.usage-config-save:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .usage-grid-layout {

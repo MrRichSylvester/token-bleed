@@ -2,9 +2,21 @@ import Fastify from 'fastify';
 import FastifyStatic from '@fastify/static';
 import FastifyCors from '@fastify/cors';
 import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { getData, invalidateCache, parseSessionMessages } from './parser.js';
 import { filterByDate, computeProjects, computeStats, computeDaily, computeModelStats } from './aggregator.js';
+
+const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
+
+function readClaudeSettings(): Record<string, unknown> {
+  try {
+    return JSON.parse(fs.readFileSync(CLAUDE_SETTINGS_PATH, 'utf-8'));
+  } catch {
+    return {};
+  }
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -75,6 +87,28 @@ app.get('/api/sessions/:id/messages', async (req, reply) => {
 app.get('/api/models', async (req) => {
   const { since } = req.query as Record<string, string>;
   return computeModelStats(getSessions(since));
+});
+
+app.get('/api/meta', async () => {
+  const { sessions } = getData();
+  const sorted = [...sessions].sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const earliestDate = sorted.length > 0 ? sorted[0].startTime.slice(0, 10) : null;
+  const latestDate = sorted.length > 0 ? sorted[sorted.length - 1].startTime.slice(0, 10) : null;
+  const settings = readClaudeSettings();
+  const cleanupPeriodDays = typeof settings.cleanupPeriodDays === 'number' ? settings.cleanupPeriodDays : 30;
+  return { earliestDate, latestDate, cleanupPeriodDays };
+});
+
+app.post('/api/settings', async (req, reply) => {
+  const body = req.body as Record<string, unknown>;
+  const raw = Number(body.cleanupPeriodDays);
+  if (!Number.isFinite(raw)) { reply.status(400); return { error: 'cleanupPeriodDays must be a number' }; }
+  const corrected = raw === 0;
+  const value = Math.max(1, Math.round(raw));
+  const existing = readClaudeSettings();
+  existing.cleanupPeriodDays = value;
+  fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(existing, null, 2) + '\n');
+  return { ok: true, cleanupPeriodDays: value, corrected };
 });
 
 app.get('/api/models/comparison', async (req) => {

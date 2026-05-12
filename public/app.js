@@ -98,8 +98,8 @@ function _initTooltip() {
 // ── API client ─────────────────────────────────────────────────
 
 const api = {
-  async fetch(path) {
-    const res = await fetch(path);
+  async fetch(path, init) {
+    const res = await fetch(path, init);
     if (!res.ok) throw new Error(`API error ${res.status}`);
     return res.json();
   },
@@ -120,6 +120,8 @@ const api = {
     return api.fetch(api.withSince('/api/models/comparison', extra));
   },
   refresh: () => api.fetch('/api/refresh'),
+  meta: () => api.fetch('/api/meta'),
+  saveSetting: (key, value) => api.fetch(`/api/settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [key]: value }) }),
 };
 
 // ── Period helpers ─────────────────────────────────────────────
@@ -369,24 +371,31 @@ function initDraggableCards(container) {
 
 // ── Usage Grid (GitHub-style) ──────────────────────────────────
 
-function renderUsageGrid(dailyAll) {
+function renderUsageGrid(dailyAll, meta) {
   if (!dailyAll || dailyAll.length === 0) return '';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Grid starts at the actual earliest log date from the server
+  const earliestStr = meta?.earliestDate || (dailyAll.length > 0 ? dailyAll[0].date : null);
+  if (!earliestStr) return '';
+
+  const gridStart = new Date(earliestStr);
+  gridStart.setHours(0, 0, 0, 0);
 
   const byDate = {};
   for (const d of dailyAll) byDate[d.date] = d;
 
   const maxCost = Math.max(...dailyAll.map(d => d.cost), 0.001);
   const activeDays = dailyAll.filter(d => d.cost > 0).length;
-  const totalCost = dailyAll.reduce((s, d) => s + d.cost, 0);
+  const spanDays = Math.round((today - gridStart) / 86400000) + 1;
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Align back to the Sunday of the week containing gridStart
+  const alignedStart = new Date(gridStart);
+  alignedStart.setDate(gridStart.getDate() - gridStart.getDay());
 
-  // Start on the Sunday 51 full weeks before the current week's Sunday
-  const startDate = new Date(today);
-  startDate.setDate(today.getDate() - today.getDay() - 51 * 7);
-
-  const WEEKS = 52;
+  const WEEKS = Math.ceil((Math.floor((today - alignedStart) / 86400000) + 1) / 7);
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
   function getLevel(cost) {
@@ -398,26 +407,26 @@ function renderUsageGrid(dailyAll) {
     return 4;
   }
 
-  // Build weeks and track month boundaries
   const weekCols = [];
-  const monthSpans = []; // { label, startWeek, endWeek }
+  const monthSpans = [];
   let lastMonth = -1;
 
   for (let w = 0; w < WEEKS; w++) {
     const cells = [];
     for (let d = 0; d < 7; d++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + w * 7 + d);
+      const date = new Date(alignedStart);
+      date.setDate(alignedStart.getDate() + w * 7 + d);
       const isFuture = date > today;
+      const isBeforeData = date < gridStart;
       const dateStr = date.toISOString().slice(0, 10);
 
-      if (d === 0 && date.getMonth() !== lastMonth) {
+      if (d === 0 && !isBeforeData && !isFuture && date.getMonth() !== lastMonth) {
         lastMonth = date.getMonth();
         if (monthSpans.length > 0) monthSpans[monthSpans.length - 1].endWeek = w - 1;
         monthSpans.push({ label: MONTHS[date.getMonth()], startWeek: w, endWeek: WEEKS - 1 });
       }
 
-      if (isFuture) {
+      if (isFuture || isBeforeData) {
         cells.push(`<div class="usage-cell" data-future></div>`);
       } else {
         const data = byDate[dateStr];
@@ -432,8 +441,7 @@ function renderUsageGrid(dailyAll) {
     weekCols.push(`<div class="usage-week">${cells.join('')}</div>`);
   }
 
-  // Month labels row — each label width = number of weeks it spans * cell stride
-  const STRIDE = 11; // 10px cell + 1px gap
+  const STRIDE = 11;
   const monthRow = monthSpans.map(m => {
     const spanWeeks = m.endWeek - m.startWeek + 1;
     const width = spanWeeks * STRIDE - 1;
@@ -441,11 +449,31 @@ function renderUsageGrid(dailyAll) {
     return `<span class="usage-month-label" style="left:${offset}px;width:${width}px">${m.label}</span>`;
   }).join('');
 
+  const sinceLabel = gridStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const cleanupDays = meta?.cleanupPeriodDays ?? 30;
+
   return `
     <div class="usage-grid-wrap">
       <div class="usage-grid-top">
         <span class="usage-grid-title">Activity</span>
-        <span class="usage-grid-meta">${activeDays} active day${activeDays !== 1 ? 's' : ''} · ${fmtCost(totalCost)} total</span>
+        <div class="usage-grid-top-right">
+          <span class="usage-grid-meta">${activeDays} active day${activeDays !== 1 ? 's' : ''} · ${spanDays} day${spanDays !== 1 ? 's' : ''} of logs</span>
+          <button class="usage-config-btn" id="usage-config-toggle" title="Log retention settings">⚙</button>
+        </div>
+      </div>
+      <div class="usage-config-panel" id="usage-config-panel" style="display:none">
+        <div class="usage-retention-info">
+          Logs start <strong>${sinceLabel}</strong>. Claude Code deletes sessions older than <strong>${cleanupDays} days</strong>.
+        </div>
+        <div class="usage-retention-controls">
+          <span class="usage-config-label">Keep logs for</span>
+          <input class="usage-config-input" id="usage-retention-input" type="number" min="1" max="3650" value="${cleanupDays}">
+          <span class="usage-config-label">days</span>
+          <button class="usage-config-save" id="usage-retention-save">Save</button>
+        </div>
+        <div class="usage-retention-warning" id="usage-zero-warning" style="display:none">
+          ⚠ 0 disables transcript writing entirely. Setting to 1 instead.
+        </div>
       </div>
       <div class="usage-grid-layout">
         <div class="usage-day-col">
@@ -469,14 +497,61 @@ function renderUsageGrid(dailyAll) {
   `;
 }
 
+function bindUsageGridConfig() {
+  const toggle = document.getElementById('usage-config-toggle');
+  const panel = document.getElementById('usage-config-panel');
+  const input = document.getElementById('usage-retention-input');
+  const save = document.getElementById('usage-retention-save');
+  const warning = document.getElementById('usage-zero-warning');
+  if (!toggle || !panel) return;
+
+  toggle.addEventListener('click', () => {
+    panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+    if (panel.style.display !== 'none') input.focus();
+  });
+
+  save.addEventListener('click', async () => {
+    let v = parseInt(input.value, 10);
+    if (!Number.isFinite(v) || v < 0) return;
+    if (v === 0) {
+      warning.style.display = 'block';
+      v = 1;
+      input.value = '1';
+      return;
+    }
+    warning.style.display = 'none';
+    save.disabled = true;
+    save.textContent = 'Saving…';
+    try {
+      const result = await api.saveSetting('cleanupPeriodDays', v);
+      if (result.corrected) {
+        warning.style.display = 'block';
+        input.value = '1';
+      }
+      panel.style.display = 'none';
+      renderOverview();
+    } finally {
+      save.disabled = false;
+      save.textContent = 'Save';
+    }
+  });
+
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') save.click(); });
+  input.addEventListener('input', () => {
+    if (parseInt(input.value, 10) === 0) warning.style.display = 'block';
+    else warning.style.display = 'none';
+  });
+}
+
 // ── Overview ───────────────────────────────────────────────────
 
 async function renderOverview() {
   setLoading();
   try {
-    const [stats, daily, models, dailyAll] = await Promise.all([
+    const [stats, daily, models, dailyAll, meta] = await Promise.all([
       api.stats(), api.daily(), api.models(),
       api.fetch('/api/daily'),
+      api.meta(),
     ]);
     state.data.stats = stats;
     state.data.daily = daily;
@@ -526,7 +601,7 @@ async function renderOverview() {
             <div class="metric-sub">${stats.totalSessions > 0 ? '~' + Math.round(stats.totalMessages / stats.totalSessions) + ' per session' : '—'}</div>
           </div>
         </div>
-        ${renderUsageGrid(dailyAll)}
+        ${renderUsageGrid(dailyAll, meta)}
       </div>
 
       <div class="chart-row-2">
@@ -586,6 +661,7 @@ async function renderOverview() {
 
     initDraggableCards(content);
     animateHbars(content);
+    bindUsageGridConfig();
 
     // Load recent sessions async
     const { sessions } = await api.sessions({ limit: 10, offset: 0 });
