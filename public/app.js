@@ -601,7 +601,7 @@ async function renderOverview() {
 
     const content = document.getElementById('content');
     content.innerHTML = `
-      <h1 class="page-title">Burn Rate</h1>
+      <h1 class="page-title">Overview</h1>
       <p class="page-subtitle">${periodLabel()} · ${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</p>
 
       <div class="overview-top">
@@ -1574,7 +1574,7 @@ function showOnboardingIfNeeded(meta) {
     <div class="onboarding-card">
       <div class="onboarding-title">One thing before you dig in</div>
       <p class="onboarding-text">
-        Burn Rate tracks your Claude Code usage by reading local session logs.
+        Token Bleed tracks your Claude Code usage by reading local session logs.
         Those logs are currently kept for <strong>${cleanupDays} days</strong> —
         after that Claude Code deletes them and they're gone from this dashboard too.
       </p>

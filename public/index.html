@@ -3,19 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Token Dashboard — AI Revenue Club</title>
+  <title>Token Bleed</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div id="app">
     <aside id="sidebar">
+      <div class="sidebar-club-brand">
+        <span class="club-ai">AI</span> <span class="club-revenue">Revenue</span> <span class="club-club">Club</span>
+      </div>
       <nav>
         <div class="nav-section-label">Overview</div>
         <a class="nav-item" data-view="overview" href="#overview">
-          <span class="nav-icon">◈</span> Burn Rate
+          <span class="nav-icon">◈</span> Overview
         </a>
 
         <div class="nav-section-label">Data</div>
@@ -44,10 +47,8 @@
       <header id="header">
         <div class="header-left">
           <div class="header-logo-row">
-            <span class="header-brand">AI Revenue Club</span>
-            <span class="header-product">Token Dashboard</span>
+            <span class="header-brand token-bleed-logo">Token <span class="bleed-word">Bleed</span></span>
           </div>
-          <div class="header-tagline">Build AI systems that actually make money.</div>
         </div>
         <div class="header-right" style="display:flex;align-items:center;gap:20px;">
           <div id="period-selector"></div>

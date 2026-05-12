@@ -53,7 +53,7 @@ html, body {
   display: grid;
   grid-template-rows: auto 1fr;
   height: 100vh;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .body-grid {
@@ -73,6 +73,7 @@ html, body {
   height: 54px;
   flex-shrink: 0;
   z-index: 10;
+  overflow: visible;
 }
 
 .header-left {
@@ -89,15 +90,72 @@ html, body {
 
 .header-brand {
   font-weight: 700;
-  font-size: 14px;
-  color: var(--accent);
-  letter-spacing: -0.01em;
+  font-size: 16px;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.token-bleed-logo {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ── Bleed word animation ── */
+.bleed-word {
+  color: var(--red);
+  position: relative;
+  display: inline-block;
+  letter-spacing: -0.02em;
+  animation: bleed-pulse 3.5s ease-in-out infinite;
+}
+
+.bleed-word::after {
+  content: '';
+  position: absolute;
+  top: 78%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 0;
+  background: linear-gradient(to bottom, var(--red), rgba(255, 90, 90, 0));
+  border-radius: 0 0 50% 50%;
+  animation: bleed-drip 3.5s ease-in infinite;
+  animation-delay: 1s;
+}
+
+.bleed-word::before {
+  content: '';
+  position: absolute;
+  top: 78%;
+  left: 35%;
+  width: 2px;
+  height: 0;
+  background: linear-gradient(to bottom, var(--red), rgba(255, 90, 90, 0));
+  border-radius: 0 0 50% 50%;
+  animation: bleed-drip 4.2s ease-in infinite;
+  animation-delay: 2.2s;
+}
+
+@keyframes bleed-drip {
+  0%   { height: 0; opacity: 0; }
+  5%   { opacity: 1; }
+  40%  { height: 18px; opacity: 0.9; }
+  80%  { height: 28px; opacity: 0.4; }
+  100% { height: 32px; opacity: 0; }
+}
+
+/* Glow pulse on the bleed word */
+@keyframes bleed-pulse {
+  0%, 100% { text-shadow: 0 0 8px rgba(255,90,90,0.4); }
+  50%       { text-shadow: 0 0 16px rgba(255,90,90,0.8), 0 0 32px rgba(255,90,90,0.3); }
 }
 
 .header-product {
-  font-weight: 500;
-  font-size: 14px;
-  color: var(--text-secondary);
+  display: none;
 }
 
 .header-tagline {
@@ -124,7 +182,27 @@ html, body {
   flex-direction: column;
   flex-shrink: 0;
   overflow-y: auto;
-  padding-top: 12px;
+  padding-top: 0;
+}
+
+.sidebar-club-brand {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.club-ai,
+.club-club {
+  color: #ffffff;
+}
+
+.club-revenue {
+  color: var(--accent);
 }
 
 .nav-section-label {
@@ -173,6 +251,7 @@ html, body {
   padding: 16px;
   border-top: 1px solid var(--border);
 }
+
 
 .refresh-btn {
   width: 100%;
