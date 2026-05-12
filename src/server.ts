@@ -9,7 +9,7 @@ import { exec, spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { getData, invalidateCache, parseSessionMessages } from './parser.js';
 import { filterByDate, computeProjects, computeStats, computeDaily, computeModelStats } from './aggregator.js';
-import { PRICING, setCustomPricing } from './pricing.js';
+import { PRICING, LEGACY_MODEL_KEYS, setCustomPricing } from './pricing.js';
 import { computeTips } from './tips.js';
 import type { AppSettings } from './types.js';
 import {
@@ -158,6 +158,7 @@ app.get('/api/app-settings', async () => {
     customPricing: appSettings.customPricing,
     builtinPricing: PRICING,
     detectedModels: [...detectedModels].sort(),
+    legacyModelKeys: [...LEGACY_MODEL_KEYS],
   };
 });
 

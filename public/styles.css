@@ -3133,6 +3133,19 @@ td.msg-prompt {
 .pricing-reset-btn:hover:not(:disabled) { color: var(--accent); }
 .pricing-reset-btn:disabled { opacity: 0.2; cursor: default; }
 
+.pricing-legacy-toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  cursor: pointer;
+  padding: 6px 0;
+  margin-bottom: 4px;
+  transition: color 150ms;
+}
+.pricing-legacy-toggle:hover { color: var(--text-secondary); }
+
 .pricing-add-row {
   display: flex;
   gap: 8px;

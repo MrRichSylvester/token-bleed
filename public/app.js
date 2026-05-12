@@ -1705,20 +1705,23 @@ async function renderSettings() {
     const [appSettings, meta, providerData] = await Promise.all([api.appSettings(), api.meta(), api.providers()]);
     state.appSettings = appSettings;
 
-    const { plan, customPricing, builtinPricing, detectedModels } = appSettings;
+    const { plan, customPricing, builtinPricing, detectedModels, legacyModelKeys = [] } = appSettings;
+    const legacySet = new Set(legacyModelKeys);
     const cleanupDays = meta.cleanupPeriodDays ?? 30;
 
     // Models that appear in sessions but have no built-in pricing (custom/local/unknown)
     const unknownModels = detectedModels.filter(m => !builtinPricing[m] &&
       !Object.keys(builtinPricing).some(k => m.startsWith(k) || k.startsWith(m)));
 
-    // All built-in models shown first, then any custom/unknown-only models appended
-    const builtinKeys = Object.keys(builtinPricing).sort();
+    // Current models + any unknown/custom-only models in the main table
+    const currentBuiltinKeys = Object.keys(builtinPricing).filter(k => !legacySet.has(k)).sort();
+    const legacyBuiltinKeys  = Object.keys(builtinPricing).filter(k =>  legacySet.has(k)).sort();
     const extraModels = [...new Set([
       ...unknownModels,
       ...Object.keys(customPricing).filter(m => !builtinPricing[m]),
     ])].sort();
-    const allModelSet = new Set([...builtinKeys, ...extraModels]);
+    const currentModelSet = new Set([...currentBuiltinKeys, ...extraModels]);
+    const legacyModelSet  = new Set(legacyBuiltinKeys);
 
     function pricingRow(model) {
       const cp = customPricing[model];
@@ -1792,10 +1795,16 @@ async function renderSettings() {
               </tr>
             </thead>
             <tbody id="pricing-tbody">
-              ${[...allModelSet].map(pricingRow).join('')}
+              ${[...currentModelSet].map(pricingRow).join('')}
+            </tbody>
+            <tbody id="pricing-legacy-tbody" hidden>
+              ${[...legacyModelSet].map(pricingRow).join('')}
             </tbody>
           </table>
         </div>
+        <button class="pricing-legacy-toggle" id="pricing-legacy-toggle">
+          Show legacy models (${legacyModelSet.size})
+        </button>
 
         <div class="pricing-add-row">
           <input id="pricing-new-model" class="pricing-new-model-input" type="text" placeholder="model name (e.g. my-local-llm)">
@@ -1852,7 +1861,7 @@ async function renderSettings() {
     // Pricing save
     function collectCustomPricing() {
       const result = {};
-      document.querySelectorAll('#pricing-tbody .pricing-row').forEach(row => {
+      document.querySelectorAll('#pricing-tbody .pricing-row, #pricing-legacy-tbody .pricing-row').forEach(row => {
         // Skip built-in rows that haven't been overridden
         if (row.dataset.atBuiltin === 'true') return;
         const model = row.dataset.model;
@@ -1926,6 +1935,17 @@ async function renderSettings() {
         cell.appendChild(badge);
       }
       document.getElementById('pricing-save-row').style.display = '';
+    });
+
+    // Legacy models toggle
+    document.getElementById('pricing-legacy-toggle')?.addEventListener('click', () => {
+      const tbody = document.getElementById('pricing-legacy-tbody');
+      const btn = document.getElementById('pricing-legacy-toggle');
+      if (!tbody || !btn) return;
+      tbody.hidden = !tbody.hidden;
+      btn.textContent = tbody.hidden
+        ? `Show legacy models (${legacyModelSet.size})`
+        : `Hide legacy models`;
     });
 
     // Pricing table inputs — show save row on edit; mark built-in rows as modified
