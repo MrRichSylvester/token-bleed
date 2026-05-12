@@ -242,6 +242,7 @@ function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 160,
   const colorMap = { green: '#00FF87', blue: '#5B8DEF', violet: '#B985F4', amber: '#FFB547' };
   const colorVal = colorMap[color] || colorMap.green;
   const gradId = `bg-${valueKey}`;
+  const topPad = 14;
 
   const bars = recent.map((d, i) => {
     const barH = Math.max(2, Math.floor((d[valueKey] / maxVal) * chartH));
@@ -249,7 +250,13 @@ function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 160,
     const y = chartH - barH;
     const tip = `${d.date}  ${fmt(d[valueKey])}`;
     const delay = 80 + i * 15;
-    return `<rect class="bar-chart-bar" x="${x}" y="${y}" width="${barW}" height="${barH}" rx="2" fill="url(#${gradId})" data-tip="${escHtml(tip)}" style="animation-delay:${delay}ms"></rect>`;
+    const labelY = Math.max(topPad - 2, y - 6);
+    return `
+    <g class="bar-col">
+      <rect class="bar-col-bg" x="${x}" y="0" width="${barW}" height="${chartH}" rx="2"/>
+      <rect class="bar-chart-bar" x="${x}" y="${y}" width="${barW}" height="${barH}" rx="2" fill="url(#${gradId})" data-tip="${escHtml(tip)}" style="animation-delay:${delay}ms"/>
+      <text class="bar-col-val" x="${x + barW / 2}" y="${labelY}" text-anchor="middle">${escHtml(fmt(d[valueKey]))}</text>
+    </g>`;
   }).join('');
 
   const step = Math.max(1, Math.floor(recent.length / 8));
@@ -265,7 +272,6 @@ function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 160,
     <text class="chart-axis-label" x="-4" y="${y + 3}" text-anchor="end">${fmt(maxVal * frac)}</text>`;
   }).join('');
 
-  const topPad = 14;
   return `<svg viewBox="0 ${-topPad} ${svgW + 40} ${height + topPad}" width="100%" height="${height + topPad}" style="display:block;overflow:visible">
     <defs>
       <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
@@ -371,23 +377,15 @@ function initDraggableCards(container) {
 
 // ── Usage Grid (GitHub-style) ──────────────────────────────────
 
-function renderUsageGrid(dailyAll, meta) {
+function renderUsageGrid(dailyAll) {
   if (!dailyAll || dailyAll.length === 0) return '';
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Fixed 365-day window — capped at actual data start
-  const cutoff = new Date(today);
-  cutoff.setDate(today.getDate() - 364);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
-  const daily = dailyAll.filter(d => d.date >= cutoffStr);
-
-  // Grid starts at the actual earliest log date from the server
-  const earliestStr = (daily.length > 0 ? daily[0].date : null) || meta?.earliestDate;
-  if (!earliestStr) return '';
-
-  const gridStart = new Date(earliestStr);
+  // Always show full 365-day grid — cells with no data render as empty (gray)
+  const gridStart = new Date(today);
+  gridStart.setDate(today.getDate() - 364);
   gridStart.setHours(0, 0, 0, 0);
 
   const byDate = {};
@@ -422,16 +420,15 @@ function renderUsageGrid(dailyAll, meta) {
       const date = new Date(alignedStart);
       date.setDate(alignedStart.getDate() + w * 7 + d);
       const isFuture = date > today;
-      const isBeforeData = date < gridStart;
       const dateStr = date.toISOString().slice(0, 10);
 
-      if (d === 0 && !isBeforeData && !isFuture && date.getMonth() !== lastMonth) {
+      if (d === 0 && !isFuture && date.getMonth() !== lastMonth) {
         lastMonth = date.getMonth();
         if (monthSpans.length > 0) monthSpans[monthSpans.length - 1].endWeek = w - 1;
         monthSpans.push({ label: MONTHS[date.getMonth()], startWeek: w, endWeek: WEEKS - 1 });
       }
 
-      if (isFuture || isBeforeData) {
+      if (isFuture) {
         cells.push(`<div class="usage-cell" data-future></div>`);
       } else {
         const data = byDate[dateStr];
@@ -440,18 +437,20 @@ function renderUsageGrid(dailyAll, meta) {
         const tip = cost > 0
           ? `${dateStr}  ${fmtCost(cost)}  ${sessions} session${sessions !== 1 ? 's' : ''}`
           : `${dateStr}  no activity`;
-        cells.push(`<div class="usage-cell" data-level="${getLevel(cost)}" data-tip="${escHtml(tip)}"></div>`);
+        const level = getLevel(cost);
+        const delayAttr = level > 0 ? ` style="--cd:${Math.floor(Math.random() * 2400)}ms"` : '';
+        cells.push(`<div class="usage-cell" data-level="${level}" data-tip="${escHtml(tip)}"${delayAttr}></div>`);
       }
     }
     weekCols.push(`<div class="usage-week">${cells.join('')}</div>`);
   }
 
-  const STRIDE = 11;
+  // Positions use CSS calc so they track --cell-size when scaleUsageGrid updates it
   const monthRow = monthSpans.map(m => {
     const spanWeeks = m.endWeek - m.startWeek + 1;
-    const width = spanWeeks * STRIDE - 1;
-    const offset = m.startWeek * STRIDE;
-    return `<span class="usage-month-label" style="left:${offset}px;width:${width}px">${m.label}</span>`;
+    const left = `calc(${m.startWeek} * (var(--cell-size, 10px) + 1px))`;
+    const width = `calc(${spanWeeks} * (var(--cell-size, 10px) + 1px) - 1px)`;
+    return `<span class="usage-month-label" style="left:${left};width:${width}">${m.label}</span>`;
   }).join('');
 
   return `
@@ -469,15 +468,6 @@ function renderUsageGrid(dailyAll, meta) {
           <div class="usage-weeks">${weekCols.join('')}</div>
         </div>
       </div>
-      <div class="usage-grid-legend">
-        <span class="usage-legend-text">Less</span>
-        <div class="usage-cell" data-level="0"></div>
-        <div class="usage-cell" data-level="1"></div>
-        <div class="usage-cell" data-level="2"></div>
-        <div class="usage-cell" data-level="3"></div>
-        <div class="usage-cell" data-level="4"></div>
-        <span class="usage-legend-text">More</span>
-      </div>
     </div>
   `;
 }
@@ -487,25 +477,27 @@ function scaleUsageGrid() {
   if (!wrap) return;
   const numWeeks = parseInt(wrap.dataset.weeks || '4', 10);
   const topEl = wrap.querySelector('.usage-grid-top');
-  const legendEl = wrap.querySelector('.usage-grid-legend');
   const monthEl = wrap.querySelector('.usage-month-row');
   const rightEl = wrap.querySelector('.usage-grid-right');
-  if (!topEl || !legendEl || !monthEl || !rightEl) return;
+  if (!topEl || !monthEl || !rightEl) return;
 
   const cs = getComputedStyle(wrap);
   const padV = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
   const innerH = wrap.clientHeight - padV;
-  const topUsed = topEl.offsetHeight + 10;     // 10px margin-bottom
-  const monthUsed = monthEl.offsetHeight + 2;  // 2px margin-bottom
-  const legendUsed = legendEl.offsetHeight + 10; // 10px margin-top
+  const topUsed = topEl.offsetHeight + 10;
+  const monthUsed = monthEl.offsetHeight + 2;
 
-  const gridH = innerH - topUsed - monthUsed - legendUsed;
+  const gridH = innerH - topUsed - monthUsed;
   const cellFromH = Math.floor((gridH - 6) / 7); // 7 rows, 6 gaps
 
-  const cellFromW = Math.floor((rightEl.clientWidth - (numWeeks - 1)) / numWeeks);
+  // Embedded card: height-only sizing, grid scrolls horizontally
+  if (wrap.closest('.overview-activity')) {
+    wrap.style.setProperty('--cell-size', Math.max(8, cellFromH) + 'px');
+    return;
+  }
 
-  const cellSize = Math.max(10, Math.min(cellFromH, cellFromW));
-  wrap.style.setProperty('--cell-size', cellSize + 'px');
+  const cellFromW = Math.floor((rightEl.clientWidth - (numWeeks - 1)) / numWeeks);
+  wrap.style.setProperty('--cell-size', Math.max(10, Math.min(cellFromH, cellFromW)) + 'px');
 }
 
 // ── Overview ───────────────────────────────────────────────────
@@ -560,7 +552,7 @@ async function renderOverview() {
           <div class="metric-sub">${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</div>
         </div>
         <div class="metric-card overview-activity">
-          ${renderUsageGrid(dailyAll, meta)}
+          ${renderUsageGrid(dailyAll)}
         </div>
         <div class="metric-card">
           <div class="metric-label">Total Prompts</div>
@@ -597,28 +589,6 @@ async function renderOverview() {
         </div>
         <div class="chart-wrap">
           <div class="chart-title">Token Breakdown</div>
-          <div class="token-stats-row">
-            <div class="token-stat">
-              <div class="token-stat-label">Total</div>
-              <div class="token-stat-value mono">${fmtTokens(stats.totalTokens)}</div>
-            </div>
-            <div class="token-stat">
-              <div class="token-stat-label">Cache Hit</div>
-              <div class="token-stat-value">${fmtPct(stats.cacheHitRate)}</div>
-            </div>
-            <div class="token-stat">
-              <div class="token-stat-label">Output</div>
-              <div class="token-stat-value mono">${fmtTokens(stats.outputTokens)}</div>
-            </div>
-            <div class="token-stat">
-              <div class="token-stat-label">Cache Read</div>
-              <div class="token-stat-value mono">${fmtTokens(stats.cacheReadTokens)}</div>
-            </div>
-            <div class="token-stat">
-              <div class="token-stat-label">Cache Write</div>
-              <div class="token-stat-value mono">${fmtTokens(stats.cacheCreationTokens)}</div>
-            </div>
-          </div>
           <div class="hbar-wrap">${renderHorizBars(tokenRows, { fmtVal: fmtTokens })}</div>
         </div>
       </div>
@@ -636,7 +606,12 @@ async function renderOverview() {
 
     initDraggableCards(content);
     animateHbars(content);
-    requestAnimationFrame(scaleUsageGrid);
+    requestAnimationFrame(() => {
+      scaleUsageGrid();
+      // Scroll activity grid to the most recent weeks (rightmost)
+      const gridRight = content.querySelector('.overview-activity .usage-grid-right');
+      if (gridRight) gridRight.scrollLeft = gridRight.scrollWidth;
+    });
     showOnboardingIfNeeded(meta);
 
     // Load recent sessions async
