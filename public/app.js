@@ -739,7 +739,7 @@ function bindSelectableRows(container, sessions) {
       const label = `${s.projectName} · ${fmtDate(s.startTime)}`;
       const idx = state.compSelection.findIndex(x => x.id === id);
       if (cb.checked) {
-        if (state.compSelection.length >= 2) state.compSelection.shift();
+        if (state.compSelection.length >= 6) { cb.checked = false; return; }
         state.compSelection.push({ id, label });
       } else {
         if (idx !== -1) state.compSelection.splice(idx, 1);
@@ -756,6 +756,8 @@ function syncAllCheckboxes() {
   });
 }
 
+const COMP_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
+
 function renderCompareBar() {
   let bar = document.getElementById('compare-bar');
   if (!bar) {
@@ -770,19 +772,28 @@ function renderCompareBar() {
     return;
   }
 
-  const [a, b] = state.compSelection;
-  const canCompare = state.compSelection.length === 2;
+  const n = state.compSelection.length;
+  const canCompare = n >= 2;
+  const atCap = n >= 6;
+
+  const chips = state.compSelection.map((entry, i) => `
+    <div class="compare-chip">
+      <span class="compare-chip-letter">${COMP_LETTERS[i]}</span>
+      <span class="compare-chip-name">${escHtml(entry.label)}</span>
+      <button class="compare-chip-clear" data-clear="${i}" title="Remove">×</button>
+    </div>
+  `).join('');
+
+  const hint = !atCap
+    ? `<span class="compare-bar-hint">${canCompare ? '+ add more' : 'pick one more to compare'}</span>`
+    : '';
 
   bar.className = 'compare-bar';
   bar.innerHTML = `
     <div class="compare-bar-inner">
-      <div class="compare-bar-slots">
-        ${slotHtml(a, 'A', 0)}
-        <span class="compare-bar-vs">vs</span>
-        ${b ? slotHtml(b, 'B', 1) : '<div class="compare-slot compare-slot--empty"><span class="compare-slot-placeholder">Pick a second session</span></div>'}
-      </div>
-      ${canCompare ? '<button class="compare-go-btn" id="compare-go-btn">Compare →</button>' : ''}
-      <button class="compare-bar-dismiss" id="compare-bar-dismiss" title="Clear selection">✕</button>
+      <div class="compare-bar-chips">${chips}${hint}</div>
+      ${canCompare ? `<button class="compare-go-btn" id="compare-go-btn">Compare (${n}) →</button>` : ''}
+      <button class="compare-bar-dismiss" id="compare-bar-dismiss" title="Clear all">✕</button>
     </div>
   `;
 
@@ -798,8 +809,6 @@ function renderCompareBar() {
   const goBtn = bar.querySelector('#compare-go-btn');
   if (goBtn) {
     goBtn.addEventListener('click', () => {
-      state.compSession1Id = state.compSelection[0].id;
-      state.compSession2Id = state.compSelection[1].id;
       state.data.allSessions = null;
       navigate('session-compare');
     });
@@ -810,14 +819,6 @@ function renderCompareBar() {
     syncAllCheckboxes();
     renderCompareBar();
   });
-}
-
-function slotHtml(entry, letter, idx) {
-  return `<div class="compare-slot compare-slot--filled">
-    <span class="compare-slot-letter">${letter}</span>
-    <span class="compare-slot-name">${escHtml(entry.label)}</span>
-    <button class="compare-slot-clear" data-clear="${idx}" title="Remove">×</button>
-  </div>`;
 }
 
 async function toggleSession(row, container) {
@@ -1081,9 +1082,9 @@ async function renderSessionCompare() {
       const { sessions } = await api.sessions({ limit: 500, offset: 0 });
       state.data.allSessions = sessions;
     }
-    const sessions = state.data.allSessions;
+    const allSessions = state.data.allSessions;
 
-    if (sessions.length === 0) {
+    if (allSessions.length === 0) {
       document.getElementById('content').innerHTML = `
         <h1 class="page-title">Session Compare</h1>
         <div class="empty-state"><div class="empty-icon">⇄</div><div class="empty-msg">No sessions found</div></div>
@@ -1091,210 +1092,174 @@ async function renderSessionCompare() {
       return;
     }
 
-    if (!state.compSession1Id && sessions[0]) state.compSession1Id = sessions[0].id;
-    if (!state.compSession2Id && sessions[1]) state.compSession2Id = sessions[1].id;
+    // Seed from compSelection if arriving from Projects/Sessions page
+    if (state.compSelection.length === 0 && allSessions.length >= 2) {
+      state.compSelection = [
+        { id: allSessions[0].id, label: sessionChipLabel(allSessions[0]) },
+        { id: allSessions[1].id, label: sessionChipLabel(allSessions[1]) },
+      ];
+      renderCompareBar();
+    }
 
-    const content = document.getElementById('content');
-    content.innerHTML = `
-      <h1 class="page-title">Session Compare</h1>
-      <p class="page-subtitle">Pick two sessions to compare cost and token usage side by side</p>
-
-      <div class="comparison-selectors">
-        <select id="sc-session1" class="session-picker-select">
-          ${sessions.map(s => sessionOption(s, state.compSession1Id)).join('')}
-        </select>
-        <span class="comparison-vs-label">vs</span>
-        <select id="sc-session2" class="session-picker-select">
-          ${sessions.map(s => sessionOption(s, state.compSession2Id)).join('')}
-        </select>
-      </div>
-
-      <div id="session-comparison-result"></div>
-    `;
-
-    document.getElementById('sc-session1').addEventListener('change', e => {
-      state.compSession1Id = e.target.value;
-      renderSessionComparisonResult();
-    });
-    document.getElementById('sc-session2').addEventListener('change', e => {
-      state.compSession2Id = e.target.value;
-      renderSessionComparisonResult();
-    });
-
-    renderSessionComparisonResult();
+    renderSessionComparePage();
   } catch (e) {
     showError(e);
   }
 }
 
-function sessionOption(s, selectedId) {
-  const label = `${fmtDate(s.startTime)} · ${s.projectName} · ${s.firstPrompt.slice(0, 60)}`;
-  return `<option value="${escHtml(s.id)}" ${s.id === selectedId ? 'selected' : ''}>${escHtml(label)}</option>`;
+function sessionChipLabel(s) {
+  return `${s.projectName} · ${fmtDate(s.startTime)}`;
 }
 
-function renderSessionComparisonResult() {
+function sessionDropdownLabel(s) {
+  return `${fmtDate(s.startTime)} · ${s.projectName} · ${s.firstPrompt.slice(0, 55)}`;
+}
+
+function renderSessionComparePage() {
+  const allSessions = state.data.allSessions ?? [];
+  const selectedIds = new Set(state.compSelection.map(x => x.id));
+  const atCap = state.compSelection.length >= 6;
+
+  const addOptions = allSessions
+    .filter(s => !selectedIds.has(s.id))
+    .map(s => `<option value="${escHtml(s.id)}">${escHtml(sessionDropdownLabel(s))}</option>`)
+    .join('');
+
+  const chips = state.compSelection.map((entry, i) => `
+    <div class="sc-chip">
+      <span class="sc-chip-letter">${COMP_LETTERS[i]}</span>
+      <span class="sc-chip-name">${escHtml(entry.label)}</span>
+      <button class="sc-chip-remove" data-remove="${i}" title="Remove">×</button>
+    </div>
+  `).join('');
+
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <h1 class="page-title">Session Compare</h1>
+    <p class="page-subtitle">Compare cost and token usage across up to 6 sessions</p>
+
+    <div class="sc-selector">
+      <div class="sc-chips">${chips || '<span class="sc-empty-hint">Add sessions to compare</span>'}</div>
+      ${!atCap ? `
+        <div class="sc-add-row">
+          <select id="sc-add-select" class="session-picker-select">
+            <option value="">— add a session —</option>
+            ${addOptions}
+          </select>
+        </div>
+      ` : ''}
+    </div>
+
+    <div id="session-comparison-result"></div>
+  `;
+
+  content.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.compSelection.splice(parseInt(btn.dataset.remove), 1);
+      syncAllCheckboxes();
+      renderCompareBar();
+      renderSessionComparePage();
+    });
+  });
+
+  const addSelect = document.getElementById('sc-add-select');
+  if (addSelect) {
+    addSelect.addEventListener('change', () => {
+      const id = addSelect.value;
+      if (!id) return;
+      const s = allSessions.find(x => x.id === id);
+      if (!s) return;
+      state.compSelection.push({ id, label: sessionChipLabel(s) });
+      syncAllCheckboxes();
+      renderCompareBar();
+      renderSessionComparePage();
+    });
+  }
+
+  renderSessionComparisonTable();
+}
+
+function renderSessionComparisonTable() {
   const wrap = document.getElementById('session-comparison-result');
   if (!wrap) return;
 
-  const sessions = state.data.allSessions ?? [];
-  const s1 = sessions.find(s => s.id === state.compSession1Id);
-  const s2 = sessions.find(s => s.id === state.compSession2Id);
+  const allSessions = state.data.allSessions ?? [];
+  const selected = state.compSelection
+    .map(x => allSessions.find(s => s.id === x.id))
+    .filter(Boolean);
 
-  if (!s1 || !s2) {
-    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">⇄</div><div class="empty-msg">Select two sessions to compare</div></div>`;
+  if (selected.length < 2) {
+    wrap.innerHTML = `<div class="empty-state" style="margin-top:24px"><div class="empty-icon">⇄</div><div class="empty-msg">Add at least 2 sessions to compare</div></div>`;
     return;
   }
 
-  if (s1.id === s2.id) {
-    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">⇄</div><div class="empty-msg">Pick two different sessions</div></div>`;
-    return;
-  }
+  const metrics = [
+    { label: 'Cost',            val: s => s.cost,                                                                                                  fmt: s => { const local = isLocal(s); return local ? '<span class="amber">local</span>' : fmtCost(s.cost); }, lowerBetter: true,  skipLocal: true },
+    { label: 'Total Tokens',    val: s => s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens,      fmt: s => fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens), lowerBetter: true  },
+    { label: 'Input Tokens',    val: s => s.usage.inputTokens,    fmt: s => fmtTokens(s.usage.inputTokens),    lowerBetter: true  },
+    { label: 'Output Tokens',   val: s => s.usage.outputTokens,   fmt: s => fmtTokens(s.usage.outputTokens),   lowerBetter: true  },
+    { label: 'Cache Read',      val: s => s.usage.cacheReadTokens, fmt: s => fmtTokens(s.usage.cacheReadTokens), lowerBetter: false },
+    { label: 'Cache Write',     val: s => s.usage.cacheCreationTokens, fmt: s => fmtTokens(s.usage.cacheCreationTokens), lowerBetter: true },
+    { label: 'Cache Hit Rate',  val: s => s.cacheHitRate,         fmt: s => fmtPct(s.cacheHitRate),            lowerBetter: false },
+    { label: 'Duration',        val: s => s.duration,             fmt: s => fmtDuration(s.duration),           lowerBetter: true  },
+    { label: 'Messages',        val: s => s.messageCount,         fmt: s => s.messageCount.toString(),         lowerBetter: null  },
+    { label: 'Tool Calls',      val: s => s.toolCallCount,        fmt: s => s.toolCallCount.toString(),        lowerBetter: null  },
+  ];
 
-  const local1 = s1.cost === 0 && (s1.usage.inputTokens + s1.usage.outputTokens) > 0;
-  const local2 = s2.cost === 0 && (s2.usage.inputTokens + s2.usage.outputTokens) > 0;
+  function isLocal(s) { return s.cost === 0 && (s.usage.inputTokens + s.usage.outputTokens) > 0; }
 
-  let winner = null;
-  let pctDiff = 0;
-  if (!local1 && !local2 && s1.cost > 0 && s2.cost > 0) {
-    winner = s1.cost <= s2.cost ? 's1' : 's2';
-    const cheaper = Math.min(s1.cost, s2.cost);
-    const pricier = Math.max(s1.cost, s2.cost);
-    pctDiff = ((pricier - cheaper) / pricier) * 100;
-  }
+  const colHeaders = selected.map((s, i) => {
+    const local = isLocal(s);
+    return `<th class="sc-col-header">
+      <div class="sc-col-letter">${COMP_LETTERS[i]}</div>
+      <div class="sc-col-project">${escHtml(s.projectName)}</div>
+      <div class="sc-col-date">${fmtDateTime(s.startTime)}</div>
+      <div style="margin-top:5px">${modelBadgeHtml(s.primaryModel, local)}</div>
+      <div class="sc-col-prompt" title="${escHtml(s.firstPrompt)}">${escHtml(s.firstPrompt.slice(0, 60))}${s.firstPrompt.length > 60 ? '…' : ''}</div>
+    </th>`;
+  }).join('');
+
+  const metricRows = metrics.map(m => {
+    const vals = selected.map(s => ({ s, v: m.val(s), local: isLocal(s) }));
+
+    // Find best/worst among non-local sessions when lowerBetter is defined
+    let bestV = null, worstV = null;
+    if (m.lowerBetter !== null) {
+      const scoreable = vals.filter(x => !(m.skipLocal && x.local) && x.v > 0);
+      if (scoreable.length >= 2) {
+        const vs = scoreable.map(x => x.v);
+        bestV  = m.lowerBetter ? Math.min(...vs) : Math.max(...vs);
+        worstV = m.lowerBetter ? Math.max(...vs) : Math.min(...vs);
+      }
+    }
+
+    const cells = vals.map(({ s, v, local }) => {
+      let cls = '';
+      if (bestV !== null && !(m.skipLocal && local)) {
+        if (v === bestV && bestV !== worstV) cls = 'sc-cell-best';
+        else if (v === worstV && bestV !== worstV) cls = 'sc-cell-worst';
+      }
+      return `<td class="sc-cell ${cls}">${m.fmt(s)}</td>`;
+    }).join('');
+
+    return `<tr><td class="sc-metric-label">${escHtml(m.label)}</td>${cells}</tr>`;
+  }).join('');
 
   wrap.innerHTML = `
-    <div class="comparison-arena">
-      ${renderSessionCompCard(s1, winner === 's1', winner === 's2', local1, pctDiff)}
-      <div class="vs-divider"><div class="vs-circle">VS</div></div>
-      ${renderSessionCompCard(s2, winner === 's2', winner === 's1', local2, pctDiff)}
+    <div class="sc-table-wrap">
+      <table class="sc-table">
+        <thead>
+          <tr>
+            <th class="sc-metric-label"></th>
+            ${colHeaders}
+          </tr>
+        </thead>
+        <tbody>${metricRows}</tbody>
+      </table>
     </div>
-    ${renderSessionDeltaRow(s1, s2, local1, local2)}
-  `;
-}
-
-function renderSessionCompCard(s, isWinner, isLoser, isLocal, pctDiff) {
-  const totalTok = s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens;
-  const costClass = isLocal ? 'local-cost' : isWinner ? 'winner-cost' : isLoser ? 'loser-cost' : '';
-  const costDisplay = isLocal ? `${fmtTokens(totalTok)} tokens` : fmtCost(s.cost);
-
-  const badge = isWinner
-    ? '<span class="badge-winner">Cheaper</span>'
-    : isLoser
-    ? '<span class="badge-loser">More Expensive</span>'
-    : isLocal
-    ? '<span class="badge-local">Local</span>'
-    : '';
-
-  const savingsBlock = isWinner && pctDiff > 0 ? `
-    <div class="comp-savings">
-      <div class="comp-savings-pct">${pctDiff.toFixed(0)}% cheaper</div>
-      <div class="comp-savings-label">vs the other session</div>
-    </div>
-  ` : '';
-
-  return `
-    <div class="comparison-card ${isWinner ? 'winner' : ''}">
-      <div class="comp-header">
-        <div>
-          <div class="comp-session-date">${fmtDateTime(s.startTime)}</div>
-          <div class="comp-model-name">${escHtml(s.projectName)}</div>
-          <div style="margin-top:6px">${modelBadgeHtml(s.primaryModel, isLocal)}</div>
-        </div>
-        ${badge}
-      </div>
-      <div class="comp-body">
-        <div class="comp-cost ${costClass}">${costDisplay}</div>
-
-        <div class="comp-stats-grid">
-          <div class="comp-stat">
-            <div class="comp-stat-label">Total Tokens</div>
-            <div class="comp-stat-value">${fmtTokens(totalTok)}</div>
-          </div>
-          <div class="comp-stat">
-            <div class="comp-stat-label">Input</div>
-            <div class="comp-stat-value">${fmtTokens(s.usage.inputTokens)}</div>
-          </div>
-          <div class="comp-stat">
-            <div class="comp-stat-label">Output</div>
-            <div class="comp-stat-value">${fmtTokens(s.usage.outputTokens)}</div>
-          </div>
-          <div class="comp-stat">
-            <div class="comp-stat-label">Cache Read</div>
-            <div class="comp-stat-value">${fmtTokens(s.usage.cacheReadTokens)}</div>
-          </div>
-        </div>
-
-        <div class="comp-efficiency">
-          <div class="comp-eff-item">
-            <div class="comp-eff-label">Cache Hit</div>
-            <div class="comp-eff-value">${fmtPct(s.cacheHitRate)}</div>
-          </div>
-          <div class="comp-eff-item">
-            <div class="comp-eff-label">Duration</div>
-            <div class="comp-eff-value">${fmtDuration(s.duration)}</div>
-          </div>
-          <div class="comp-eff-item">
-            <div class="comp-eff-label">Messages</div>
-            <div class="comp-eff-value">${s.messageCount}</div>
-          </div>
-          <div class="comp-eff-item">
-            <div class="comp-eff-label">Tool Calls</div>
-            <div class="comp-eff-value">${s.toolCallCount}</div>
-          </div>
-          <div class="comp-eff-item">
-            <div class="comp-eff-label">Cache Write</div>
-            <div class="comp-eff-value">${fmtTokens(s.usage.cacheCreationTokens)}</div>
-          </div>
-        </div>
-
-        <div class="comp-prompt-preview">
-          <div class="comp-eff-label" style="margin-bottom:6px">First Prompt</div>
-          <div class="comp-prompt-text">${escHtml(s.firstPrompt.slice(0, 120))}${s.firstPrompt.length > 120 ? '…' : ''}</div>
-        </div>
-
-        ${savingsBlock}
-      </div>
-    </div>
-  `;
-}
-
-function renderSessionDeltaRow(s1, s2, local1, local2) {
-  const rows = [];
-
-  const totalTok1 = s1.usage.inputTokens + s1.usage.outputTokens + s1.usage.cacheCreationTokens + s1.usage.cacheReadTokens;
-  const totalTok2 = s2.usage.inputTokens + s2.usage.outputTokens + s2.usage.cacheCreationTokens + s2.usage.cacheReadTokens;
-
-  function deltaHtml(val1, val2, fmtFn, higherIsBetter = false) {
-    if (!val1 || !val2) return '<span class="delta-neutral">—</span>';
-    const diff = val2 - val1;
-    const pct = Math.abs(diff / val1) * 100;
-    if (pct < 0.1) return '<span class="delta-neutral">equal</span>';
-    const positive = higherIsBetter ? diff > 0 : diff < 0;
-    const cls = positive ? 'delta-good' : 'delta-bad';
-    const sign = diff > 0 ? '+' : '-';
-    return `<span class="${cls}">${sign}${fmtFn(Math.abs(diff))} (${pct.toFixed(0)}%)</span>`;
-  }
-
-  if (!local1 && !local2) {
-    rows.push({ label: 'Cost', delta: deltaHtml(s1.cost, s2.cost, fmtCost) });
-  }
-  rows.push({ label: 'Total Tokens',   delta: deltaHtml(totalTok1, totalTok2, fmtTokens) });
-  rows.push({ label: 'Output Tokens',  delta: deltaHtml(s1.usage.outputTokens, s2.usage.outputTokens, fmtTokens) });
-  rows.push({ label: 'Cache Hit Rate', delta: deltaHtml(s1.cacheHitRate, s2.cacheHitRate, v => fmtPct(v), true) });
-  rows.push({ label: 'Duration',       delta: deltaHtml(s1.duration, s2.duration, fmtDuration) });
-  rows.push({ label: 'Messages',       delta: deltaHtml(s1.messageCount, s2.messageCount, n => n.toString()) });
-
-  return `
-    <div class="session-delta-row">
-      <div class="session-delta-title">Delta (A → B)</div>
-      <div class="session-delta-grid">
-        ${rows.map(r => `
-          <div class="session-delta-item">
-            <div class="comp-eff-label">${escHtml(r.label)}</div>
-            <div class="session-delta-value">${r.delta}</div>
-          </div>
-        `).join('')}
-      </div>
+    <div class="sc-legend">
+      <span class="sc-legend-item"><span class="sc-cell-best sc-legend-swatch"></span> Best</span>
+      <span class="sc-legend-item"><span class="sc-cell-worst sc-legend-swatch"></span> Worst</span>
     </div>
   `;
 }
