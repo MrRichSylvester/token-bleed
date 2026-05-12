@@ -497,10 +497,8 @@ async function renderProjects() {
     `;
 
     content.querySelectorAll('.project-card[data-project]').forEach(el => {
-      el.addEventListener('click', () => {
-        state.sessionsFilter.projectId = el.dataset.project;
-        state.sessionsPage = 0;
-        navigate('sessions');
+      el.querySelector('.project-card-header').addEventListener('click', () => {
+        toggleProject(el.dataset.project, el);
       });
     });
   } catch (e) {
@@ -508,37 +506,67 @@ async function renderProjects() {
   }
 }
 
+async function toggleProject(projectId, cardEl) {
+  const panel = cardEl.querySelector('.project-sessions-panel');
+  const isOpen = cardEl.classList.contains('expanded');
+
+  if (isOpen) {
+    cardEl.classList.remove('expanded');
+    panel.style.display = 'none';
+    return;
+  }
+
+  cardEl.classList.add('expanded');
+  panel.style.display = 'block';
+  panel.innerHTML = '<div class="loading-state" style="min-height:80px"><div class="spinner"></div></div>';
+
+  try {
+    const { sessions } = await api.sessions({ projectId, limit: 50, offset: 0 });
+    if (sessions.length === 0) {
+      panel.innerHTML = '<div class="empty-state" style="min-height:60px"><div class="empty-msg">No sessions found</div></div>';
+    } else {
+      panel.innerHTML = renderSessionsTable(sessions, { compact: true });
+    }
+  } catch (e) {
+    panel.innerHTML = `<div class="empty-state"><div class="empty-msg">Error: ${escHtml(e.message)}</div></div>`;
+  }
+}
+
 function renderProjectCard(p) {
   const isLocal = !p.totalCost;
   return `
     <div class="project-card" data-project="${escHtml(p.id)}">
-      <div>
-        <div class="project-name">${escHtml(p.name)}</div>
-        <div class="project-path">${escHtml(p.path)}</div>
+      <div class="project-card-header">
+        <div>
+          <div class="project-name">${escHtml(p.name)}</div>
+          <div class="project-path">${escHtml(p.path)}</div>
+        </div>
+        <div class="project-meta">
+          ${modelBadgeHtml(p.topModel, isLocal)}
+          <div class="project-stat">
+            <div class="project-stat-value mono">${fmtCost(p.totalCost)}</div>
+            <div class="project-stat-label">Total Cost</div>
+          </div>
+          <div class="project-stat">
+            <div class="project-stat-value mono">${fmtTokens(p.totalTokens)}</div>
+            <div class="project-stat-label">Tokens</div>
+          </div>
+          <div class="project-stat">
+            <div class="project-stat-value">${p.sessionCount}</div>
+            <div class="project-stat-label">Sessions</div>
+          </div>
+          <div class="project-stat">
+            <div class="project-stat-value">${fmtPct(p.cacheHitRate)}</div>
+            <div class="project-stat-label">Cache Hit</div>
+          </div>
+          <div class="project-stat">
+            <div class="project-stat-value secondary" style="font-size:11px">${fmtDate(p.lastActivity)}</div>
+            <div class="project-stat-label">Last Active</div>
+          </div>
+          <div class="project-chevron">›</div>
+        </div>
       </div>
-      <div class="project-meta">
-        ${modelBadgeHtml(p.topModel, isLocal)}
-        <div class="project-stat">
-          <div class="project-stat-value mono">${fmtCost(p.totalCost)}</div>
-          <div class="project-stat-label">Total Cost</div>
-        </div>
-        <div class="project-stat">
-          <div class="project-stat-value mono">${fmtTokens(p.totalTokens)}</div>
-          <div class="project-stat-label">Tokens</div>
-        </div>
-        <div class="project-stat">
-          <div class="project-stat-value">${p.sessionCount}</div>
-          <div class="project-stat-label">Sessions</div>
-        </div>
-        <div class="project-stat">
-          <div class="project-stat-value">${fmtPct(p.cacheHitRate)}</div>
-          <div class="project-stat-label">Cache Hit</div>
-        </div>
-        <div class="project-stat">
-          <div class="project-stat-value secondary" style="font-size:11px">${fmtDate(p.lastActivity)}</div>
-          <div class="project-stat-label">Last Active</div>
-        </div>
-      </div>
+      <div class="project-sessions-panel" style="display:none"></div>
     </div>
   `;
 }

@@ -868,17 +868,45 @@ td.prompt span { display: block; overflow: hidden; text-overflow: ellipsis; whit
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 150ms, background 150ms;
+}
+
+.project-card.expanded {
+  border-color: var(--border-2);
+}
+
+.project-card-header {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 16px;
   align-items: center;
   cursor: pointer;
-  transition: border-color 150ms, background 150ms;
 }
 
-.project-card:hover {
-  border-color: var(--border-2);
-  background: var(--surface-2);
+.project-card-header:hover .project-name {
+  color: var(--accent);
+}
+
+.project-chevron {
+  font-size: 20px;
+  color: var(--text-muted);
+  transition: transform 200ms ease;
+  margin-left: 12px;
+  user-select: none;
+  line-height: 1;
+}
+
+.project-card.expanded .project-chevron {
+  transform: rotate(90deg);
+}
+
+.project-sessions-panel {
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+  padding-top: 12px;
+  overflow-x: auto;
 }
 
 .project-name {
