@@ -65,6 +65,36 @@ function shortModelName(model) {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
+// ── Tooltip ────────────────────────────────────────────────────
+
+let _tt = null;
+
+function _initTooltip() {
+  _tt = document.createElement('div');
+  _tt.id = 'chart-tooltip';
+  document.body.appendChild(_tt);
+
+  const content = document.getElementById('content');
+  content.addEventListener('mouseover', e => {
+    const el = e.target.closest('[data-tip]');
+    if (el) {
+      _tt.textContent = el.dataset.tip;
+      _tt.style.display = 'block';
+    } else {
+      _tt.style.display = 'none';
+    }
+  });
+  content.addEventListener('mousemove', e => {
+    if (_tt.style.display === 'block') {
+      const x = Math.min(e.clientX + 14, window.innerWidth - 260);
+      const y = Math.max(e.clientY - 44, 8);
+      _tt.style.left = x + 'px';
+      _tt.style.top = y + 'px';
+    }
+  });
+  content.addEventListener('mouseleave', () => { _tt.style.display = 'none'; });
+}
+
 // ── API client ─────────────────────────────────────────────────
 
 const api = {
@@ -193,7 +223,7 @@ function updateNav() {
 
 // ── Charts ─────────────────────────────────────────────────────
 
-function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 120 } = {}) {
+function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 160, color = 'green' } = {}) {
   if (!daily || daily.length === 0) return '<p class="muted" style="padding:20px 0">No activity data yet.</p>';
 
   const recent = daily.slice(-60);
@@ -203,12 +233,16 @@ function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 120 
   const barW = Math.max(3, Math.floor((svgW - (recent.length - 1) * BAR_GAP) / recent.length));
   const chartH = height - 24;
 
+  const colorMap = { green: '#00FF87', blue: '#5B8DEF', violet: '#B985F4', amber: '#FFB547' };
+  const colorVal = colorMap[color] || colorMap.green;
+  const gradId = `bg-${valueKey}`;
+
   const bars = recent.map((d, i) => {
     const barH = Math.max(2, Math.floor((d[valueKey] / maxVal) * chartH));
     const x = i * (barW + BAR_GAP);
     const y = chartH - barH;
-    const tip = `${d.date}: ${fmt(d[valueKey])}`;
-    return `<rect class="bar-chart-bar" x="${x}" y="${y}" width="${barW}" height="${barH}" rx="1"><title>${tip}</title></rect>`;
+    const tip = `${d.date}  ${fmt(d[valueKey])}`;
+    return `<rect class="bar-chart-bar" x="${x}" y="${y}" width="${barW}" height="${barH}" rx="2" fill="url(#${gradId})" data-tip="${escHtml(tip)}"></rect>`;
   }).join('');
 
   const step = Math.max(1, Math.floor(recent.length / 8));
@@ -225,19 +259,31 @@ function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 120 
   }).join('');
 
   return `<svg viewBox="0 0 ${svgW + 40} ${height}" width="100%" height="${height}" style="display:block;overflow:visible">
+    <defs>
+      <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${colorVal}" stop-opacity="0.9"/>
+        <stop offset="100%" stop-color="${colorVal}" stop-opacity="0.25"/>
+      </linearGradient>
+    </defs>
     <g transform="translate(36,0)">${gridlines}${bars}${labels}</g>
   </svg>`;
 }
 
-function renderHorizBars(rows, { fmtVal = (v) => v, accent = false } = {}) {
-  // rows: [{ label, value, max, sub }]
+function renderHorizBars(rows, { fmtVal = (v) => v, color = 'border' } = {}) {
   if (!rows || rows.length === 0) return '<p class="muted" style="padding:8px 0">No data.</p>';
   const maxVal = Math.max(...rows.map(r => r.value), 0.001);
+  const colorMap = {
+    green:  ['rgba(0,255,135,0.12)',   '#00FF87'],
+    blue:   ['rgba(91,141,239,0.12)',  '#5B8DEF'],
+    violet: ['rgba(185,133,244,0.12)', '#B985F4'],
+    amber:  ['rgba(255,181,71,0.12)',  '#FFB547'],
+    border: ['rgba(255,255,255,0.04)', '#262F45'],
+  };
   return rows.map(r => {
     const pct = Math.max(2, (r.value / maxVal) * 100);
-    const barColor = accent ? 'var(--green)' : 'var(--border)';
-    const fillColor = accent ? 'rgba(0,255,0,0.15)' : 'rgba(255,255,255,0.06)';
-    return `<div class="hbar-row">
+    const [fillColor, barColor] = colorMap[r.color || color] || colorMap.border;
+    const tip = `${r.label}: ${fmtVal(r.value)}${r.sub ? `  (${r.sub})` : ''}`;
+    return `<div class="hbar-row" data-tip="${escHtml(tip)}">
       <div class="hbar-label">${escHtml(r.label)}</div>
       <div class="hbar-track">
         <div class="hbar-fill" style="width:${pct}%;background:${fillColor};border-right:2px solid ${barColor}"></div>
@@ -265,16 +311,15 @@ async function renderOverview() {
       label: shortModelName(m.model),
       value: m.sessionCount,
       sub: m.isLocal ? 'local' : fmtCost(m.totalCost),
+      color: m.isLocal ? 'amber' : 'blue',
     }));
-    const modelFmt = n => `${n}`;
-    const modelAccent = false;
 
-    // Token breakdown rows
+    // Token breakdown rows — each type gets its own color
     const tokenRows = [
-      { label: 'Cache Read',   value: stats.cacheReadTokens,    sub: fmtPct(stats.cacheReadTokens / (stats.totalTokens || 1)) },
-      { label: 'Cache Write',  value: stats.cacheCreationTokens, sub: fmtPct(stats.cacheCreationTokens / (stats.totalTokens || 1)) },
-      { label: 'Output',       value: stats.outputTokens,        sub: fmtPct(stats.outputTokens / (stats.totalTokens || 1)) },
-      { label: 'Input',        value: stats.inputTokens,         sub: fmtPct(stats.inputTokens / (stats.totalTokens || 1)) },
+      { label: 'Cache Read',  value: stats.cacheReadTokens,     sub: fmtPct(stats.cacheReadTokens / (stats.totalTokens || 1)),     color: 'violet' },
+      { label: 'Cache Write', value: stats.cacheCreationTokens, sub: fmtPct(stats.cacheCreationTokens / (stats.totalTokens || 1)), color: 'blue'   },
+      { label: 'Output',      value: stats.outputTokens,        sub: fmtPct(stats.outputTokens / (stats.totalTokens || 1)),        color: 'green'  },
+      { label: 'Input',       value: stats.inputTokens,         sub: fmtPct(stats.inputTokens / (stats.totalTokens || 1)),         color: 'amber'  },
     ].filter(r => r.value > 0);
 
     const content = document.getElementById('content');
@@ -323,22 +368,22 @@ async function renderOverview() {
       <div class="chart-row-2">
         <div class="chart-wrap">
           <div class="chart-title">Daily Cost</div>
-          <div class="chart-svg-wrap">${renderBarChart(daily, { valueKey: 'cost', fmt: fmtCost })}</div>
+          <div class="chart-svg-wrap">${renderBarChart(daily, { valueKey: 'cost', fmt: fmtCost, color: 'green' })}</div>
         </div>
         <div class="chart-wrap">
           <div class="chart-title">Daily Sessions</div>
-          <div class="chart-svg-wrap">${renderBarChart(daily, { valueKey: 'sessions', fmt: n => `${n} sessions` })}</div>
+          <div class="chart-svg-wrap">${renderBarChart(daily, { valueKey: 'sessions', fmt: n => `${n} sessions`, color: 'blue' })}</div>
         </div>
       </div>
 
       <div class="chart-row-2">
         <div class="chart-wrap">
           <div class="chart-title">Usage by Model</div>
-          <div class="hbar-wrap">${renderHorizBars(modelRows, { fmtVal: modelFmt, accent: modelAccent })}</div>
+          <div class="hbar-wrap">${renderHorizBars(modelRows, { fmtVal: n => `${n}` })}</div>
         </div>
         <div class="chart-wrap">
           <div class="chart-title">Token Breakdown</div>
-          <div class="hbar-wrap">${renderHorizBars(tokenRows, { fmtVal: fmtTokens, accent: false })}</div>
+          <div class="hbar-wrap">${renderHorizBars(tokenRows, { fmtVal: fmtTokens })}</div>
         </div>
       </div>
 
@@ -827,9 +872,9 @@ function renderPeriodSelector() {
 // ── Bootstrap ──────────────────────────────────────────────────
 
 function init() {
-  // Wire up the app layout (sidebar + main side by side)
+  _initTooltip();
+
   const app = document.getElementById('app');
-  const header = document.getElementById('header');
   const sidebar = document.getElementById('sidebar');
   const main = document.getElementById('main');
 
