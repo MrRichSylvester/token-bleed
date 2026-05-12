@@ -1090,10 +1090,15 @@ function renderMessagesTable(messages) {
     const thinkCell = m.hasThinking
       ? `<td class="right" style="font-size:11px" title="Extended thinking">💭</td>`
       : `<td class="right muted" style="font-size:11px">—</td>`;
+    const TRUNC = 120;
+    const prompt = m.prompt || '';
+    const promptCell = prompt.length > TRUNC
+      ? `<span class="msg-prompt-text">${escHtml(prompt.slice(0, TRUNC))}…</span><span class="msg-prompt-expand" data-prompt="${escHtml(prompt)}">show more</span>`
+      : `<span class="msg-prompt-text">${escHtml(prompt)}</span>`;
     return `<tr>
       <td class="muted" style="font-size:11px;width:24px;text-align:right">${i + 1}</td>
       <td class="muted nowrap" style="font-size:11px">${fmtDateTime(m.timestamp)}</td>
-      <td class="msg-prompt">${escHtml(m.prompt)}</td>
+      <td class="msg-prompt">${promptCell}</td>
       <td style="font-size:11px">${modelBadgeHtml(m.model, false)}</td>
       <td class="right mono muted" style="font-size:11px">${totalTok ? fmtTokens(totalTok) : '—'}</td>
       <td class="right mono" style="font-size:11px">${m.cost ? fmtCost(m.cost) : '—'}</td>
@@ -2109,6 +2114,19 @@ function init() {
   document.getElementById('theme-toggle-btn').addEventListener('click', () => {
     const current = document.documentElement.getAttribute('data-theme');
     applyTheme(current === 'light' ? 'dark' : 'light');
+  });
+
+  // Prompt modal
+  const promptModal = document.getElementById('prompt-modal');
+  const promptModalBody = document.getElementById('prompt-modal-body');
+  document.getElementById('prompt-modal-close').addEventListener('click', () => { promptModal.hidden = true; });
+  promptModal.addEventListener('click', e => { if (e.target === promptModal) promptModal.hidden = true; });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') promptModal.hidden = true; });
+  document.addEventListener('click', e => {
+    const el = e.target.closest('.msg-prompt-expand');
+    if (!el) return;
+    promptModalBody.textContent = el.dataset.prompt;
+    promptModal.hidden = false;
   });
 
   // About button
