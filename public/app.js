@@ -1257,7 +1257,7 @@ function renderCompCard(m, isWinner, isLoser, savingsPct, vsModel) {
             <div class="comp-stat-value">${fmtTokens(totalTokens)}</div>
           </div>
           <div class="comp-stat">
-            <div class="comp-stat-label">Input Tokens</div>
+            <div class="comp-stat-label">Input Tokens${m.isLocal ? ' <span class="local-token-note" title="Local models report the full context each turn, not just new tokens">*</span>' : ''}</div>
             <div class="comp-stat-value">${fmtTokens(m.inputTokens)}</div>
           </div>
           <div class="comp-stat">
@@ -1467,6 +1467,13 @@ function renderSessionComparisonTable() {
     return `<tr><td class="sc-metric-label">${escHtml(m.label)}</td>${cells}</tr>`;
   }).join('');
 
+  const hasLocal = selected.some(s => isLocal(s));
+  const localNote = hasLocal ? `
+    <p class="sc-local-note">
+      Local model input tokens reflect the full conversation context sent each turn, not just new tokens.
+      This inflates input counts compared to hosted APIs that track incremental tokens and cache reads separately.
+    </p>` : '';
+
   wrap.innerHTML = `
     <div class="sc-table-wrap">
       <table class="sc-table">
@@ -1483,6 +1490,7 @@ function renderSessionComparisonTable() {
       <span class="sc-legend-item"><span class="sc-cell-best sc-legend-swatch"></span> Best</span>
       <span class="sc-legend-item"><span class="sc-cell-worst sc-legend-swatch"></span> Worst</span>
     </div>
+    ${localNote}
   `;
 }
 

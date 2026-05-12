@@ -124,6 +124,7 @@ export interface RawEntry {
   permissionMode?: string;
   aiTitle?: string;
   message?: {
+    id?: string;
     role?: string;
     model?: string;
     content?: unknown;

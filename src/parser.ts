@@ -60,6 +60,7 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
   let permissionMode = '';
   const models = new Set<string>();
   const usage: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, cache5mTokens: 0, cache1hTokens: 0 };
+  const seenMessageIds = new Set<string>();
 
   for (const line of lines) {
     let entry: RawEntry;
@@ -96,13 +97,19 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
     }
 
     if (entry.type === 'assistant' && entry.message?.usage) {
-      const u = entry.message.usage;
-      usage.inputTokens += u.input_tokens ?? 0;
-      usage.outputTokens += u.output_tokens ?? 0;
-      usage.cacheCreationTokens += u.cache_creation_input_tokens ?? 0;
-      usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;
-      usage.cache5mTokens += u.cache_creation?.ephemeral_5m_input_tokens ?? 0;
-      usage.cache1hTokens += u.cache_creation?.ephemeral_1h_input_tokens ?? 0;
+      const msgId = entry.message.id;
+      const isNewMessage = !msgId || !seenMessageIds.has(msgId);
+
+      if (isNewMessage) {
+        if (msgId) seenMessageIds.add(msgId);
+        const u = entry.message.usage;
+        usage.inputTokens += u.input_tokens ?? 0;
+        usage.outputTokens += u.output_tokens ?? 0;
+        usage.cacheCreationTokens += u.cache_creation_input_tokens ?? 0;
+        usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;
+        usage.cache5mTokens += u.cache_creation?.ephemeral_5m_input_tokens ?? 0;
+        usage.cache1hTokens += u.cache_creation?.ephemeral_1h_input_tokens ?? 0;
+      }
 
       if (entry.message.model) models.add(entry.message.model);
 
