@@ -649,30 +649,31 @@ async function renderProjects() {
 }
 
 async function toggleProject(projectId, cardEl) {
-  const panel = cardEl.querySelector('.project-sessions-panel');
+  const inner = cardEl.querySelector('.project-sessions-panel-inner');
   const isOpen = cardEl.classList.contains('expanded');
 
   if (isOpen) {
     cardEl.classList.remove('expanded');
-    panel.style.display = 'none';
     return;
   }
 
   cardEl.classList.add('expanded');
-  panel.style.display = 'block';
-  panel.innerHTML = '<div class="loading-state" style="min-height:80px"><div class="spinner"></div></div>';
+
+  if (inner.dataset.loaded) return;
+  inner.innerHTML = '<div class="loading-state" style="min-height:80px"><div class="spinner"></div></div>';
 
   try {
     const { sessions } = await api.sessions({ projectId, limit: 50, offset: 0 });
+    inner.dataset.loaded = '1';
     if (sessions.length === 0) {
-      panel.innerHTML = '<div class="empty-state" style="min-height:60px"><div class="empty-msg">No sessions found</div></div>';
+      inner.innerHTML = '<div class="empty-state" style="min-height:60px"><div class="empty-msg">No sessions found</div></div>';
     } else {
-      panel.innerHTML = renderSessionsTable(sessions, { compact: true, selectable: true });
-      bindSessionExpansion(panel);
-      bindSelectableRows(panel, sessions);
+      inner.innerHTML = renderSessionsTable(sessions, { compact: true, selectable: true });
+      bindSessionExpansion(inner);
+      bindSelectableRows(inner, sessions);
     }
   } catch (e) {
-    panel.innerHTML = `<div class="empty-state"><div class="empty-msg">Error: ${escHtml(e.message)}</div></div>`;
+    inner.innerHTML = `<div class="empty-state"><div class="empty-msg">Error: ${escHtml(e.message)}</div></div>`;
   }
 }
 
@@ -710,7 +711,7 @@ function renderProjectCard(p) {
           <div class="project-chevron">›</div>
         </div>
       </div>
-      <div class="project-sessions-panel" style="display:none"></div>
+      <div class="project-sessions-panel"><div class="project-sessions-panel-inner"></div></div>
     </div>
   `;
 }
@@ -971,6 +972,8 @@ async function toggleSession(row, container) {
 
   row.classList.add('expanded');
   detailRow.style.display = '';
+  detailRow.classList.add('expanding');
+  setTimeout(() => detailRow.classList.remove('expanding'), 250);
   const wrap = detailRow.querySelector('.session-messages-wrap');
   if (wrap.dataset.loaded) return;
 
@@ -1601,7 +1604,7 @@ function showAboutModal() {
         </p>
 
         <div class="about-links-row">
-          <a class="about-pill" href="https://github.com/mrrichsylvester/burn-rate" target="_blank" rel="noopener">GitHub →</a>
+          <a class="about-pill" href="https://github.com/mrrichsylvester/token-bleed" target="_blank" rel="noopener">GitHub →</a>
           <a class="about-pill" href="https://youtube.com/@MrRichSylvester" target="_blank" rel="noopener">YouTube →</a>
           <a class="about-pill" href="https://airevenueclub.com" target="_blank" rel="noopener">Community →</a>
         </div>

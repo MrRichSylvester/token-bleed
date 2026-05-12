@@ -604,6 +604,15 @@ td.prompt span { display: block; overflow: hidden; text-overflow: ellipsis; whit
 
 .session-detail-row:hover { background: transparent !important; }
 
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.session-detail-row.expanding .session-detail-cell {
+  animation: fadeSlideIn 220ms ease forwards;
+}
+
 .session-detail-cell {
   padding: 0 0 0 24px !important;
   background: var(--bg);
@@ -1531,10 +1540,28 @@ td.msg-prompt {
 }
 
 .project-sessions-panel {
-  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 280ms cubic-bezier(0.4, 0, 0.2, 1),
+              margin-top 280ms ease,
+              padding-top 280ms ease,
+              border-top-color 280ms ease;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 1px solid transparent;
+}
+
+.project-card.expanded .project-sessions-panel {
+  grid-template-rows: 1fr;
   margin-top: 16px;
   padding-top: 12px;
+  border-top-color: var(--border);
+}
+
+.project-sessions-panel-inner {
+  overflow: hidden;
   overflow-x: auto;
+  min-height: 0;
 }
 
 .project-name {
