@@ -1,66 +1,67 @@
 # Token Bleed
 
 <p align="center">
-  <img src="images/logo.png" alt="Token Bleed Logo" width="200" />
+  <img src="images/logo.png" alt="Token Bleed Logo" width="240" />
 </p>
 
-**See exactly what Claude Code is costing you.**
-
-Token Bleed is a local dashboard that reads your Claude Code session logs and turns them into a clean cost and usage tracker. No API key. No cloud. No telemetry. Just your data, running locally.
+**See exactly what Claude Code is costing you. Per session. Per project. Per prompt.**
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/built_with-TypeScript-3178c6.svg)](https://www.typescriptlang.org/)
-[![Fastify](https://img.shields.io/badge/server-Fastify-000000.svg)](https://fastify.dev/)
 
 ---
 
-![Token Bleed Dashboard Overview](images/overview.png)
+![Dashboard Overview](images/overview.png)
 
 ---
 
-## What it shows
+## The problem
 
-Token Bleed provides a high-level overview of your Claude Code spending habits, helping you identify which projects and models are most expensive.
+Claude Code is productive. It's also expensive when you're not watching.
 
-### Project & Model Breakdown
-- **Total spend** across all Claude Code sessions, by project and by model.
-- **Project hierarchy** visualization shows you exactly where your budget is going.
+It manages context automatically, fires tool calls in the background, and reads files you didn't ask it to read. By the time your Anthropic bill lands, you have no idea which project burned $40 or which prompt pattern is costing you three times what it should.
 
-![Project Hierarchy](images/project-hierarchy.png)
-*Drill down into specific projects to see their individual cost impact.*
+Token Bleed fixes that. It reads your local session logs and turns them into a real cost dashboard. No API key, no cloud, no telemetry. Your data never leaves your machine.
 
-- **Model comparison** side-by-side stats across every model you have used.
+---
 
-![Usage by Model](images/usage-by-model.png)
-*Compare costs and token usage across different models.*
+## What it does
 
-### Activity Tracking
-- **Daily activity** with cost and token trends over time.
+### Cost visibility, not estimates
 
-![Activity Trends](images/activity.png)
-*Visualize your token usage spikes and cost trends over time.*
+Total spend, daily trends, average session cost, and per-message breakdowns. Filtered by time period. Accurate to Anthropic's published pricing including cache write and cache read rates.
 
-- **Daily cost and sessions** charts help you track your peak usage days.
-- **Cache hit rate** monitoring so you know if prompt caching is actually working.
+Your session history rendered as a contribution-style heatmap — so you can see not just what you spent, but when you were shipping.
 
-<p align="middle">
-  <img src="images/daily-cost.png" width="45%" />
-  <img src="images/daily-sessions.png" width="45%" />
-</p>
+![Activity Heatmap](images/activity.png)
 
-### Deep Dives
-- **Session drill-down** including the first prompt, tool call count, and per-message cost breakdown.
-- **Session compare** to diff two sessions directly—perfect for testing prompt changes.
+### Project and model breakdown
+
+See which projects are burning the most and which models you're actually using. Drill down from project to session to individual message. Every number is traceable.
+
+| Project Breakdown | Model Usage |
+| :---: | :---: |
+| ![Project Hierarchy](images/project-hierarchy.png) | ![Usage by Model](images/usage-by-model.png) |
+
+### Session Compare
+
+Pick any two sessions and diff them side by side. Token counts, cost, cache behavior, tool call volume. Useful when you're testing prompt strategies and want to know which approach is actually cheaper, not just which feels faster.
 
 ![Session Comparison](images/session-compare.png)
-*Compare two sessions to see how changes affect token usage.*
 
-- **Pro tips** and optimization suggestions based on your usage patterns.
+### Model Compare
+
+Compare two models across the same workload. Input tokens, output tokens, cache hit rate, total cost. Helps you make the Opus vs Sonnet decision with data instead of instinct.
+
+### Cache hit rate tracking
+
+Prompt caching is the biggest lever most builders aren't using correctly. Token Bleed tracks your cache hit rate so you can see whether your workflow is actually taking advantage of it, and by how much.
+
+### Optimization signals
+
+Surfaces patterns in your usage: sessions with no cache hits, high tool call counts, models you're paying Opus prices for on tasks that don't need it.
 
 ![Optimization Tips](images/tips.png)
-*Get actionable advice on how to reduce your token burn rate.*
-
-All filtered by time period. Light and dark theme included.
 
 ---
 
@@ -94,7 +95,7 @@ npm run build
 npm run build:start
 ```
 
-Or set `PORT` and `HOST` environment variables to run on a different address.
+Set `PORT` and `HOST` to run on a different address:
 
 ```bash
 PORT=8080 HOST=0.0.0.0 npm start
@@ -104,7 +105,7 @@ PORT=8080 HOST=0.0.0.0 npm start
 
 ## Models supported
 
-Token Bleed includes accurate pricing for:
+Built-in pricing for all current Claude models. Prefix matching handles future versioned IDs automatically.
 
 | Model             | Input | Output | Cache Write | Cache Read |
 | ----------------- | ----- | ------ | ----------- | ---------- |
@@ -116,28 +117,17 @@ Token Bleed includes accurate pricing for:
 | claude-3-opus     | $15   | $75    | $18.75      | $1.50      |
 | claude-3-haiku    | $0.25 | $1.25  | $0.30       | $0.03      |
 
-Prices per million tokens. Prefix matching handles future versioned model IDs automatically.
+Prices per million tokens. You can add custom model pricing in Settings.
 
-Local/custom models show usage data but report $0 cost.
-
----
-
-## Known quirks with local models
-
-Token Bleed works with any model Claude Code talks to, including local models running via Ollama or similar. Two things to be aware of when reading token counts for those sessions.
-
-**Local models report cumulative input tokens.** The Anthropic API reports incremental input tokens per turn, with cached context tracked separately in `cache_read_input_tokens`. Local model servers (Ollama, etc.) do not implement prompt caching, so they report the full conversation context as `input_tokens` on every turn. Turn 3 includes the full prompt from turns 1 and 2. This means input token totals for local model sessions will be significantly higher than equivalent Claude sessions and are not directly comparable. The session compare and model compare views flag this with a note when a local model is present.
+Local and custom models show usage data but report $0 cost.
 
 ---
 
-## Stack
+## Local model quirks
 
-- **Runtime:** Node.js with [tsx](https://github.com/privatenumber/tsx)
-- **Server:** [Fastify](https://fastify.dev/)
-- **Frontend:** Vanilla TypeScript, no framework
-- **Fonts:** Figtree, JetBrains Mono, Outfit
+Token Bleed works with any model Claude Code connects to, including local models via Ollama or similar.
 
-No build step required for the frontend. Static files are served directly from `public/`.
+One thing to know: local model servers do not implement prompt caching, so they report the full conversation context as `input_tokens` on every turn instead of incremental deltas. This means input token totals for local model sessions will be significantly higher than equivalent Claude sessions and are not directly comparable. Session Compare and Model Compare flag this when a local model is present.
 
 ---
 
@@ -160,6 +150,16 @@ The server exposes a REST API if you want to build on top of it.
 | POST   | `/api/settings`              | Update `cleanupPeriodDays` in `~/.claude/settings.json` |
 
 All list endpoints accept a `?since=YYYY-MM-DD` query param to filter by date.
+
+---
+
+## Stack
+
+- **Runtime:** Node.js with [tsx](https://github.com/privatenumber/tsx)
+- **Server:** [Fastify](https://fastify.dev/)
+- **Frontend:** Vanilla TypeScript, no framework
+
+No build step required for the frontend. Static files are served directly from `public/`.
 
 ---
 
