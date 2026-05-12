@@ -7,7 +7,7 @@
 
 ---
 
-![Dashboard Overview](images/overview.png)
+![Dashboard Overview](images/dashboard.png)
 
 ---
 
@@ -65,8 +65,8 @@ Your Claude Code sessions rendered as a contribution-style heatmap. See your bui
 
 See which projects are burning the most and which models you're actually using. Drill down from project to session to individual message. Every number is traceable.
 
-| Project Breakdown | Model Usage |
-| :---: | :---: |
+|                 Project Breakdown                  |                 Model Usage                  |
+| :------------------------------------------------: | :------------------------------------------: |
 | ![Project Hierarchy](images/project-hierarchy.png) | ![Usage by Model](images/usage-by-model.png) |
 
 ### Session Compare
@@ -88,6 +88,10 @@ Prompt caching is the biggest lever most builders aren't using correctly. Token 
 Surfaces patterns in your usage: sessions with no cache hits, high tool call counts, models you're paying Opus prices for on tasks that don't need it.
 
 ![Optimization Tips](images/tips.png)
+
+### Connect any model to Claude Code
+
+Token Bleed isn't just a dashboard—it helps you connect Claude Code to non-Anthropic models. Use the built-in model bridge to run Claude Code against OpenAI, Gemini, or local models via Ollama and LiteLLM, and track their costs in one place.
 
 ---
 
@@ -115,9 +119,11 @@ Built-in pricing for all current Claude models. Prefix matching handles future v
 | claude-3-opus     | $15   | $75    | $18.75      | $1.50      |
 | claude-3-haiku    | $0.25 | $1.25  | $0.30       | $0.03      |
 
-Prices per million tokens. You can add custom model pricing in Settings.
+### Custom Models & Pricing
 
-Local and custom models show usage data but report $0 cost.
+You can **add your own pricing for any custom model** in the Settings tab. This allows you to track costs for OpenAI models, Gemini, or custom local models with the same precision as built-in Claude models.
+
+By default, local and custom models show usage data but report $0 cost until their pricing is configured.
 
 ---
 
