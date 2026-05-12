@@ -1,5 +1,9 @@
 # Token Bleed
 
+<p align="center">
+  <img src="images/logo.png" alt="Token Bleed Logo" width="200" />
+</p>
+
 **See exactly what Claude Code is costing you.**
 
 Token Bleed is a local dashboard that reads your Claude Code session logs and turns them into a clean cost and usage tracker. No API key. No cloud. No telemetry. Just your data, running locally.
@@ -10,14 +14,51 @@ Token Bleed is a local dashboard that reads your Claude Code session logs and tu
 
 ---
 
+![Token Bleed Dashboard Overview](images/overview.png)
+
+---
+
 ## What it shows
 
-- **Total spend** across all Claude Code sessions, by project and by model
-- **Cache hit rate** so you know if prompt caching is actually working
-- **Daily activity** with cost and token trends over time
-- **Session drill-down** including the first prompt, tool call count, and per-message cost breakdown
-- **Model comparison** side-by-side stats across every model you have used
-- **Session compare** to diff two sessions directly
+Token Bleed provides a high-level overview of your Claude Code spending habits, helping you identify which projects and models are most expensive.
+
+### Project & Model Breakdown
+- **Total spend** across all Claude Code sessions, by project and by model.
+- **Project hierarchy** visualization shows you exactly where your budget is going.
+
+![Project Hierarchy](images/project-hierarchy.png)
+*Drill down into specific projects to see their individual cost impact.*
+
+- **Model comparison** side-by-side stats across every model you have used.
+
+![Usage by Model](images/usage-by-model.png)
+*Compare costs and token usage across different models.*
+
+### Activity Tracking
+- **Daily activity** with cost and token trends over time.
+
+![Activity Trends](images/activity.png)
+*Visualize your token usage spikes and cost trends over time.*
+
+- **Daily cost and sessions** charts help you track your peak usage days.
+- **Cache hit rate** monitoring so you know if prompt caching is actually working.
+
+<p align="middle">
+  <img src="images/daily-cost.png" width="45%" />
+  <img src="images/daily-sessions.png" width="45%" />
+</p>
+
+### Deep Dives
+- **Session drill-down** including the first prompt, tool call count, and per-message cost breakdown.
+- **Session compare** to diff two sessions directly—perfect for testing prompt changes.
+
+![Session Comparison](images/session-compare.png)
+*Compare two sessions to see how changes affect token usage.*
+
+- **Pro tips** and optimization suggestions based on your usage patterns.
+
+![Optimization Tips](images/tips.png)
+*Get actionable advice on how to reduce your token burn rate.*
 
 All filtered by time period. Light and dark theme included.
 
