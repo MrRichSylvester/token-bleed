@@ -1693,11 +1693,10 @@ async function renderTips() {
 // ── Settings ────────────────────────────────────────────────────
 
 const PLAN_OPTIONS = [
-  { key: 'api',   label: 'API',        sub: 'Pay per token' },
-  { key: 'pro',   label: 'Pro',        sub: '$20/mo' },
-  { key: 'max',   label: 'Max',        sub: '$100/mo' },
-  { key: 'max5x', label: 'Max 5x',     sub: '$500/mo' },
-  { key: 'max20x',label: 'Max 20x',    sub: '$2,000/mo' },
+  { key: 'api',    label: 'API',      sub: 'Pay per token' },
+  { key: 'pro',    label: 'Pro',      sub: '$20/mo' },
+  { key: 'max5x',  label: 'Max 5x',   sub: '$100/mo' },
+  { key: 'max20x', label: 'Max 20x',  sub: '$200/mo' },
 ];
 
 async function renderSettings() {
@@ -1713,30 +1712,43 @@ async function renderSettings() {
     const unknownModels = detectedModels.filter(m => !builtinPricing[m] &&
       !Object.keys(builtinPricing).some(k => m.startsWith(k) || k.startsWith(m)));
 
-    // Custom pricing rows: start with any already-saved custom entries, then fill in unknown models
-    const customModelSet = new Set([...Object.keys(customPricing), ...unknownModels]);
+    // All built-in models shown first, then any custom/unknown-only models appended
+    const builtinKeys = Object.keys(builtinPricing).sort();
+    const extraModels = [...new Set([
+      ...unknownModels,
+      ...Object.keys(customPricing).filter(m => !builtinPricing[m]),
+    ])].sort();
+    const allModelSet = new Set([...builtinKeys, ...extraModels]);
 
     function pricingRow(model) {
-      const cp = customPricing[model] || {};
+      const cp = customPricing[model];
       const bp = builtinPricing[model];
-      const isBuiltin = !!bp && !customPricing[model];
-      const placeholder = bp ? bp : { input: '', output: '', cacheWrite: '', cacheRead: '' };
+      const isBuiltin = !!bp;
+      const hasCustom = !!cp;
+      // Show custom price if overridden, otherwise show built-in price (or empty for unknown models)
+      const vals = cp ?? bp ?? {};
+      const atBuiltin = isBuiltin && !hasCustom;
       return `
-        <tr class="pricing-row" data-model="${escHtml(model)}">
+        <tr class="pricing-row" data-model="${escHtml(model)}" data-builtin="${isBuiltin}" data-at-builtin="${atBuiltin}">
           <td class="pricing-model-cell">
             <span class="pricing-model-name">${escHtml(model)}</span>
-            ${isBuiltin ? '<span class="pricing-builtin-badge">built-in</span>' : ''}
-            ${customPricing[model] ? '<span class="pricing-custom-badge">custom</span>' : ''}
+            ${isBuiltin && !hasCustom ? '<span class="pricing-builtin-badge">built-in</span>' : ''}
+            ${hasCustom ? '<span class="pricing-custom-badge">custom</span>' : ''}
           </td>
           <td><input class="pricing-input" type="number" min="0" step="0.01" data-field="input"
-            value="${cp.input ?? ''}" placeholder="${placeholder.input}"></td>
+            value="${vals.input ?? ''}"></td>
           <td><input class="pricing-input" type="number" min="0" step="0.01" data-field="output"
-            value="${cp.output ?? ''}" placeholder="${placeholder.output}"></td>
+            value="${vals.output ?? ''}"></td>
           <td><input class="pricing-input" type="number" min="0" step="0.01" data-field="cacheWrite"
-            value="${cp.cacheWrite ?? ''}" placeholder="${placeholder.cacheWrite}"></td>
+            value="${vals.cacheWrite ?? ''}"></td>
           <td><input class="pricing-input" type="number" min="0" step="0.01" data-field="cacheRead"
-            value="${cp.cacheRead ?? ''}" placeholder="${placeholder.cacheRead}"></td>
-          <td><button class="pricing-clear-btn" data-model="${escHtml(model)}" title="Remove custom pricing">✕</button></td>
+            value="${vals.cacheRead ?? ''}"></td>
+          <td>
+            ${isBuiltin
+              ? `<button class="pricing-reset-btn" data-model="${escHtml(model)}" title="Reset to built-in price" ${atBuiltin ? 'disabled' : ''}>↺</button>`
+              : `<button class="pricing-clear-btn" data-model="${escHtml(model)}" title="Remove custom pricing">✕</button>`
+            }
+          </td>
         </tr>`;
     }
 
@@ -1747,8 +1759,8 @@ async function renderSettings() {
       <div class="settings-section">
         <div class="settings-section-title">Plan</div>
         <div class="settings-section-desc">
-          Costs are always shown as API-rate equivalents regardless of plan.
-          On Pro/Max plans this represents the market value of your usage — useful for knowing if your subscription is paying off.
+          Select the plan you are on. Token Bleed always calculates costs at API rates regardless of your plan.
+          On Pro and Max plans this shows the equivalent market value of your usage, so you can see whether the subscription is paying off.
         </div>
         <div class="plan-selector">
           ${PLAN_OPTIONS.map(p => `
@@ -1763,35 +1775,34 @@ async function renderSettings() {
       <div class="settings-section">
         <div class="settings-section-title">Model Pricing</div>
         <div class="settings-section-desc">
-          Override built-in pricing or add rates for custom and local models.
-          Prices are per million tokens. Leave blank to use the built-in rate.
+          Built-in prices are shown below. Override any of them or add rates for local and custom models.
+          Prices are per million tokens. Hit ↺ to reset a model back to its built-in rate.
           Changes take effect on next data refresh.
         </div>
-        ${customModelSet.size > 0 ? `
-          <div class="table-wrap pricing-table-wrap">
-            <table class="pricing-table">
-              <thead>
-                <tr>
-                  <th>Model</th>
-                  <th class="right">Input $/M</th>
-                  <th class="right">Output $/M</th>
-                  <th class="right">Cache Write $/M</th>
-                  <th class="right">Cache Read $/M</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="pricing-tbody">
-                ${[...customModelSet].map(pricingRow).join('')}
-              </tbody>
-            </table>
-          </div>` : `<p class="muted" style="margin:12px 0 0">No custom models yet. Add one below or use a session with a local model to see it appear here.</p>`}
+        <div class="table-wrap pricing-table-wrap">
+          <table class="pricing-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th class="right">Input $/M</th>
+                <th class="right">Output $/M</th>
+                <th class="right">Cache Write $/M</th>
+                <th class="right">Cache Read $/M</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="pricing-tbody">
+              ${[...allModelSet].map(pricingRow).join('')}
+            </tbody>
+          </table>
+        </div>
 
         <div class="pricing-add-row">
           <input id="pricing-new-model" class="pricing-new-model-input" type="text" placeholder="model name (e.g. my-local-llm)">
           <button id="pricing-add-btn" class="pricing-add-btn">+ Add model</button>
         </div>
 
-        <div id="pricing-save-row" class="pricing-save-row" style="${customModelSet.size > 0 ? '' : 'display:none'}">
+        <div id="pricing-save-row" class="pricing-save-row" style="display:none">
           <button id="pricing-save-btn" class="btn-primary">Save pricing</button>
           <span id="pricing-save-status" class="settings-save-status"></span>
         </div>
@@ -1842,6 +1853,8 @@ async function renderSettings() {
     function collectCustomPricing() {
       const result = {};
       document.querySelectorAll('#pricing-tbody .pricing-row').forEach(row => {
+        // Skip built-in rows that haven't been overridden
+        if (row.dataset.atBuiltin === 'true') return;
         const model = row.dataset.model;
         const fields = {};
         let hasAny = false;
@@ -1882,7 +1895,7 @@ async function renderSettings() {
       }
     });
 
-    // Clear custom pricing row
+    // Clear custom-only pricing row
     content.addEventListener('click', e => {
       const clearBtn = e.target.closest('.pricing-clear-btn');
       if (!clearBtn) return;
@@ -1890,11 +1903,48 @@ async function renderSettings() {
       document.getElementById('pricing-save-row').style.display = '';
     });
 
-    // Pricing table inputs — show save row on edit
-    content.addEventListener('input', e => {
-      if (e.target.classList.contains('pricing-input')) {
-        document.getElementById('pricing-save-row').style.display = '';
+    // Reset built-in row to its default price
+    content.addEventListener('click', e => {
+      const resetBtn = e.target.closest('.pricing-reset-btn');
+      if (!resetBtn || resetBtn.disabled) return;
+      const model = resetBtn.dataset.model;
+      const row = resetBtn.closest('.pricing-row');
+      const bp = builtinPricing[model];
+      if (!row || !bp) return;
+      row.querySelector('[data-field="input"]').value = bp.input;
+      row.querySelector('[data-field="output"]').value = bp.output;
+      row.querySelector('[data-field="cacheWrite"]').value = bp.cacheWrite;
+      row.querySelector('[data-field="cacheRead"]').value = bp.cacheRead;
+      row.dataset.atBuiltin = 'true';
+      resetBtn.disabled = true;
+      const cell = row.querySelector('.pricing-model-cell');
+      cell.querySelector('.pricing-custom-badge')?.remove();
+      if (!cell.querySelector('.pricing-builtin-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'pricing-builtin-badge';
+        badge.textContent = 'built-in';
+        cell.appendChild(badge);
       }
+      document.getElementById('pricing-save-row').style.display = '';
+    });
+
+    // Pricing table inputs — show save row on edit; mark built-in rows as modified
+    content.addEventListener('input', e => {
+      if (!e.target.classList.contains('pricing-input')) return;
+      document.getElementById('pricing-save-row').style.display = '';
+      const row = e.target.closest('.pricing-row');
+      if (!row || row.dataset.builtin !== 'true' || row.dataset.atBuiltin !== 'true') return;
+      row.dataset.atBuiltin = 'false';
+      const cell = row.querySelector('.pricing-model-cell');
+      cell.querySelector('.pricing-builtin-badge')?.remove();
+      if (!cell.querySelector('.pricing-custom-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'pricing-custom-badge';
+        badge.textContent = 'custom';
+        cell.appendChild(badge);
+      }
+      const resetBtn = row.querySelector('.pricing-reset-btn');
+      if (resetBtn) resetBtn.disabled = false;
     });
 
     // Add new model row
@@ -2808,10 +2858,88 @@ init();
   ];
 
   let eggCount = 0;
+  let audioCtx = null;
+
+  function playBleedSplat(count) {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || /** @type {any} */ (window).webkitAudioContext)();
+      const ctx = audioCtx;
+      const now = ctx.currentTime;
+      const intensity = Math.min(count, 6);
+
+      // Low thud — impact body
+      const thud = ctx.createOscillator();
+      const thudGain = ctx.createGain();
+      thud.type = 'sine';
+      thud.frequency.setValueAtTime(110 + intensity * 12, now);
+      thud.frequency.exponentialRampToValueAtTime(28, now + 0.22);
+      thudGain.gain.setValueAtTime(0.65, now);
+      thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+      thud.connect(thudGain);
+      thudGain.connect(ctx.destination);
+      thud.start(now);
+      thud.stop(now + 0.32);
+
+      // Wet splat noise burst
+      const bufLen = Math.floor(ctx.sampleRate * 0.18);
+      const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < bufLen; i++) {
+        const t = i / bufLen;
+        ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 1.8);
+      }
+      const splat = ctx.createBufferSource();
+      splat.buffer = buf;
+      const splatFilter = ctx.createBiquadFilter();
+      splatFilter.type = 'lowpass';
+      splatFilter.frequency.value = 500 + intensity * 60;
+      splatFilter.Q.value = 0.8;
+      const splatGain = ctx.createGain();
+      splatGain.gain.setValueAtTime(0.35 + intensity * 0.06, now);
+      splatGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      splat.connect(splatFilter);
+      splatFilter.connect(splatGain);
+      splatGain.connect(ctx.destination);
+      splat.start(now);
+      splat.stop(now + 0.18);
+
+      // Glitchy harmonic on higher counts
+      if (count >= 3) {
+        const buzz = ctx.createOscillator();
+        const buzzGain = ctx.createGain();
+        buzz.type = 'sawtooth';
+        buzz.frequency.setValueAtTime(55 + Math.random() * 30, now + 0.02);
+        buzz.frequency.exponentialRampToValueAtTime(20, now + 0.14);
+        buzzGain.gain.setValueAtTime(0.18, now + 0.02);
+        buzzGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+        buzz.connect(buzzGain);
+        buzzGain.connect(ctx.destination);
+        buzz.start(now + 0.02);
+        buzz.stop(now + 0.14);
+      }
+
+      // Alarm screech on count 5 (the "you need help" message)
+      if (count === 5) {
+        const screech = ctx.createOscillator();
+        const screechGain = ctx.createGain();
+        screech.type = 'square';
+        screech.frequency.setValueAtTime(880, now);
+        screech.frequency.setValueAtTime(1320, now + 0.07);
+        screech.frequency.setValueAtTime(660, now + 0.14);
+        screechGain.gain.setValueAtTime(0.12, now);
+        screechGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        screech.connect(screechGain);
+        screechGain.connect(ctx.destination);
+        screech.start(now);
+        screech.stop(now + 0.22);
+      }
+    } catch { /* AudioContext not available */ }
+  }
 
   word.style.cursor = 'pointer';
   word.addEventListener('click', () => {
     eggCount++;
+    playBleedSplat(eggCount);
 
     // Glitch shake the word
     word.classList.remove('bleed-hemorrhage');
