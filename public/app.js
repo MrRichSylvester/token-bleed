@@ -239,7 +239,10 @@ function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 160,
   const barW = Math.max(3, Math.floor((svgW - (recent.length - 1) * BAR_GAP) / recent.length));
   const chartH = height - 24;
 
-  const colorMap = { green: '#00FF87', blue: '#5B8DEF', violet: '#B985F4', amber: '#FFB547' };
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const colorMap = isLight
+    ? { green: '#00a85e', blue: '#2f6fd4', violet: '#7c3aed', amber: '#b45309' }
+    : { green: '#00FF87', blue: '#5B8DEF', violet: '#B985F4', amber: '#FFB547' };
   const colorVal = colorMap[color] || colorMap.green;
   const gradId = `bg-${valueKey}`;
   const topPad = 14;
@@ -286,7 +289,14 @@ function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 160,
 function renderHorizBars(rows, { fmtVal = (v) => v, color = 'border' } = {}) {
   if (!rows || rows.length === 0) return '<p class="muted" style="padding:8px 0">No data.</p>';
   const maxVal = Math.max(...rows.map(r => r.value), 0.001);
-  const colorMap = {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const colorMap = isLight ? {
+    green:  ['rgba(0,168,94,0.13)',    '#00a85e'],
+    blue:   ['rgba(47,111,212,0.13)',  '#2f6fd4'],
+    violet: ['rgba(124,58,237,0.13)',  '#7c3aed'],
+    amber:  ['rgba(180,83,9,0.13)',    '#b45309'],
+    border: ['rgba(0,0,0,0.06)',       '#8899aa'],
+  } : {
     green:  ['rgba(0,255,135,0.12)',   '#00FF87'],
     blue:   ['rgba(91,141,239,0.12)',  '#5B8DEF'],
     violet: ['rgba(185,133,244,0.12)', '#B985F4'],
@@ -1636,9 +1646,30 @@ function showOnboardingIfNeeded() {
   showAboutModal();
 }
 
+// ── Theme ──────────────────────────────────────────────────────
+
+function initTheme() {
+  const stored = localStorage.getItem('br-theme');
+  const theme = stored === 'light' ? 'light' : 'dark';
+  applyTheme(theme);
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('theme-toggle-btn');
+  if (btn) {
+    btn.textContent = theme === 'light' ? '☾' : '☀';
+    btn.title = theme === 'light' ? 'Switch to dark' : 'Switch to light';
+  }
+  localStorage.setItem('br-theme', theme);
+  // Re-render so charts pick up the new color palette
+  if (state.data.stats) renderView();
+}
+
 // ── Bootstrap ──────────────────────────────────────────────────
 
 function init() {
+  initTheme();
   _initTooltip();
 
   const app = document.getElementById('app');
@@ -1665,6 +1696,12 @@ function init() {
       state.sessionsPage = 0;
       navigate(el.dataset.view);
     });
+  });
+
+  // Theme toggle
+  document.getElementById('theme-toggle-btn').addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    applyTheme(current === 'light' ? 'dark' : 'light');
   });
 
   // About button
