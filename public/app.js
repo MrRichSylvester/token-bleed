@@ -453,7 +453,7 @@ function renderUsageGrid(dailyAll, meta) {
   const cleanupDays = meta?.cleanupPeriodDays ?? 30;
 
   return `
-    <div class="usage-grid-wrap">
+    <div class="usage-grid-wrap" data-weeks="${WEEKS}">
       <div class="usage-grid-top">
         <span class="usage-grid-title">Activity</span>
         <div class="usage-grid-top-right">
@@ -541,6 +541,32 @@ function bindUsageGridConfig() {
     if (parseInt(input.value, 10) === 0) warning.style.display = 'block';
     else warning.style.display = 'none';
   });
+}
+
+function scaleUsageGrid() {
+  const wrap = document.querySelector('.usage-grid-wrap');
+  if (!wrap) return;
+  const numWeeks = parseInt(wrap.dataset.weeks || '4', 10);
+  const topEl = wrap.querySelector('.usage-grid-top');
+  const legendEl = wrap.querySelector('.usage-grid-legend');
+  const monthEl = wrap.querySelector('.usage-month-row');
+  const rightEl = wrap.querySelector('.usage-grid-right');
+  if (!topEl || !legendEl || !monthEl || !rightEl) return;
+
+  const cs = getComputedStyle(wrap);
+  const padV = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  const innerH = wrap.clientHeight - padV;
+  const topUsed = topEl.offsetHeight + 10;     // 10px margin-bottom
+  const monthUsed = monthEl.offsetHeight + 2;  // 2px margin-bottom
+  const legendUsed = legendEl.offsetHeight + 10; // 10px margin-top
+
+  const gridH = innerH - topUsed - monthUsed - legendUsed;
+  const cellFromH = Math.floor((gridH - 6) / 7); // 7 rows, 6 gaps
+
+  const cellFromW = Math.floor((rightEl.clientWidth - (numWeeks - 1)) / numWeeks);
+
+  const cellSize = Math.max(10, Math.min(cellFromH, cellFromW));
+  wrap.style.setProperty('--cell-size', cellSize + 'px');
 }
 
 // ── Overview ───────────────────────────────────────────────────
@@ -662,6 +688,7 @@ async function renderOverview() {
     initDraggableCards(content);
     animateHbars(content);
     bindUsageGridConfig();
+    requestAnimationFrame(scaleUsageGrid);
 
     // Load recent sessions async
     const { sessions } = await api.sessions({ limit: 10, offset: 0 });
