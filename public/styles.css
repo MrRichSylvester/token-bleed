@@ -50,16 +50,16 @@ html, body {
 
 /* ── App shell ── */
 #app {
-  display: grid;
-  grid-template-rows: auto 1fr;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .body-grid {
   display: flex;
   overflow: hidden;
-  height: 100%;
+  flex: 1;
 }
 
 /* ── Header ── */
