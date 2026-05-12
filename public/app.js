@@ -367,12 +367,117 @@ function initDraggableCards(container) {
   }
 }
 
+// ── Usage Grid (GitHub-style) ──────────────────────────────────
+
+function renderUsageGrid(dailyAll) {
+  if (!dailyAll || dailyAll.length === 0) return '';
+
+  const byDate = {};
+  for (const d of dailyAll) byDate[d.date] = d;
+
+  const maxCost = Math.max(...dailyAll.map(d => d.cost), 0.001);
+  const activeDays = dailyAll.filter(d => d.cost > 0).length;
+  const totalCost = dailyAll.reduce((s, d) => s + d.cost, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Start on the Sunday 51 full weeks before the current week's Sunday
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() - today.getDay() - 51 * 7);
+
+  const WEEKS = 52;
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function getLevel(cost) {
+    if (cost === 0) return 0;
+    const pct = cost / maxCost;
+    if (pct < 0.1) return 1;
+    if (pct < 0.3) return 2;
+    if (pct < 0.6) return 3;
+    return 4;
+  }
+
+  // Build weeks and track month boundaries
+  const weekCols = [];
+  const monthSpans = []; // { label, startWeek, endWeek }
+  let lastMonth = -1;
+
+  for (let w = 0; w < WEEKS; w++) {
+    const cells = [];
+    for (let d = 0; d < 7; d++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + w * 7 + d);
+      const isFuture = date > today;
+      const dateStr = date.toISOString().slice(0, 10);
+
+      if (d === 0 && date.getMonth() !== lastMonth) {
+        lastMonth = date.getMonth();
+        if (monthSpans.length > 0) monthSpans[monthSpans.length - 1].endWeek = w - 1;
+        monthSpans.push({ label: MONTHS[date.getMonth()], startWeek: w, endWeek: WEEKS - 1 });
+      }
+
+      if (isFuture) {
+        cells.push(`<div class="usage-cell" data-future></div>`);
+      } else {
+        const data = byDate[dateStr];
+        const cost = data?.cost || 0;
+        const sessions = data?.sessions || 0;
+        const tip = cost > 0
+          ? `${dateStr}  ${fmtCost(cost)}  ${sessions} session${sessions !== 1 ? 's' : ''}`
+          : `${dateStr}  no activity`;
+        cells.push(`<div class="usage-cell" data-level="${getLevel(cost)}" data-tip="${escHtml(tip)}"></div>`);
+      }
+    }
+    weekCols.push(`<div class="usage-week">${cells.join('')}</div>`);
+  }
+
+  // Month labels row — each label width = number of weeks it spans * cell stride
+  const STRIDE = 11; // 10px cell + 1px gap
+  const monthRow = monthSpans.map(m => {
+    const spanWeeks = m.endWeek - m.startWeek + 1;
+    const width = spanWeeks * STRIDE - 1;
+    const offset = m.startWeek * STRIDE;
+    return `<span class="usage-month-label" style="left:${offset}px;width:${width}px">${m.label}</span>`;
+  }).join('');
+
+  return `
+    <div class="usage-grid-wrap">
+      <div class="usage-grid-top">
+        <span class="usage-grid-title">Activity</span>
+        <span class="usage-grid-meta">${activeDays} active day${activeDays !== 1 ? 's' : ''} · ${fmtCost(totalCost)} total</span>
+      </div>
+      <div class="usage-grid-layout">
+        <div class="usage-day-col">
+          <span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span>
+        </div>
+        <div class="usage-grid-right">
+          <div class="usage-month-row">${monthRow}</div>
+          <div class="usage-weeks">${weekCols.join('')}</div>
+        </div>
+      </div>
+      <div class="usage-grid-legend">
+        <span class="usage-legend-text">Less</span>
+        <div class="usage-cell" data-level="0"></div>
+        <div class="usage-cell" data-level="1"></div>
+        <div class="usage-cell" data-level="2"></div>
+        <div class="usage-cell" data-level="3"></div>
+        <div class="usage-cell" data-level="4"></div>
+        <span class="usage-legend-text">More</span>
+      </div>
+    </div>
+  `;
+}
+
 // ── Overview ───────────────────────────────────────────────────
 
 async function renderOverview() {
   setLoading();
   try {
-    const [stats, daily, models] = await Promise.all([api.stats(), api.daily(), api.models()]);
+    const [stats, daily, models, dailyAll] = await Promise.all([
+      api.stats(), api.daily(), api.models(),
+      api.fetch('/api/daily'),
+    ]);
     state.data.stats = stats;
     state.data.daily = daily;
     state.data.models = models;
@@ -398,47 +503,30 @@ async function renderOverview() {
       <h1 class="page-title">Burn Rate</h1>
       <p class="page-subtitle">${periodLabel()} · ${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</p>
 
-      <div class="metric-grid">
-        <div class="metric-card accent-left" data-id="total-cost">
-          <div class="metric-label">Total Cost</div>
-          <div class="metric-value mono">${fmtCost(stats.totalCost)}</div>
-          <div class="metric-sub">${daily.length > 0 ? fmtCost(stats.totalCost / daily.length) + '/day avg' : '—'}</div>
+      <div class="overview-top">
+        <div class="metric-grid-4">
+          <div class="metric-card accent-left">
+            <div class="metric-label">Total Cost</div>
+            <div class="metric-value mono">${fmtCost(stats.totalCost)}</div>
+            <div class="metric-sub">${daily.length > 0 ? fmtCost(stats.totalCost / daily.length) + '/day avg' : '—'}</div>
+          </div>
+          <div class="metric-card accent-left">
+            <div class="metric-label">Avg Cost / Session</div>
+            <div class="metric-value mono">${stats.totalSessions > 0 ? fmtCost(stats.totalCost / stats.totalSessions) : '—'}</div>
+            <div class="metric-sub">per paid session</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Sessions</div>
+            <div class="metric-value mono">${stats.totalSessions.toLocaleString()}</div>
+            <div class="metric-sub">${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Total Prompts</div>
+            <div class="metric-value mono">${stats.totalMessages.toLocaleString()}</div>
+            <div class="metric-sub">${stats.totalSessions > 0 ? '~' + Math.round(stats.totalMessages / stats.totalSessions) + ' per session' : '—'}</div>
+          </div>
         </div>
-        <div class="metric-card" data-id="sessions">
-          <div class="metric-label">Sessions</div>
-          <div class="metric-value mono">${stats.totalSessions.toLocaleString()}</div>
-          <div class="metric-sub">${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</div>
-        </div>
-        <div class="metric-card" data-id="cache-hit-rate">
-          <div class="metric-label">Cache Hit Rate</div>
-          <div class="metric-value">${fmtPct(stats.cacheHitRate)}</div>
-          <div class="metric-sub">${fmtTokens(stats.cacheReadTokens)} from cache</div>
-        </div>
-        <div class="metric-card accent-left" data-id="avg-cost-session">
-          <div class="metric-label">Avg Cost / Session</div>
-          <div class="metric-value mono">${stats.totalSessions > 0 ? fmtCost(stats.totalCost / stats.totalSessions) : '—'}</div>
-          <div class="metric-sub">per paid session</div>
-        </div>
-        <div class="metric-card" data-id="total-tokens">
-          <div class="metric-label">Total Tokens</div>
-          <div class="metric-value mono">${fmtTokens(stats.totalTokens)}</div>
-          <div class="metric-sub">${fmtTokens(stats.inputTokens)} input</div>
-        </div>
-        <div class="metric-card" data-id="output-tokens">
-          <div class="metric-label">Output Tokens</div>
-          <div class="metric-value mono">${fmtTokens(stats.outputTokens)}</div>
-          <div class="metric-sub">${fmtPct(stats.outputTokens / (stats.totalTokens || 1))} of total</div>
-        </div>
-        <div class="metric-card" data-id="messages">
-          <div class="metric-label">Messages</div>
-          <div class="metric-value mono">${stats.totalMessages.toLocaleString()}</div>
-          <div class="metric-sub">${stats.totalSessions > 0 ? '~' + Math.round(stats.totalMessages / stats.totalSessions) + ' per session' : '—'}</div>
-        </div>
-        <div class="metric-card" data-id="top-model">
-          <div class="metric-label">Top Model</div>
-          <div class="metric-value" style="font-size:15px">${shortModelName(stats.topModel)}</div>
-          <div class="metric-sub">${stats.modelsUsed.length} model${stats.modelsUsed.length !== 1 ? 's' : ''} used</div>
-        </div>
+        ${renderUsageGrid(dailyAll)}
       </div>
 
       <div class="chart-row-2">
@@ -459,6 +547,28 @@ async function renderOverview() {
         </div>
         <div class="chart-wrap">
           <div class="chart-title">Token Breakdown</div>
+          <div class="token-stats-row">
+            <div class="token-stat">
+              <div class="token-stat-label">Total</div>
+              <div class="token-stat-value mono">${fmtTokens(stats.totalTokens)}</div>
+            </div>
+            <div class="token-stat">
+              <div class="token-stat-label">Cache Hit</div>
+              <div class="token-stat-value">${fmtPct(stats.cacheHitRate)}</div>
+            </div>
+            <div class="token-stat">
+              <div class="token-stat-label">Output</div>
+              <div class="token-stat-value mono">${fmtTokens(stats.outputTokens)}</div>
+            </div>
+            <div class="token-stat">
+              <div class="token-stat-label">Cache Read</div>
+              <div class="token-stat-value mono">${fmtTokens(stats.cacheReadTokens)}</div>
+            </div>
+            <div class="token-stat">
+              <div class="token-stat-label">Cache Write</div>
+              <div class="token-stat-value mono">${fmtTokens(stats.cacheCreationTokens)}</div>
+            </div>
+          </div>
           <div class="hbar-wrap">${renderHorizBars(tokenRows, { fmtVal: fmtTokens })}</div>
         </div>
       </div>

@@ -246,6 +246,28 @@ html, body {
   margin-bottom: 32px;
 }
 
+/* ── Overview top row ── */
+.overview-top {
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
+  margin-bottom: 28px;
+}
+
+.metric-grid-4 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 14px;
+  flex: 1;
+}
+
+.overview-top .usage-grid-wrap {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
 /* ── Metric cards ── */
 .metric-grid {
   display: grid;
@@ -568,6 +590,135 @@ td.msg-prompt {
 }
 
 /* ── Chart wrap ── */
+/* ── Usage Grid ── */
+
+.usage-grid-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px 16px;
+  margin-bottom: 28px;
+  overflow-x: auto;
+  transition: border-color 200ms;
+}
+
+.usage-grid-wrap:hover {
+  border-color: var(--border-2);
+}
+
+.usage-grid-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.usage-grid-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.usage-grid-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.usage-grid-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.usage-day-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 18px;
+  flex-shrink: 0;
+}
+
+.usage-day-col span {
+  height: 10px;
+  line-height: 10px;
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
+  min-width: 24px;
+}
+
+.usage-grid-right {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.usage-month-row {
+  position: relative;
+  height: 16px;
+  margin-bottom: 2px;
+}
+
+.usage-month-label {
+  position: absolute;
+  font-size: 9px;
+  color: var(--text-muted);
+  line-height: 16px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.usage-weeks {
+  display: flex;
+  gap: 1px;
+}
+
+.usage-week {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.usage-cell {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  transition: opacity 120ms;
+}
+
+.usage-cell:hover {
+  opacity: 0.75;
+}
+
+.usage-cell[data-future] {
+  background: transparent;
+}
+
+.usage-cell[data-level="0"] { background: var(--surface-3); }
+.usage-cell[data-level="1"] { background: rgba(0, 255, 135, 0.18); }
+.usage-cell[data-level="2"] { background: rgba(0, 255, 135, 0.38); }
+.usage-cell[data-level="3"] { background: rgba(0, 255, 135, 0.62); }
+.usage-cell[data-level="4"] { background: rgba(0, 255, 135, 0.88); }
+
+.usage-grid-legend {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 10px;
+  justify-content: flex-end;
+}
+
+.usage-legend-text {
+  font-size: 9px;
+  color: var(--text-muted);
+  margin: 0 2px;
+}
+
 .chart-wrap {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -587,6 +738,47 @@ td.msg-prompt {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   margin-bottom: 18px;
+}
+
+/* ── Token stats summary ── */
+.token-stats-row {
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.token-stat {
+  flex: 1;
+  padding: 10px 14px;
+  border-right: 1px solid var(--border);
+}
+
+.token-stat:last-child {
+  border-right: none;
+}
+
+.token-stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+
+.token-stat-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.token-stat-value.mono {
+  font-family: var(--font-mono);
+  font-size: 14px;
 }
 
 .chart-svg-wrap {
@@ -1134,6 +1326,14 @@ td.msg-prompt {
   .nav-item { justify-content: center; padding: 10px; margin: 1px 4px; }
   .sidebar-footer { padding: 12px 8px; }
   .refresh-btn { padding: 8px; }
+}
+
+@media (max-width: 960px) {
+  .overview-top { flex-direction: column; }
+  .metric-grid-4 { flex: none; grid-template-columns: 1fr 1fr 1fr 1fr; grid-template-rows: auto; }
+  .overview-top .usage-grid-wrap { margin-bottom: 0; }
+  .token-stats-row { flex-wrap: wrap; }
+  .token-stat { flex: 0 0 50%; border-bottom: 1px solid var(--border); }
 }
 
 /* ── Period selector ── */
