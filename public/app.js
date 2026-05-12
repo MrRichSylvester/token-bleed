@@ -339,12 +339,12 @@ async function renderOverview() {
         <div class="metric-card accent-left">
           <div class="metric-label">Total Cost</div>
           <div class="metric-value mono">${fmtCost(stats.totalCost)}</div>
-          <div class="metric-sub">${stats.totalSessions} sessions</div>
+          <div class="metric-sub">${daily.length > 0 ? fmtCost(stats.totalCost / daily.length) + '/day avg' : '—'}</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Total Tokens</div>
-          <div class="metric-value mono">${fmtTokens(stats.totalTokens)}</div>
-          <div class="metric-sub">${fmtTokens(stats.outputTokens)} output</div>
+          <div class="metric-label">Sessions</div>
+          <div class="metric-value mono">${stats.totalSessions.toLocaleString()}</div>
+          <div class="metric-sub">${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</div>
         </div>
         <div class="metric-card accent-left">
           <div class="metric-label">Cache Hit Rate</div>
@@ -352,19 +352,24 @@ async function renderOverview() {
           <div class="metric-sub">${fmtTokens(stats.cacheReadTokens)} from cache</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Messages</div>
-          <div class="metric-value mono">${stats.totalMessages.toLocaleString()}</div>
-          <div class="metric-sub">${stats.projectCount} projects</div>
-        </div>
-        <div class="metric-card">
           <div class="metric-label">Avg Cost / Session</div>
           <div class="metric-value mono">${stats.totalSessions > 0 ? fmtCost(stats.totalCost / stats.totalSessions) : '—'}</div>
-          <div class="metric-sub">across paid models</div>
+          <div class="metric-sub">per paid session</div>
         </div>
-        <div class="metric-card accent-left">
-          <div class="metric-label">Cache Created</div>
-          <div class="metric-value mono">${fmtTokens(stats.cacheCreationTokens)}</div>
-          <div class="metric-sub">write tokens</div>
+        <div class="metric-card">
+          <div class="metric-label">Total Tokens</div>
+          <div class="metric-value mono">${fmtTokens(stats.totalTokens)}</div>
+          <div class="metric-sub">${fmtTokens(stats.inputTokens)} input</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Output Tokens</div>
+          <div class="metric-value mono">${fmtTokens(stats.outputTokens)}</div>
+          <div class="metric-sub">${fmtPct(stats.outputTokens / (stats.totalTokens || 1))} of total</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Messages</div>
+          <div class="metric-value mono">${stats.totalMessages.toLocaleString()}</div>
+          <div class="metric-sub">${stats.totalSessions > 0 ? '~' + Math.round(stats.totalMessages / stats.totalSessions) + ' per session' : '—'}</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">Top Model</div>
