@@ -965,15 +965,21 @@ async function toggleSession(row, container) {
 
   const isOpen = detailRow.style.display !== 'none';
   if (isOpen) {
-    detailRow.style.display = 'none';
     row.classList.remove('expanded');
+    detailRow.classList.add('collapsing');
+    setTimeout(() => {
+      detailRow.style.display = 'none';
+      detailRow.classList.remove('collapsing');
+    }, 280);
     return;
   }
 
   row.classList.add('expanded');
   detailRow.style.display = '';
-  detailRow.classList.add('expanding');
-  setTimeout(() => detailRow.classList.remove('expanding'), 250);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    detailRow.classList.add('expanding');
+    setTimeout(() => detailRow.classList.remove('expanding'), 450);
+  }));
   const wrap = detailRow.querySelector('.session-messages-wrap');
   if (wrap.dataset.loaded) return;
 

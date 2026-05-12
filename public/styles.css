@@ -605,12 +605,21 @@ td.prompt span { display: block; overflow: hidden; text-overflow: ellipsis; whit
 .session-detail-row:hover { background: transparent !important; }
 
 @keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(-5px); }
+  from { opacity: 0; transform: translateY(-10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.session-detail-row.expanding .session-detail-cell {
-  animation: fadeSlideIn 220ms ease forwards;
+@keyframes fadeSlideOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-10px); }
+}
+
+.session-detail-row.expanding .session-messages-wrap {
+  animation: fadeSlideIn 400ms ease-out forwards;
+}
+
+.session-detail-row.collapsing .session-messages-wrap {
+  animation: fadeSlideOut 280ms ease-in forwards;
 }
 
 .session-detail-cell {
