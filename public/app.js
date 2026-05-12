@@ -242,7 +242,8 @@ function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 160,
     const x = i * (barW + BAR_GAP);
     const y = chartH - barH;
     const tip = `${d.date}  ${fmt(d[valueKey])}`;
-    return `<rect class="bar-chart-bar" x="${x}" y="${y}" width="${barW}" height="${barH}" rx="2" fill="url(#${gradId})" data-tip="${escHtml(tip)}"></rect>`;
+    const delay = 60 + i * 5;
+    return `<rect class="bar-chart-bar" x="${x}" y="${y}" width="${barW}" height="${barH}" rx="2" fill="url(#${gradId})" data-tip="${escHtml(tip)}" style="animation-delay:${delay}ms"></rect>`;
   }).join('');
 
   const step = Math.max(1, Math.floor(recent.length / 8));
@@ -632,10 +633,6 @@ async function renderComparison() {
 
     if (!state.compModel1 && models[0]) state.compModel1 = models[0].model;
     if (!state.compModel2 && models[1]) state.compModel2 = models[1].model;
-
-    const modelOptions = models.map(m =>
-      `<option value="${escHtml(m.model)}">${escHtml(m.model)} (${m.sessionCount} sessions)</option>`
-    ).join('');
 
     const content = document.getElementById('content');
     content.innerHTML = `
