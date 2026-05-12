@@ -193,29 +193,23 @@ function updateNav() {
 
 // ── Charts ─────────────────────────────────────────────────────
 
-function renderBarChart(daily, width = 700, height = 120) {
+function renderBarChart(daily, { valueKey = 'cost', fmt = fmtCost, height = 120 } = {}) {
   if (!daily || daily.length === 0) return '<p class="muted" style="padding:20px 0">No activity data yet.</p>';
 
-  // Show last 60 days
   const recent = daily.slice(-60);
-  const maxCost = Math.max(...recent.map(d => d.cost), 0.001);
-
+  const maxVal = Math.max(...recent.map(d => d[valueKey]), 0.001);
   const BAR_GAP = 2;
-  const barW = Math.max(4, Math.floor((width - BAR_GAP * recent.length) / recent.length));
+  const barW = 8;
   const chartH = height - 24;
 
   const bars = recent.map((d, i) => {
-    const barH = Math.max(2, Math.floor((d.cost / maxCost) * chartH));
+    const barH = Math.max(2, Math.floor((d[valueKey] / maxVal) * chartH));
     const x = i * (barW + BAR_GAP);
     const y = chartH - barH;
-    const label = d.date.slice(5); // MM-DD
-    const tip = `${d.date}: ${fmtCost(d.cost)} (${d.sessions} sessions)`;
-    return `<rect class="bar-chart-bar" x="${x}" y="${y}" width="${barW}" height="${barH}" rx="1">
-      <title>${tip}</title>
-    </rect>`;
+    const tip = `${d.date}: ${fmt(d[valueKey])}`;
+    return `<rect class="bar-chart-bar" x="${x}" y="${y}" width="${barW}" height="${barH}" rx="1"><title>${tip}</title></rect>`;
   }).join('');
 
-  // X labels: show every ~10 bars
   const step = Math.max(1, Math.floor(recent.length / 8));
   const labels = recent.map((d, i) => {
     if (i % step !== 0) return '';
@@ -223,23 +217,37 @@ function renderBarChart(daily, width = 700, height = 120) {
     return `<text class="chart-axis-label" x="${x}" y="${chartH + 16}" text-anchor="middle">${d.date.slice(5)}</text>`;
   }).join('');
 
-  // Gridlines
   const gridlines = [0.25, 0.5, 0.75, 1].map(frac => {
     const y = chartH - Math.floor(frac * chartH);
-    const cost = maxCost * frac;
-    return `<line class="chart-gridline" x1="0" y1="${y}" x2="${width}" y2="${y}" stroke-dasharray="3,3"/>
-    <text class="chart-axis-label" x="-4" y="${y + 3}" text-anchor="end">${fmtCost(cost)}</text>`;
+    return `<line class="chart-gridline" x1="0" y1="${y}" x2="${recent.length * (barW + BAR_GAP)}" y2="${y}" stroke-dasharray="3,3"/>
+    <text class="chart-axis-label" x="-4" y="${y + 3}" text-anchor="end">${fmt(maxVal * frac)}</text>`;
   }).join('');
 
   const svgW = recent.length * (barW + BAR_GAP);
-
   return `<svg viewBox="0 0 ${svgW + 40} ${height}" width="100%" height="${height}" style="display:block;overflow:visible">
-    <g transform="translate(36,0)">
-      ${gridlines}
-      ${bars}
-      ${labels}
-    </g>
+    <g transform="translate(36,0)">${gridlines}${bars}${labels}</g>
   </svg>`;
+}
+
+function renderHorizBars(rows, { fmtVal = (v) => v, accent = false } = {}) {
+  // rows: [{ label, value, max, sub }]
+  if (!rows || rows.length === 0) return '<p class="muted" style="padding:8px 0">No data.</p>';
+  const maxVal = Math.max(...rows.map(r => r.value), 0.001);
+  return rows.map(r => {
+    const pct = Math.max(2, (r.value / maxVal) * 100);
+    const barColor = accent ? 'var(--green)' : 'var(--border)';
+    const fillColor = accent ? 'rgba(0,255,0,0.15)' : 'rgba(255,255,255,0.06)';
+    return `<div class="hbar-row">
+      <div class="hbar-label">${escHtml(r.label)}</div>
+      <div class="hbar-track">
+        <div class="hbar-fill" style="width:${pct}%;background:${fillColor};border-right:2px solid ${barColor}"></div>
+      </div>
+      <div class="hbar-right">
+        <div class="hbar-value">${fmtVal(r.value)}</div>
+        ${r.sub ? `<div class="hbar-sub">${escHtml(r.sub)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ── Overview ───────────────────────────────────────────────────
@@ -247,13 +255,31 @@ function renderBarChart(daily, width = 700, height = 120) {
 async function renderOverview() {
   setLoading();
   try {
-    const [stats, daily] = await Promise.all([api.stats(), api.daily()]);
+    const [stats, daily, models] = await Promise.all([api.stats(), api.daily(), api.models()]);
     state.data.stats = stats;
     state.data.daily = daily;
+    state.data.models = models;
+
+    // Usage by model — all models, session count as universal bar metric
+    const modelRows = models.slice(0, 8).map(m => ({
+      label: shortModelName(m.model),
+      value: m.sessionCount,
+      sub: m.isLocal ? 'local' : fmtCost(m.totalCost),
+    }));
+    const modelFmt = n => `${n}`;
+    const modelAccent = false;
+
+    // Token breakdown rows
+    const tokenRows = [
+      { label: 'Cache Read',   value: stats.cacheReadTokens,    sub: fmtPct(stats.cacheReadTokens / (stats.totalTokens || 1)) },
+      { label: 'Cache Write',  value: stats.cacheCreationTokens, sub: fmtPct(stats.cacheCreationTokens / (stats.totalTokens || 1)) },
+      { label: 'Output',       value: stats.outputTokens,        sub: fmtPct(stats.outputTokens / (stats.totalTokens || 1)) },
+      { label: 'Input',        value: stats.inputTokens,         sub: fmtPct(stats.inputTokens / (stats.totalTokens || 1)) },
+    ].filter(r => r.value > 0);
 
     const content = document.getElementById('content');
     content.innerHTML = `
-      <h1 class="page-title">Dashboard</h1>
+      <h1 class="page-title">Burn Rate</h1>
       <p class="page-subtitle">${periodLabel()} · ${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</p>
 
       <div class="metric-grid">
@@ -278,9 +304,9 @@ async function renderOverview() {
           <div class="metric-sub">${stats.projectCount} projects</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Input Tokens</div>
-          <div class="metric-value mono">${fmtTokens(stats.inputTokens)}</div>
-          <div class="metric-sub">non-cached</div>
+          <div class="metric-label">Avg Cost / Session</div>
+          <div class="metric-value mono">${stats.totalSessions > 0 ? fmtCost(stats.totalCost / stats.totalSessions) : '—'}</div>
+          <div class="metric-sub">across paid models</div>
         </div>
         <div class="metric-card accent-left">
           <div class="metric-label">Cache Created</div>
@@ -294,9 +320,26 @@ async function renderOverview() {
         </div>
       </div>
 
-      <div class="chart-wrap">
-        <div class="chart-title">Daily Cost</div>
-        <div class="chart-svg-wrap">${renderBarChart(daily)}</div>
+      <div class="chart-row-2">
+        <div class="chart-wrap">
+          <div class="chart-title">Daily Cost</div>
+          <div class="chart-svg-wrap">${renderBarChart(daily, { valueKey: 'cost', fmt: fmtCost })}</div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">Daily Sessions</div>
+          <div class="chart-svg-wrap">${renderBarChart(daily, { valueKey: 'sessions', fmt: n => `${n} sessions` })}</div>
+        </div>
+      </div>
+
+      <div class="chart-row-2">
+        <div class="chart-wrap">
+          <div class="chart-title">Usage by Model</div>
+          <div class="hbar-wrap">${renderHorizBars(modelRows, { fmtVal: modelFmt, accent: modelAccent })}</div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">Token Breakdown</div>
+          <div class="hbar-wrap">${renderHorizBars(tokenRows, { fmtVal: fmtTokens, accent: false })}</div>
+        </div>
       </div>
 
       <div class="section">
