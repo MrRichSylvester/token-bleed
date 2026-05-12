@@ -845,6 +845,91 @@ td.msg-prompt {
   letter-spacing: 0.05em;
 }
 
+/* ── Session Compare ── */
+.session-picker-select {
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  color: var(--text-primary);
+  padding: 9px 36px 9px 14px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  cursor: pointer;
+  min-width: 340px;
+  max-width: 460px;
+  outline: none;
+  transition: border-color 150ms, box-shadow 150ms;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%233D4E6E' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.session-picker-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.comp-session-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+  font-family: var(--font-mono);
+}
+
+.comp-prompt-preview {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.comp-prompt-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.session-delta-row {
+  margin-top: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+}
+
+.session-delta-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.session-delta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+}
+
+.session-delta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.session-delta-value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.delta-good    { color: var(--accent); }
+.delta-bad     { color: var(--red); }
+.delta-neutral { color: var(--text-muted); }
+
 /* ── Filter bar ── */
 .filter-bar {
   display: flex;

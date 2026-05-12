@@ -185,6 +185,8 @@ const state = {
   sessionsFilter: { projectId: '', model: '' },
   compModel1: '',
   compModel2: '',
+  compSession1Id: '',
+  compSession2Id: '',
   data: {
     stats: null,
     daily: null,
@@ -193,6 +195,7 @@ const state = {
     sessionTotal: 0,
     models: null,
     comparison: null,
+    allSessions: null,
   },
 };
 
@@ -963,6 +966,236 @@ function renderCompCard(m, isWinner, isLoser, savingsPct, vsModel) {
   `;
 }
 
+// ── Session Comparison ─────────────────────────────────────────
+
+async function renderSessionCompare() {
+  setLoading();
+  try {
+    if (!state.data.allSessions) {
+      const { sessions } = await api.sessions({ limit: 500, offset: 0 });
+      state.data.allSessions = sessions;
+    }
+    const sessions = state.data.allSessions;
+
+    if (sessions.length === 0) {
+      document.getElementById('content').innerHTML = `
+        <h1 class="page-title">Session Compare</h1>
+        <div class="empty-state"><div class="empty-icon">⇄</div><div class="empty-msg">No sessions found</div></div>
+      `;
+      return;
+    }
+
+    if (!state.compSession1Id && sessions[0]) state.compSession1Id = sessions[0].id;
+    if (!state.compSession2Id && sessions[1]) state.compSession2Id = sessions[1].id;
+
+    const content = document.getElementById('content');
+    content.innerHTML = `
+      <h1 class="page-title">Session Compare</h1>
+      <p class="page-subtitle">Pick two sessions to compare cost and token usage side by side</p>
+
+      <div class="comparison-selectors">
+        <select id="sc-session1" class="session-picker-select">
+          ${sessions.map(s => sessionOption(s, state.compSession1Id)).join('')}
+        </select>
+        <span class="comparison-vs-label">vs</span>
+        <select id="sc-session2" class="session-picker-select">
+          ${sessions.map(s => sessionOption(s, state.compSession2Id)).join('')}
+        </select>
+      </div>
+
+      <div id="session-comparison-result"></div>
+    `;
+
+    document.getElementById('sc-session1').addEventListener('change', e => {
+      state.compSession1Id = e.target.value;
+      renderSessionComparisonResult();
+    });
+    document.getElementById('sc-session2').addEventListener('change', e => {
+      state.compSession2Id = e.target.value;
+      renderSessionComparisonResult();
+    });
+
+    renderSessionComparisonResult();
+  } catch (e) {
+    showError(e);
+  }
+}
+
+function sessionOption(s, selectedId) {
+  const label = `${fmtDate(s.startTime)} · ${s.projectName} · ${s.firstPrompt.slice(0, 60)}`;
+  return `<option value="${escHtml(s.id)}" ${s.id === selectedId ? 'selected' : ''}>${escHtml(label)}</option>`;
+}
+
+function renderSessionComparisonResult() {
+  const wrap = document.getElementById('session-comparison-result');
+  if (!wrap) return;
+
+  const sessions = state.data.allSessions ?? [];
+  const s1 = sessions.find(s => s.id === state.compSession1Id);
+  const s2 = sessions.find(s => s.id === state.compSession2Id);
+
+  if (!s1 || !s2) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">⇄</div><div class="empty-msg">Select two sessions to compare</div></div>`;
+    return;
+  }
+
+  if (s1.id === s2.id) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">⇄</div><div class="empty-msg">Pick two different sessions</div></div>`;
+    return;
+  }
+
+  const local1 = s1.cost === 0 && (s1.usage.inputTokens + s1.usage.outputTokens) > 0;
+  const local2 = s2.cost === 0 && (s2.usage.inputTokens + s2.usage.outputTokens) > 0;
+
+  let winner = null;
+  let pctDiff = 0;
+  if (!local1 && !local2 && s1.cost > 0 && s2.cost > 0) {
+    winner = s1.cost <= s2.cost ? 's1' : 's2';
+    const cheaper = Math.min(s1.cost, s2.cost);
+    const pricier = Math.max(s1.cost, s2.cost);
+    pctDiff = ((pricier - cheaper) / pricier) * 100;
+  }
+
+  wrap.innerHTML = `
+    <div class="comparison-arena">
+      ${renderSessionCompCard(s1, winner === 's1', winner === 's2', local1, pctDiff)}
+      <div class="vs-divider"><div class="vs-circle">VS</div></div>
+      ${renderSessionCompCard(s2, winner === 's2', winner === 's1', local2, pctDiff)}
+    </div>
+    ${renderSessionDeltaRow(s1, s2, local1, local2)}
+  `;
+}
+
+function renderSessionCompCard(s, isWinner, isLoser, isLocal, pctDiff) {
+  const totalTok = s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens;
+  const costClass = isLocal ? 'local-cost' : isWinner ? 'winner-cost' : isLoser ? 'loser-cost' : '';
+  const costDisplay = isLocal ? `${fmtTokens(totalTok)} tokens` : fmtCost(s.cost);
+
+  const badge = isWinner
+    ? '<span class="badge-winner">Cheaper</span>'
+    : isLoser
+    ? '<span class="badge-loser">More Expensive</span>'
+    : isLocal
+    ? '<span class="badge-local">Local</span>'
+    : '';
+
+  const savingsBlock = isWinner && pctDiff > 0 ? `
+    <div class="comp-savings">
+      <div class="comp-savings-pct">${pctDiff.toFixed(0)}% cheaper</div>
+      <div class="comp-savings-label">vs the other session</div>
+    </div>
+  ` : '';
+
+  return `
+    <div class="comparison-card ${isWinner ? 'winner' : ''}">
+      <div class="comp-header">
+        <div>
+          <div class="comp-session-date">${fmtDateTime(s.startTime)}</div>
+          <div class="comp-model-name">${escHtml(s.projectName)}</div>
+        </div>
+        ${badge}
+      </div>
+      <div class="comp-body">
+        <div class="comp-cost ${costClass}">${costDisplay}</div>
+
+        <div class="comp-stats-grid">
+          <div class="comp-stat">
+            <div class="comp-stat-label">Total Tokens</div>
+            <div class="comp-stat-value">${fmtTokens(totalTok)}</div>
+          </div>
+          <div class="comp-stat">
+            <div class="comp-stat-label">Input</div>
+            <div class="comp-stat-value">${fmtTokens(s.usage.inputTokens)}</div>
+          </div>
+          <div class="comp-stat">
+            <div class="comp-stat-label">Output</div>
+            <div class="comp-stat-value">${fmtTokens(s.usage.outputTokens)}</div>
+          </div>
+          <div class="comp-stat">
+            <div class="comp-stat-label">Cache Read</div>
+            <div class="comp-stat-value">${fmtTokens(s.usage.cacheReadTokens)}</div>
+          </div>
+        </div>
+
+        <div class="comp-efficiency">
+          <div class="comp-eff-item">
+            <div class="comp-eff-label">Cache Hit</div>
+            <div class="comp-eff-value">${fmtPct(s.cacheHitRate)}</div>
+          </div>
+          <div class="comp-eff-item">
+            <div class="comp-eff-label">Duration</div>
+            <div class="comp-eff-value">${fmtDuration(s.duration)}</div>
+          </div>
+          <div class="comp-eff-item">
+            <div class="comp-eff-label">Messages</div>
+            <div class="comp-eff-value">${s.messageCount}</div>
+          </div>
+          <div class="comp-eff-item">
+            <div class="comp-eff-label">Tool Calls</div>
+            <div class="comp-eff-value">${s.toolCallCount}</div>
+          </div>
+          <div class="comp-eff-item">
+            <div class="comp-eff-label">Model</div>
+            <div class="comp-eff-value" style="font-size:11px">${escHtml(shortModelName(s.primaryModel))}</div>
+          </div>
+          <div class="comp-eff-item">
+            <div class="comp-eff-label">Cache Write</div>
+            <div class="comp-eff-value">${fmtTokens(s.usage.cacheCreationTokens)}</div>
+          </div>
+        </div>
+
+        <div class="comp-prompt-preview">
+          <div class="comp-eff-label" style="margin-bottom:6px">First Prompt</div>
+          <div class="comp-prompt-text">${escHtml(s.firstPrompt.slice(0, 120))}${s.firstPrompt.length > 120 ? '…' : ''}</div>
+        </div>
+
+        ${savingsBlock}
+      </div>
+    </div>
+  `;
+}
+
+function renderSessionDeltaRow(s1, s2, local1, local2) {
+  const rows = [];
+
+  const totalTok1 = s1.usage.inputTokens + s1.usage.outputTokens + s1.usage.cacheCreationTokens + s1.usage.cacheReadTokens;
+  const totalTok2 = s2.usage.inputTokens + s2.usage.outputTokens + s2.usage.cacheCreationTokens + s2.usage.cacheReadTokens;
+
+  function deltaHtml(val1, val2, fmtFn, higherIsBetter = false) {
+    if (!val1 || !val2) return '<span class="delta-neutral">—</span>';
+    const diff = val2 - val1;
+    const pct = Math.abs(diff / val1) * 100;
+    if (pct < 0.1) return '<span class="delta-neutral">equal</span>';
+    const positive = higherIsBetter ? diff > 0 : diff < 0;
+    const cls = positive ? 'delta-good' : 'delta-bad';
+    const sign = diff > 0 ? '+' : '-';
+    return `<span class="${cls}">${sign}${fmtFn(Math.abs(diff))} (${pct.toFixed(0)}%)</span>`;
+  }
+
+  if (!local1 && !local2) {
+    rows.push({ label: 'Cost', delta: deltaHtml(s1.cost, s2.cost, fmtCost) });
+  }
+  rows.push({ label: 'Total Tokens',   delta: deltaHtml(totalTok1, totalTok2, fmtTokens) });
+  rows.push({ label: 'Output Tokens',  delta: deltaHtml(s1.usage.outputTokens, s2.usage.outputTokens, fmtTokens) });
+  rows.push({ label: 'Cache Hit Rate', delta: deltaHtml(s1.cacheHitRate, s2.cacheHitRate, v => fmtPct(v), true) });
+  rows.push({ label: 'Duration',       delta: deltaHtml(s1.duration, s2.duration, fmtDuration) });
+  rows.push({ label: 'Messages',       delta: deltaHtml(s1.messageCount, s2.messageCount, n => n.toString()) });
+
+  return `
+    <div class="session-delta-row">
+      <div class="session-delta-title">Delta (A → B)</div>
+      <div class="session-delta-grid">
+        ${rows.map(r => `
+          <div class="session-delta-item">
+            <div class="comp-eff-label">${escHtml(r.label)}</div>
+            <div class="session-delta-value">${r.delta}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
 function periodLabel() {
   const periods = PERIOD_MODES[state.periodMode]?.periods ?? [];
   return periods.find(p => p.key === state.period)?.label ?? 'All Time';
@@ -994,11 +1227,12 @@ function showError(e) {
 async function renderView() {
   updateNav();
   switch (state.view) {
-    case 'overview':   return renderOverview();
-    case 'projects':   return renderProjects();
-    case 'sessions':   return renderSessions();
-    case 'comparison': return renderComparison();
-    default:           return renderOverview();
+    case 'overview':        return renderOverview();
+    case 'projects':        return renderProjects();
+    case 'sessions':        return renderSessions();
+    case 'comparison':      return renderComparison();
+    case 'session-compare': return renderSessionCompare();
+    default:                return renderOverview();
   }
 }
 
@@ -1032,6 +1266,7 @@ function renderPeriodSelector() {
       // Default to 'all' when switching modes to avoid invalid key crossover
       state.period = 'all';
       state.sessionsPage = 0;
+      state.data.allSessions = null;
       renderPeriodSelector();
       renderView();
     });
@@ -1042,6 +1277,7 @@ function renderPeriodSelector() {
       if (btn.dataset.period === state.period) return;
       state.period = btn.dataset.period;
       state.sessionsPage = 0;
+      state.data.allSessions = null;
       renderPeriodSelector();
       renderView();
     });
