@@ -894,15 +894,20 @@ td.msg-prompt {
   transition: opacity 150ms, box-shadow 150ms;
 }
 
+.usage-cell[data-level="1"] { --cell-color: rgba(0, 255, 135, 0.18); }
+.usage-cell[data-level="2"] { --cell-color: rgba(0, 255, 135, 0.38); }
+.usage-cell[data-level="3"] { --cell-color: rgba(0, 255, 135, 0.62); }
+.usage-cell[data-level="4"] { --cell-color: rgba(0, 255, 135, 0.88); }
+
 .usage-cell[data-level]:not([data-level="0"]) {
-  opacity: 0;
+  background: var(--surface-3);
   animation: cell-fade 1.8s ease forwards;
   animation-delay: var(--cd, 0ms);
 }
 
 @keyframes cell-fade {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from { background: var(--surface-3); }
+  to   { background: var(--cell-color); }
 }
 
 .usage-cell[data-level]:not([data-level="0"]):hover {
@@ -919,10 +924,6 @@ td.msg-prompt {
 }
 
 .usage-cell[data-level="0"] { background: var(--surface-3); }
-.usage-cell[data-level="1"] { background: rgba(0, 255, 135, 0.18); }
-.usage-cell[data-level="2"] { background: rgba(0, 255, 135, 0.38); }
-.usage-cell[data-level="3"] { background: rgba(0, 255, 135, 0.62); }
-.usage-cell[data-level="4"] { background: rgba(0, 255, 135, 0.88); }
 
 
 
