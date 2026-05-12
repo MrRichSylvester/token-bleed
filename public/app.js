@@ -122,6 +122,9 @@ const api = {
   refresh: () => api.fetch('/api/refresh'),
   meta: () => api.fetch('/api/meta'),
   saveSetting: (key, value) => api.fetch(`/api/settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [key]: value }) }),
+  appSettings: () => api.fetch('/api/app-settings'),
+  saveAppSettings: (patch) => api.fetch('/api/app-settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }),
+  tips: () => api.fetch('/api/tips'),
 };
 
 // ── Period helpers ─────────────────────────────────────────────
@@ -185,6 +188,7 @@ const state = {
   sessionsPage: 0,
   sessionsLimit: 50,
   sessionsFilter: { projectId: '', model: '' },
+  appSettings: null,
   compModel1: '',
   compModel2: '',
   compSession1Id: '',
@@ -800,6 +804,7 @@ async function renderSessions() {
           ${modelOptions}
         </select>
         <span class="filter-count">${total.toLocaleString()} session${total !== 1 ? 's' : ''}</span>
+        <a class="export-csv-btn" href="${api.withSince('/api/export/sessions.csv')}" download>↓ CSV</a>
       </div>
 
       <div class="table-wrap" id="sessions-table-wrap">
@@ -1525,6 +1530,8 @@ async function renderView() {
     case 'sessions':        return renderSessions();
     case 'comparison':      return renderComparison();
     case 'session-compare': return renderSessionCompare();
+    case 'tips':            return renderTips();
+    case 'settings':        return renderSettings();
     default:                return renderOverview();
   }
 }
@@ -1579,6 +1586,321 @@ function renderPeriodSelector() {
       renderView();
     });
   });
+}
+
+// ── Tips ───────────────────────────────────────────────────────
+
+async function renderTips() {
+  setLoading();
+  try {
+    const tips = await api.tips();
+
+    const content = document.getElementById('content');
+
+    if (!tips || tips.length === 0) {
+      content.innerHTML = `
+        <h1 class="page-title">Tips</h1>
+        <p class="page-subtitle">Based on your last 30 days of usage</p>
+        <div class="empty-state">
+          <div class="empty-icon">◎</div>
+          <div class="empty-msg">No issues found. Usage looks clean.</div>
+        </div>`;
+      return;
+    }
+
+    const iconMap = { warn: '⚠', info: 'ℹ', good: '✓' };
+
+    content.innerHTML = `
+      <h1 class="page-title">Tips</h1>
+      <p class="page-subtitle">Based on your last 30 days of usage</p>
+      <div class="tips-list">
+        ${tips.map(t => `
+          <div class="tip-card tip-${escHtml(t.severity)}">
+            <div class="tip-header">
+              <span class="tip-icon tip-icon-${escHtml(t.severity)}">${iconMap[t.severity] ?? 'ℹ'}</span>
+              <span class="tip-title">${escHtml(t.title)}</span>
+              ${t.value != null ? `<span class="tip-value">$${t.value.toFixed(2)} potential savings</span>` : ''}
+            </div>
+            <p class="tip-body">${escHtml(t.body)}</p>
+          </div>
+        `).join('')}
+      </div>`;
+  } catch (e) {
+    showError(e);
+  }
+}
+
+// ── Settings ────────────────────────────────────────────────────
+
+const PLAN_OPTIONS = [
+  { key: 'api',   label: 'API',        sub: 'Pay per token' },
+  { key: 'pro',   label: 'Pro',        sub: '$20/mo' },
+  { key: 'max',   label: 'Max',        sub: '$100/mo' },
+  { key: 'max5x', label: 'Max 5x',     sub: '$500/mo' },
+  { key: 'max20x',label: 'Max 20x',    sub: '$2,000/mo' },
+];
+
+async function renderSettings() {
+  setLoading();
+  try {
+    const [appSettings, meta] = await Promise.all([api.appSettings(), api.meta()]);
+    state.appSettings = appSettings;
+
+    const { plan, customPricing, builtinPricing, detectedModels } = appSettings;
+    const cleanupDays = meta.cleanupPeriodDays ?? 30;
+
+    // Models that appear in sessions but have no built-in pricing (custom/local/unknown)
+    const unknownModels = detectedModels.filter(m => !builtinPricing[m] &&
+      !Object.keys(builtinPricing).some(k => m.startsWith(k) || k.startsWith(m)));
+
+    // Custom pricing rows: start with any already-saved custom entries, then fill in unknown models
+    const customModelSet = new Set([...Object.keys(customPricing), ...unknownModels]);
+
+    function pricingRow(model) {
+      const cp = customPricing[model] || {};
+      const bp = builtinPricing[model];
+      const isBuiltin = !!bp && !customPricing[model];
+      const placeholder = bp ? bp : { input: '', output: '', cacheWrite: '', cacheRead: '' };
+      return `
+        <tr class="pricing-row" data-model="${escHtml(model)}">
+          <td class="pricing-model-cell">
+            <span class="pricing-model-name">${escHtml(model)}</span>
+            ${isBuiltin ? '<span class="pricing-builtin-badge">built-in</span>' : ''}
+            ${customPricing[model] ? '<span class="pricing-custom-badge">custom</span>' : ''}
+          </td>
+          <td><input class="pricing-input" type="number" min="0" step="0.01" data-field="input"
+            value="${cp.input ?? ''}" placeholder="${placeholder.input}"></td>
+          <td><input class="pricing-input" type="number" min="0" step="0.01" data-field="output"
+            value="${cp.output ?? ''}" placeholder="${placeholder.output}"></td>
+          <td><input class="pricing-input" type="number" min="0" step="0.01" data-field="cacheWrite"
+            value="${cp.cacheWrite ?? ''}" placeholder="${placeholder.cacheWrite}"></td>
+          <td><input class="pricing-input" type="number" min="0" step="0.01" data-field="cacheRead"
+            value="${cp.cacheRead ?? ''}" placeholder="${placeholder.cacheRead}"></td>
+          <td><button class="pricing-clear-btn" data-model="${escHtml(model)}" title="Remove custom pricing">✕</button></td>
+        </tr>`;
+    }
+
+    const content = document.getElementById('content');
+    content.innerHTML = `
+      <h1 class="page-title">Settings</h1>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Plan</div>
+        <div class="settings-section-desc">
+          Costs are always shown as API-rate equivalents regardless of plan.
+          On Pro/Max plans this represents the market value of your usage — useful for knowing if your subscription is paying off.
+        </div>
+        <div class="plan-selector">
+          ${PLAN_OPTIONS.map(p => `
+            <button class="plan-btn ${plan === p.key ? 'active' : ''}" data-plan="${p.key}">
+              <span class="plan-btn-label">${p.label}</span>
+              <span class="plan-btn-sub">${p.sub}</span>
+            </button>`).join('')}
+        </div>
+        <div id="plan-save-status" class="settings-save-status"></div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Model Pricing</div>
+        <div class="settings-section-desc">
+          Override built-in pricing or add rates for custom and local models.
+          Prices are per million tokens. Leave blank to use the built-in rate.
+          Changes take effect on next data refresh.
+        </div>
+        ${customModelSet.size > 0 ? `
+          <div class="table-wrap pricing-table-wrap">
+            <table class="pricing-table">
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th class="right">Input $/M</th>
+                  <th class="right">Output $/M</th>
+                  <th class="right">Cache Write $/M</th>
+                  <th class="right">Cache Read $/M</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="pricing-tbody">
+                ${[...customModelSet].map(pricingRow).join('')}
+              </tbody>
+            </table>
+          </div>` : `<p class="muted" style="margin:12px 0 0">No custom models yet. Add one below or use a session with a local model to see it appear here.</p>`}
+
+        <div class="pricing-add-row">
+          <input id="pricing-new-model" class="pricing-new-model-input" type="text" placeholder="model name (e.g. my-local-llm)">
+          <button id="pricing-add-btn" class="pricing-add-btn">+ Add model</button>
+        </div>
+
+        <div id="pricing-save-row" class="pricing-save-row" style="${customModelSet.size > 0 ? '' : 'display:none'}">
+          <button id="pricing-save-btn" class="btn-primary">Save pricing</button>
+          <span id="pricing-save-status" class="settings-save-status"></span>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Log Retention</div>
+        <div class="settings-section-desc">
+          Token Bleed reads local Claude Code session logs.
+          Those logs are currently kept for <strong>${cleanupDays} days</strong>.
+          After that Claude Code deletes them and they disappear from this dashboard too.
+          90 days is a good default.
+        </div>
+        <div class="retention-row">
+          <span class="settings-label">Keep logs for</span>
+          <input class="settings-number-input" id="retention-days-input" type="number" min="1" max="3650" value="${cleanupDays}">
+          <span class="settings-label">days</span>
+          <button class="btn-primary" id="retention-save-btn">Save</button>
+          <span id="retention-save-status" class="settings-save-status"></span>
+        </div>
+        <div class="usage-retention-warning" id="retention-zero-warning" style="display:none">
+          ⚠ Setting to 0 disables transcript writing entirely. Using 1 instead.
+        </div>
+      </div>
+    `;
+
+    // Plan selector
+    content.querySelectorAll('.plan-btn[data-plan]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const planStatus = document.getElementById('plan-save-status');
+        content.querySelectorAll('.plan-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        planStatus.textContent = 'Saving…';
+        try {
+          await api.saveAppSettings({ plan: btn.dataset.plan });
+          state.appSettings.plan = btn.dataset.plan;
+          planStatus.textContent = 'Saved';
+          setTimeout(() => { planStatus.textContent = ''; }, 2000);
+        } catch {
+          planStatus.textContent = 'Error saving';
+        }
+      });
+    });
+
+    // Pricing save
+    function collectCustomPricing() {
+      const result = {};
+      document.querySelectorAll('#pricing-tbody .pricing-row').forEach(row => {
+        const model = row.dataset.model;
+        const fields = {};
+        let hasAny = false;
+        row.querySelectorAll('.pricing-input').forEach(input => {
+          const v = parseFloat(input.value);
+          if (Number.isFinite(v) && v >= 0) {
+            fields[input.dataset.field] = v;
+            hasAny = true;
+          }
+        });
+        if (hasAny) {
+          result[model] = {
+            input: fields.input ?? 0,
+            output: fields.output ?? 0,
+            cacheWrite: fields.cacheWrite ?? 0,
+            cacheRead: fields.cacheRead ?? 0,
+          };
+        }
+      });
+      return result;
+    }
+
+    document.getElementById('pricing-save-btn')?.addEventListener('click', async () => {
+      const status = document.getElementById('pricing-save-status');
+      const btn = document.getElementById('pricing-save-btn');
+      btn.disabled = true;
+      status.textContent = 'Saving…';
+      try {
+        const cp = collectCustomPricing();
+        await api.saveAppSettings({ customPricing: cp });
+        state.appSettings.customPricing = cp;
+        status.textContent = 'Saved — refresh data to apply';
+        setTimeout(() => { status.textContent = ''; }, 3000);
+      } catch {
+        status.textContent = 'Error saving';
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // Clear custom pricing row
+    content.addEventListener('click', e => {
+      const clearBtn = e.target.closest('.pricing-clear-btn');
+      if (!clearBtn) return;
+      clearBtn.closest('.pricing-row').remove();
+      document.getElementById('pricing-save-row').style.display = '';
+    });
+
+    // Pricing table inputs — show save row on edit
+    content.addEventListener('input', e => {
+      if (e.target.classList.contains('pricing-input')) {
+        document.getElementById('pricing-save-row').style.display = '';
+      }
+    });
+
+    // Add new model row
+    document.getElementById('pricing-add-btn').addEventListener('click', () => {
+      const input = document.getElementById('pricing-new-model');
+      const model = input.value.trim();
+      if (!model) return;
+      input.value = '';
+
+      let tbody = document.getElementById('pricing-tbody');
+      if (!tbody) {
+        // Table didn't exist yet — re-render would be complex; just append a table
+        const wrap = content.querySelector('.settings-section:nth-child(2)');
+        const noModelsMsg = wrap.querySelector('.muted');
+        if (noModelsMsg) noModelsMsg.remove();
+        const tableWrap = document.createElement('div');
+        tableWrap.className = 'table-wrap pricing-table-wrap';
+        tableWrap.innerHTML = `
+          <table class="pricing-table">
+            <thead><tr>
+              <th>Model</th>
+              <th class="right">Input $/M</th><th class="right">Output $/M</th>
+              <th class="right">Cache Write $/M</th><th class="right">Cache Read $/M</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="pricing-tbody"></tbody>
+          </table>`;
+        wrap.querySelector('.pricing-add-row').before(tableWrap);
+        tbody = document.getElementById('pricing-tbody');
+      }
+
+      // Don't add duplicates
+      if (tbody.querySelector(`[data-model="${CSS.escape(model)}"]`)) return;
+
+      const tmp = document.createElement('tbody');
+      tmp.innerHTML = pricingRow(model);
+      tbody.appendChild(tmp.firstElementChild);
+      document.getElementById('pricing-save-row').style.display = '';
+    });
+
+    // Log retention save
+    const retentionInput = document.getElementById('retention-days-input');
+    const retentionWarning = document.getElementById('retention-zero-warning');
+    retentionInput.addEventListener('input', () => {
+      retentionWarning.style.display = parseInt(retentionInput.value, 10) === 0 ? 'block' : 'none';
+    });
+    document.getElementById('retention-save-btn').addEventListener('click', async () => {
+      let v = parseInt(retentionInput.value, 10);
+      if (!Number.isFinite(v) || v < 0) return;
+      if (v === 0) { retentionWarning.style.display = 'block'; retentionInput.value = '1'; return; }
+      const btn = document.getElementById('retention-save-btn');
+      const status = document.getElementById('retention-save-status');
+      btn.disabled = true;
+      status.textContent = 'Saving…';
+      try {
+        await api.saveSetting('cleanupPeriodDays', v);
+        status.textContent = 'Saved';
+        setTimeout(() => { status.textContent = ''; }, 2000);
+      } catch {
+        status.textContent = 'Error saving';
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+  } catch (e) {
+    showError(e);
+  }
 }
 
 // ── Onboarding / Settings modal ────────────────────────────────
@@ -1791,12 +2113,6 @@ function init() {
 
   // About button
   document.getElementById('about-btn').addEventListener('click', showAboutModal);
-
-  // Global settings button
-  document.getElementById('global-settings-btn').addEventListener('click', async () => {
-    const meta = await api.meta();
-    showSettingsModal(meta);
-  });
 
   // Refresh button
   document.getElementById('refresh-btn').addEventListener('click', async () => {

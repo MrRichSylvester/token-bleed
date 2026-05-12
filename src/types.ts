@@ -110,6 +110,19 @@ export interface SessionMessage {
   hasThinking: boolean;
 }
 
+export interface AppSettings {
+  plan: 'api' | 'pro' | 'max' | 'max5x' | 'max20x';
+  customPricing: Record<string, { input: number; output: number; cacheWrite: number; cacheRead: number }>;
+}
+
+export interface Tip {
+  id: string;
+  severity: 'warn' | 'info' | 'good';
+  title: string;
+  body: string;
+  value?: number;
+}
+
 export interface RawEntry {
   type?: string;
   parentUuid?: string;
