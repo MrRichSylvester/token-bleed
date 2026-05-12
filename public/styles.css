@@ -191,9 +191,12 @@ html, body {
   font-size: 13px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 16px 16px 12px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
+  flex-shrink: 0;
 }
 
 .club-ai,
