@@ -7,16 +7,18 @@
 
 ---
 
+### Quick start (recommended)
+```bash
+npx token-bleed
+```
+
+---
+
 ![Dashboard Overview](images/dashboard.png)
 
 ---
 
 ## Installation
-
-### Quick start (recommended)
-```bash
-npx token-bleed
-```
 
 ### Install permanently
 ```bash
