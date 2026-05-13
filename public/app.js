@@ -195,6 +195,7 @@ const state = {
   view: 'overview',
   periodMode: 'calendar',
   period: 'all',
+  overviewSessionSort: 'cost',
   sessionsPage: 0,
   sessionsLimit: 50,
   sessionsFilter: { projectId: '', model: '' },
@@ -652,7 +653,10 @@ async function renderOverview() {
 
       <div class="section">
         <div class="section-header">
-          <div class="section-title">Recent Sessions</div>
+          <select id="overview-session-sort" class="section-title-select" aria-label="Dashboard sessions list">
+            <option value="cost" ${state.overviewSessionSort === 'cost' ? 'selected' : ''}>Most Expensive Sessions</option>
+            <option value="recent" ${state.overviewSessionSort === 'recent' ? 'selected' : ''}>Recent Sessions</option>
+          </select>
           <a href="#sessions" class="secondary" style="font-size:12px;text-decoration:none">View all →</a>
         </div>
         <div id="recent-sessions-wrap">
@@ -671,14 +675,28 @@ async function renderOverview() {
     });
     showOnboardingIfNeeded();
 
-    // Load recent sessions async
-    const { sessions } = await api.sessions({ limit: 10, offset: 0 });
-    const recentWrap = document.getElementById('recent-sessions-wrap');
-    recentWrap.innerHTML = renderSessionsTable(sessions, { compact: true });
-    bindSessionExpansion(recentWrap);
+    document.getElementById('overview-session-sort')?.addEventListener('change', async (e) => {
+      state.overviewSessionSort = e.target.value;
+      await loadOverviewSessions();
+    });
+
+    await loadOverviewSessions();
   } catch (e) {
     showError(e);
   }
+}
+
+async function loadOverviewSessions() {
+  const sessionsParams = { limit: 10, offset: 0 };
+  if (state.overviewSessionSort === 'cost') sessionsParams.sort = 'cost';
+
+  const recentWrap = document.getElementById('recent-sessions-wrap');
+  if (!recentWrap) return;
+
+  recentWrap.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  const { sessions } = await api.sessions(sessionsParams);
+  recentWrap.innerHTML = renderSessionsTable(sessions, { compact: true });
+  bindSessionExpansion(recentWrap);
 }
 
 // ── Projects ───────────────────────────────────────────────────

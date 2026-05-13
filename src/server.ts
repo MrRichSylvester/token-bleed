@@ -93,6 +93,11 @@ app.get('/api/sessions', async (req) => {
   let filtered = sessions;
   if (query.projectId) filtered = filtered.filter((s) => s.projectId === query.projectId);
   if (query.model) filtered = filtered.filter((s) => s.primaryModel === query.model);
+  if (query.sort === 'cost') {
+    filtered = [...filtered].sort((a, b) =>
+      (b.cost - a.cost) || new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+    );
+  }
 
   const limit = Math.min(parseInt(query.limit ?? '100', 10), 500);
   const offset = parseInt(query.offset ?? '0', 10);
