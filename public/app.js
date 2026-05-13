@@ -342,6 +342,66 @@ function animateHbars(container) {
   });
 }
 
+function renderProjectTokenComparison(projects, limit = 6) {
+  const rows = (projects || [])
+    .slice(0, limit)
+    .map(p => ({
+      name: p.name || 'Untitled project',
+      lastActivity: p.lastActivity,
+      input: p.usage?.inputTokens || 0,
+      output: p.usage?.outputTokens || 0,
+      cacheRead: p.usage?.cacheReadTokens || 0,
+      cacheWrite: p.usage?.cacheCreationTokens || 0,
+    }))
+    .filter(p => p.input + p.output + p.cacheRead + p.cacheWrite > 0);
+
+  if (rows.length === 0) return '<p class="muted" style="padding:8px 0">No data.</p>';
+
+  return `<div class="project-token-wrap">
+    ${rows.map(p => {
+      const primaryTotal = p.input + p.output;
+      const inputPct = primaryTotal > 0 ? (p.input / primaryTotal) * 100 : 0;
+      const outputPct = primaryTotal > 0 ? (p.output / primaryTotal) * 100 : 0;
+      const dominant = outputPct >= inputPct
+        ? { label: 'Output', pct: outputPct, className: 'output' }
+        : { label: 'Input', pct: inputPct, className: 'input' };
+      const secondary = outputPct >= inputPct
+        ? { label: 'Input', pct: inputPct }
+        : { label: 'Output', pct: outputPct };
+      const tip = `${p.name}: input ${fmtTokens(p.input)} (${fmtPct(inputPct / 100)}) · output ${fmtTokens(p.output)} (${fmtPct(outputPct / 100)}) · cache read ${fmtTokens(p.cacheRead)} · cache write ${fmtTokens(p.cacheWrite)}`;
+
+      return `<div class="project-token-row" data-tip="${escHtml(tip)}">
+        <div class="project-token-label">
+          <div class="project-token-name">${escHtml(p.name)}</div>
+          <div class="project-token-date">${fmtDate(p.lastActivity)}</div>
+        </div>
+        <div class="project-token-bars">
+          <div class="project-token-values">
+            <span class="project-token-kind input">Input <strong>${fmtTokens(p.input)}</strong></span>
+            <span class="project-token-kind output">Output <strong>${fmtTokens(p.output)}</strong></span>
+          </div>
+          <div class="project-token-track">
+            <div class="project-token-fill input ${p.input > 0 ? 'active' : ''}" style="width:0" data-w="${inputPct}%"></div>
+            <div class="project-token-fill output ${p.output > 0 ? 'active' : ''}" style="width:0" data-w="${outputPct}%"></div>
+          </div>
+          <div class="project-token-total">${fmtTokens(primaryTotal)} input + output</div>
+        </div>
+        <div class="project-token-mix ${dominant.className}">
+          <span>Mix</span>
+          <strong>${fmtPct(dominant.pct / 100)} ${dominant.label}</strong>
+          <em>${fmtPct(secondary.pct / 100)} ${secondary.label}</em>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function animateProjectTokenBars(container) {
+  container.querySelectorAll('.project-token-fill[data-w]').forEach((el, i) => {
+    setTimeout(() => { el.style.width = el.dataset.w; }, 120 + i * 70);
+  });
+}
+
 // ── Metric card drag-and-drop ──────────────────────────────────
 
 function initDraggableCards(container) {
@@ -531,13 +591,14 @@ function scaleUsageGrid() {
 async function renderOverview() {
   setLoading();
   try {
-    const [stats, daily, models, dailyAll] = await Promise.all([
-      api.stats(), api.daily(), api.models(),
+    const [stats, daily, models, projects, dailyAll] = await Promise.all([
+      api.stats(), api.daily(), api.models(), api.projects(),
       api.fetch('/api/daily'),
     ]);
     state.data.stats = stats;
     state.data.daily = daily;
     state.data.models = models;
+    state.data.projects = projects;
 
     // Usage by model — all models, session count as universal bar metric
     const modelRows = models.slice(0, 8).map(m => ({
@@ -546,14 +607,6 @@ async function renderOverview() {
       sub: m.isLocal ? 'local' : fmtCost(m.totalCost),
       color: m.isLocal ? 'amber' : 'blue',
     }));
-
-    // Token breakdown rows — each type gets its own color
-    const tokenRows = [
-      { label: 'Cache Read',  value: stats.cacheReadTokens,     sub: fmtPct(stats.cacheReadTokens / (stats.totalTokens || 1)),     color: 'violet' },
-      { label: 'Cache Write', value: stats.cacheCreationTokens, sub: fmtPct(stats.cacheCreationTokens / (stats.totalTokens || 1)), color: 'blue'   },
-      { label: 'Output',      value: stats.outputTokens,        sub: fmtPct(stats.outputTokens / (stats.totalTokens || 1)),        color: 'green'  },
-      { label: 'Input',       value: stats.inputTokens,         sub: fmtPct(stats.inputTokens / (stats.totalTokens || 1)),         color: 'amber'  },
-    ].filter(r => r.value > 0);
 
     // Entrypoint breakdown
     const epLabelMap = { 'claude-vscode': 'VS Code', 'cli': 'CLI', 'claude-desktop': 'Desktop' };
@@ -631,8 +684,8 @@ async function renderOverview() {
           <div class="hbar-wrap">${renderHorizBars(modelRows, { fmtVal: n => `${n}` })}</div>
         </div>
         <div class="chart-wrap">
-          <div class="chart-title">Token Breakdown</div>
-          <div class="hbar-wrap">${renderHorizBars(tokenRows, { fmtVal: fmtTokens })}</div>
+          <div class="chart-title">Last 6 Projects: Input vs Output</div>
+          ${renderProjectTokenComparison(projects, 6)}
         </div>
       </div>
 
@@ -667,6 +720,7 @@ async function renderOverview() {
 
     initDraggableCards(content);
     animateHbars(content);
+    animateProjectTokenBars(content);
     requestAnimationFrame(() => {
       scaleUsageGrid();
       // Scroll activity grid to the most recent weeks (rightmost)

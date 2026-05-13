@@ -998,6 +998,161 @@ td.msg-prompt {
   white-space: nowrap;
 }
 
+/* ── Project token comparison ── */
+.project-token-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  padding-top: 2px;
+}
+
+.project-token-row {
+  display: grid;
+  grid-template-columns: minmax(108px, 145px) minmax(220px, 1fr) minmax(112px, auto);
+  align-items: center;
+  gap: 14px;
+  padding: 6px 4px;
+  border-radius: var(--radius-sm);
+  transition: background 120ms;
+}
+
+.project-token-row:hover {
+  background: var(--surface-2);
+}
+
+.project-token-label {
+  min-width: 0;
+}
+
+.project-token-name {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-token-date {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.project-token-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.project-token-values {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.project-token-kind {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.project-token-kind strong {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-left: 6px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.project-token-kind.input { color: var(--amber); }
+.project-token-kind.output {
+  color: var(--accent);
+  text-align: right;
+}
+
+.project-token-track {
+  display: flex;
+  height: 14px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.project-token-fill {
+  height: 100%;
+  transition: width 850ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  flex: 0 0 auto;
+}
+
+.project-token-fill.input {
+  background: linear-gradient(90deg, rgba(255,181,71,0.24), rgba(255,181,71,0.7));
+}
+
+.project-token-fill.input.active {
+  min-width: 2px;
+}
+
+.project-token-fill.output {
+  background: linear-gradient(90deg, rgba(0,255,135,0.24), rgba(0,255,135,0.72));
+}
+
+.project-token-fill.output.active {
+  min-width: 2px;
+}
+
+.project-token-total {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.project-token-mix {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  color: var(--text-secondary);
+  min-width: 0;
+}
+
+.project-token-mix span {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.project-token-mix strong {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.project-token-mix.output strong {
+  color: var(--accent);
+}
+
+.project-token-mix.input strong {
+  color: var(--amber);
+}
+
+.project-token-mix em {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  white-space: nowrap;
+}
+
 /* ── Chart wrap ── */
 /* ── Usage Grid ── */
 
@@ -1902,8 +2057,16 @@ td.msg-prompt {
 @media (max-width: 960px) {
   .overview-top { grid-template-columns: repeat(2, 1fr); grid-template-rows: auto; }
   .overview-activity { grid-column: auto; grid-row: auto; }
+  .chart-row-2 { grid-template-columns: 1fr; }
   .token-stats-row { flex-wrap: wrap; }
   .token-stat { flex: 0 0 50%; border-bottom: 1px solid var(--border); }
+  .project-token-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .project-token-mix {
+    justify-items: start;
+  }
 }
 
 /* ── Period selector ── */
