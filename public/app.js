@@ -204,8 +204,9 @@ const state = {
   compModel2: '',
   compSession1Id: '',
   compSession2Id: '',
-  compSelection: [], // [{id, label}] max 2
-  scHiddenMetrics: new Set(),
+  compSelection: [], // [{id, label}] max 6
+  scHiddenMetrics: loadStoredStringSet('br-sc-hidden-metrics'),
+  scViewMode: loadStoredChoice('br-sc-view-mode', ['table', 'cards'], 'table'),
   data: {
     stats: null,
     daily: null,
@@ -231,6 +232,7 @@ function navigate(view, params = {}) {
 
 window.addEventListener('hashchange', () => {
   state.view = getView();
+  renderCompareBar();
   renderView();
 });
 
@@ -1050,7 +1052,7 @@ function renderCompareBar() {
     document.body.appendChild(bar);
   }
 
-  if (state.compSelection.length === 0) {
+  if (state.view === 'session-compare' || state.compSelection.length === 0) {
     bar.className = 'compare-bar compare-bar--hidden';
     bar.innerHTML = '';
     return;
@@ -1408,6 +1410,82 @@ function renderCompCard(m, isWinner, isLoser, savingsPct, vsModel) {
 
 const LOCAL_TOKEN_TIP = 'Local models send the full conversation context each turn rather than tracking cache reads separately. This inflates input counts vs. Claude sessions.';
 
+function loadStoredStringSet(key) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(key) || '[]');
+    return new Set(Array.isArray(stored) ? stored.filter(v => typeof v === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function loadStoredChoice(key, allowed, fallback) {
+  const stored = localStorage.getItem(key);
+  return allowed.includes(stored) ? stored : fallback;
+}
+
+function saveSessionCompareMetricPrefs() {
+  localStorage.setItem('br-sc-hidden-metrics', JSON.stringify([...state.scHiddenMetrics]));
+}
+
+function saveSessionCompareViewPref() {
+  localStorage.setItem('br-sc-view-mode', state.scViewMode);
+}
+
+function isLocalSession(s) {
+  return s.cost === 0 && (s.usage.inputTokens + s.usage.outputTokens) > 0;
+}
+
+function getSessionCompareMetrics() {
+  const localTooltip = LOCAL_TOKEN_TIP;
+  return [
+    { key: 'cost',          label: 'Cost',           val: s => s.cost,                                                                                             fmt: s => { const local = isLocalSession(s); return local ? '<span class="amber">local</span>' : fmtCost(s.cost); }, lowerBetter: true,  skipLocal: true },
+    { key: 'totalTokens',   label: 'Total Tokens',   val: s => s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens, fmt: s => fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens), lowerBetter: true  },
+    { key: 'inputTokens',   label: 'Input Tokens',   val: s => s.usage.inputTokens,           fmt: s => isLocalSession(s) ? `${fmtTokens(s.usage.inputTokens)} <span class="sc-metric-info" data-tip="${escHtml(localTooltip)}">?</span>` : fmtTokens(s.usage.inputTokens), lowerBetter: true  },
+    { key: 'outputTokens',  label: 'Output Tokens',  val: s => s.usage.outputTokens,          fmt: s => fmtTokens(s.usage.outputTokens),          lowerBetter: true  },
+    { key: 'cacheRead',     label: 'Cache Read',     val: s => s.usage.cacheReadTokens,       fmt: s => fmtTokens(s.usage.cacheReadTokens),       lowerBetter: false },
+    { key: 'cacheWrite',    label: 'Cache Write',    val: s => s.usage.cacheCreationTokens,   fmt: s => fmtTokens(s.usage.cacheCreationTokens),   lowerBetter: true  },
+    { key: 'cacheHitRate',  label: 'Cache Hit Rate', val: s => s.cacheHitRate,                fmt: s => fmtPct(s.cacheHitRate),                   lowerBetter: false },
+    { key: 'duration',      label: 'Duration',       val: s => s.duration,                    fmt: s => fmtDuration(s.duration),                  lowerBetter: true  },
+    { key: 'messages',      label: 'Messages',       val: s => s.messageCount,                fmt: s => s.messageCount.toString(),                lowerBetter: null  },
+    { key: 'toolCalls',     label: 'Tool Calls',     val: s => s.toolCallCount,               fmt: s => s.toolCallCount.toString(),               lowerBetter: null  },
+    { key: 'thinkingTurns', label: 'Thinking Turns', val: s => s.thinkingBlocks || 0,         fmt: s => (s.thinkingBlocks || 0).toString(),       lowerBetter: null  },
+  ];
+}
+
+function getSelectedCompareSessions() {
+  const allSessions = state.data.allSessions ?? [];
+  return state.compSelection
+    .map(x => allSessions.find(s => s.id === x.id))
+    .filter(Boolean);
+}
+
+function getVisibleSessionCompareMetrics() {
+  return getSessionCompareMetrics().filter(m => !state.scHiddenMetrics.has(m.key));
+}
+
+function buildSessionCompareRanks(metrics, selected) {
+  const ranks = new Map();
+  metrics.forEach(m => {
+    if (m.lowerBetter === null) return;
+    const vals = selected.map(s => ({ s, v: m.val(s), local: isLocalSession(s) }));
+    const scoreable = vals.filter(x => !(m.skipLocal && x.local) && x.v > 0);
+    if (scoreable.length < 2) return;
+
+    const vs = scoreable.map(x => x.v);
+    const bestV = m.lowerBetter ? Math.min(...vs) : Math.max(...vs);
+    const worstV = m.lowerBetter ? Math.max(...vs) : Math.min(...vs);
+    if (bestV === worstV) return;
+
+    vals.forEach(({ s, v, local }) => {
+      if (m.skipLocal && local) return;
+      if (v === bestV) ranks.set(`${m.key}:${s.id}`, { cls: 'sc-cell-best', label: 'Best' });
+      else if (v === worstV) ranks.set(`${m.key}:${s.id}`, { cls: 'sc-cell-worst', label: 'Worst' });
+    });
+  });
+  return ranks;
+}
+
 // ── Session Comparison ─────────────────────────────────────────
 
 const SESSION_COMPARE_METRICS = [
@@ -1475,8 +1553,18 @@ function renderSessionComparePage() {
 
   const metricToggles = SESSION_COMPARE_METRICS.map(m => {
     const on = !state.scHiddenMetrics.has(m.key);
-    return `<button class="sc-metric-toggle${on ? ' sc-metric-toggle--on' : ''}" data-metric="${escHtml(m.key)}">${escHtml(m.label)}</button>`;
+    return `<button class="sc-metric-toggle${on ? ' sc-metric-toggle--on' : ''}" data-metric="${escHtml(m.key)}" aria-pressed="${on ? 'true' : 'false'}">${escHtml(m.label)}</button>`;
   }).join('');
+
+  const viewBtns = [
+    { key: 'table', label: 'Table' },
+    { key: 'cards', label: 'Cards' },
+  ].map(v => `
+    <button class="sc-view-btn${state.scViewMode === v.key ? ' sc-view-btn--active' : ''}" data-sc-view="${v.key}" aria-pressed="${state.scViewMode === v.key ? 'true' : 'false'}">
+      ${v.key === 'table' ? '<span class="sc-view-icon">▤</span>' : '<span class="sc-view-icon">▦</span>'}
+      ${v.label}
+    </button>
+  `).join('');
 
   const content = document.getElementById('content');
   content.innerHTML = `
@@ -1495,9 +1583,12 @@ function renderSessionComparePage() {
       ` : ''}
     </div>
 
-    <div class="sc-metrics-bar">
-      <span class="sc-metrics-bar-label">Metrics</span>
-      <div class="sc-metric-toggles">${metricToggles}</div>
+    <div class="sc-controls">
+      <div class="sc-metrics-bar">
+        <span class="sc-metrics-bar-label">Metrics</span>
+        <div class="sc-metric-toggles">${metricToggles}</div>
+      </div>
+      <div class="sc-view-switch" aria-label="Comparison view">${viewBtns}</div>
     </div>
 
     <div id="session-comparison-result"></div>
@@ -1532,52 +1623,63 @@ function renderSessionComparePage() {
       if (state.scHiddenMetrics.has(key)) {
         state.scHiddenMetrics.delete(key);
         btn.classList.add('sc-metric-toggle--on');
+        btn.setAttribute('aria-pressed', 'true');
       } else {
         state.scHiddenMetrics.add(key);
         btn.classList.remove('sc-metric-toggle--on');
+        btn.setAttribute('aria-pressed', 'false');
       }
-      renderSessionComparisonTable();
+      saveSessionCompareMetricPrefs();
+      renderSessionComparisonView();
     });
   });
 
-  renderSessionComparisonTable();
+  content.querySelectorAll('[data-sc-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.scView === state.scViewMode) return;
+      state.scViewMode = btn.dataset.scView;
+      saveSessionCompareViewPref();
+      content.querySelectorAll('[data-sc-view]').forEach(b => {
+        const active = b.dataset.scView === state.scViewMode;
+        b.classList.toggle('sc-view-btn--active', active);
+        b.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      renderSessionComparisonView();
+    });
+  });
+
+  renderSessionComparisonView();
 }
 
-function renderSessionComparisonTable() {
+function renderSessionComparisonView() {
   const wrap = document.getElementById('session-comparison-result');
   if (!wrap) return;
 
-  const allSessions = state.data.allSessions ?? [];
-  const selected = state.compSelection
-    .map(x => allSessions.find(s => s.id === x.id))
-    .filter(Boolean);
+  const selected = getSelectedCompareSessions();
 
   if (selected.length < 2) {
     wrap.innerHTML = `<div class="empty-state" style="margin-top:24px"><div class="empty-icon">⇄</div><div class="empty-msg">Add at least 2 sessions to compare</div></div>`;
     return;
   }
 
-  function isLocal(s) { return s.cost === 0 && (s.usage.inputTokens + s.usage.outputTokens) > 0; }
+  const metrics = getVisibleSessionCompareMetrics();
+  if (metrics.length === 0) {
+    wrap.innerHTML = `<div class="empty-state" style="margin-top:24px"><div class="empty-icon">◇</div><div class="empty-msg">Show at least one metric to compare</div></div>`;
+    return;
+  }
 
-  const localTooltip = LOCAL_TOKEN_TIP;
+  if (state.scViewMode === 'cards') {
+    renderSessionComparisonCards(wrap, selected, metrics);
+  } else {
+    renderSessionComparisonTable(wrap, selected, metrics);
+  }
+}
 
-  const allMetrics = [
-    { key: 'cost',          label: 'Cost',           val: s => s.cost,                                                                                             fmt: s => { const local = isLocal(s); return local ? '<span class="amber">local</span>' : fmtCost(s.cost); }, lowerBetter: true,  skipLocal: true },
-    { key: 'totalTokens',   label: 'Total Tokens',   val: s => s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens, fmt: s => fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens), lowerBetter: true  },
-    { key: 'inputTokens',   label: 'Input Tokens',   val: s => s.usage.inputTokens,           fmt: s => isLocal(s) ? `${fmtTokens(s.usage.inputTokens)} <span class="sc-metric-info" data-tip="${escHtml(localTooltip)}">?</span>` : fmtTokens(s.usage.inputTokens), lowerBetter: true  },
-    { key: 'outputTokens',  label: 'Output Tokens',  val: s => s.usage.outputTokens,          fmt: s => fmtTokens(s.usage.outputTokens),          lowerBetter: true  },
-    { key: 'cacheRead',     label: 'Cache Read',     val: s => s.usage.cacheReadTokens,       fmt: s => fmtTokens(s.usage.cacheReadTokens),       lowerBetter: false },
-    { key: 'cacheWrite',    label: 'Cache Write',    val: s => s.usage.cacheCreationTokens,   fmt: s => fmtTokens(s.usage.cacheCreationTokens),   lowerBetter: true  },
-    { key: 'cacheHitRate',  label: 'Cache Hit Rate', val: s => s.cacheHitRate,                fmt: s => fmtPct(s.cacheHitRate),                   lowerBetter: false },
-    { key: 'duration',      label: 'Duration',       val: s => s.duration,                    fmt: s => fmtDuration(s.duration),                  lowerBetter: true  },
-    { key: 'messages',      label: 'Messages',       val: s => s.messageCount,                fmt: s => s.messageCount.toString(),                lowerBetter: null  },
-    { key: 'toolCalls',     label: 'Tool Calls',     val: s => s.toolCallCount,               fmt: s => s.toolCallCount.toString(),               lowerBetter: null  },
-    { key: 'thinkingTurns', label: 'Thinking Turns', val: s => s.thinkingBlocks || 0,         fmt: s => (s.thinkingBlocks || 0).toString(),       lowerBetter: null  },
-  ];
-  const metrics = allMetrics.filter(m => !state.scHiddenMetrics.has(m.key));
+function renderSessionComparisonTable(wrap, selected, metrics) {
+  const ranks = buildSessionCompareRanks(metrics, selected);
 
   const colHeaders = selected.map((s, i) => {
-    const local = isLocal(s);
+    const local = isLocalSession(s);
     return `<th class="sc-col-header">
       <div class="sc-col-letter">${COMP_LETTERS[i]}</div>
       <div class="sc-col-project">${escHtml(s.projectName)}</div>
@@ -1588,26 +1690,9 @@ function renderSessionComparisonTable() {
   }).join('');
 
   const metricRows = metrics.map(m => {
-    const vals = selected.map(s => ({ s, v: m.val(s), local: isLocal(s) }));
-
-    // Find best/worst among non-local sessions when lowerBetter is defined
-    let bestV = null, worstV = null;
-    if (m.lowerBetter !== null) {
-      const scoreable = vals.filter(x => !(m.skipLocal && x.local) && x.v > 0);
-      if (scoreable.length >= 2) {
-        const vs = scoreable.map(x => x.v);
-        bestV  = m.lowerBetter ? Math.min(...vs) : Math.max(...vs);
-        worstV = m.lowerBetter ? Math.max(...vs) : Math.min(...vs);
-      }
-    }
-
-    const cells = vals.map(({ s, v, local }) => {
-      let cls = '';
-      if (bestV !== null && !(m.skipLocal && local)) {
-        if (v === bestV && bestV !== worstV) cls = 'sc-cell-best';
-        else if (v === worstV && bestV !== worstV) cls = 'sc-cell-worst';
-      }
-      return `<td class="sc-cell ${cls}">${m.fmt(s)}</td>`;
+    const cells = selected.map(s => {
+      const rank = ranks.get(`${m.key}:${s.id}`);
+      return `<td class="sc-cell ${rank?.cls || ''}">${m.fmt(s)}</td>`;
     }).join('');
 
     return `<tr><td class="sc-metric-label">${escHtml(m.label)}</td>${cells}</tr>`;
@@ -1624,6 +1709,64 @@ function renderSessionComparisonTable() {
         </thead>
         <tbody>${metricRows}</tbody>
       </table>
+    </div>
+    <div class="sc-legend">
+      <span class="sc-legend-item"><span class="sc-cell-best sc-legend-swatch"></span> Best</span>
+      <span class="sc-legend-item"><span class="sc-cell-worst sc-legend-swatch"></span> Worst</span>
+    </div>
+  `;
+}
+
+function renderSessionComparisonCards(wrap, selected, metrics) {
+  const ranks = buildSessionCompareRanks(metrics, selected);
+  const heroOrder = ['cost', 'totalTokens', 'duration', 'cacheHitRate'];
+  const heroMetrics = heroOrder
+    .map(key => metrics.find(m => m.key === key))
+    .filter(Boolean)
+    .concat(metrics.filter(m => !heroOrder.includes(m.key)))
+    .slice(0, 4);
+  const heroKeys = new Set(heroMetrics.map(m => m.key));
+  const detailMetrics = metrics.filter(m => !heroKeys.has(m.key));
+
+  const cards = selected.map((s, i) => {
+    const local = isLocalSession(s);
+    const hero = heroMetrics.map(m => {
+      const rank = ranks.get(`${m.key}:${s.id}`);
+      return `<div class="sc-big-metric ${rank?.cls || ''}">
+        <div class="sc-big-metric-label">
+          <span>${escHtml(m.label)}</span>
+          ${rank ? `<em>${rank.label}</em>` : ''}
+        </div>
+        <div class="sc-big-metric-value">${m.fmt(s)}</div>
+      </div>`;
+    }).join('');
+
+    const details = detailMetrics.map(m => {
+      const rank = ranks.get(`${m.key}:${s.id}`);
+      return `<div class="sc-card-metric-row ${rank?.cls || ''}">
+        <span>${escHtml(m.label)}</span>
+        <strong>${m.fmt(s)}</strong>
+      </div>`;
+    }).join('');
+
+    return `<article class="sc-compare-card sc-compare-card--${i % 6}">
+      <div class="sc-card-header">
+        <div class="sc-card-letter">${COMP_LETTERS[i]}</div>
+        <div class="sc-card-title-wrap">
+          <h2 class="sc-card-title">${escHtml(s.projectName)}</h2>
+          <div class="sc-card-meta">${fmtDateTime(s.startTime)}</div>
+        </div>
+      </div>
+      <div class="sc-card-model">${modelBadgeHtml(s.primaryModel, local)}</div>
+      <p class="sc-card-prompt" title="${escHtml(s.firstPrompt)}">${escHtml(s.firstPrompt)}</p>
+      <div class="sc-big-metrics">${hero}</div>
+      ${details ? `<div class="sc-card-metric-list">${details}</div>` : ''}
+    </article>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="sc-cards-stage">
+      <div class="sc-card-grid">${cards}</div>
     </div>
     <div class="sc-legend">
       <span class="sc-legend-item"><span class="sc-cell-best sc-legend-swatch"></span> Best</span>

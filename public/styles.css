@@ -2630,13 +2630,22 @@ td.msg-prompt {
   flex-shrink: 0;
 }
 
-/* ── Session compare metrics bar ── */
+/* ── Session compare controls ── */
+.sc-controls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
 .sc-metrics-bar {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 20px;
   flex-wrap: wrap;
+  flex: 1 1 520px;
 }
 
 .sc-metrics-bar-label {
@@ -2672,8 +2681,51 @@ td.msg-prompt {
 }
 
 .sc-metric-toggle:hover:not(.sc-metric-toggle--on) {
-  border-color: var(--border-3);
+  border-color: var(--border-2);
   color: var(--text-secondary);
+}
+
+.sc-view-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.sc-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 11px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.92rem;
+  font-weight: 600;
+  transition: background 120ms, color 120ms, border-color 120ms;
+}
+
+.sc-view-btn--active {
+  background: var(--surface-3);
+  border-color: var(--border-2);
+  color: var(--text-primary);
+}
+
+.sc-view-btn:hover:not(.sc-view-btn--active) {
+  color: var(--text-secondary);
+}
+
+.sc-view-icon {
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--accent);
 }
 
 /* ── Session compare table ── */
@@ -2781,6 +2833,229 @@ td.msg-prompt {
   display: flex;
   gap: 20px;
   padding: 12px 4px 0;
+}
+
+/* ── Session compare cards ── */
+.sc-cards-stage {
+  padding: 18px;
+  background:
+    linear-gradient(135deg, rgba(0, 255, 135, 0.06), rgba(91, 141, 239, 0.04) 42%, rgba(255, 181, 71, 0.04));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.sc-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.sc-compare-card {
+  --sc-card-accent: var(--accent);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 420px;
+  padding: 18px;
+  background: rgba(12, 15, 26, 0.94);
+  border: 1px solid var(--border-2);
+  border-top: 3px solid var(--sc-card-accent);
+  border-radius: 8px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+
+.sc-compare-card--1 { --sc-card-accent: var(--blue); }
+.sc-compare-card--2 { --sc-card-accent: var(--violet); }
+.sc-compare-card--3 { --sc-card-accent: var(--amber); }
+.sc-compare-card--4 { --sc-card-accent: var(--red); }
+.sc-compare-card--5 { --sc-card-accent: #7dd3fc; }
+
+.sc-card-header {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.sc-card-letter {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  background: color-mix(in srgb, var(--sc-card-accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sc-card-accent) 35%, transparent);
+  border-radius: 8px;
+  color: var(--sc-card-accent);
+  font-family: var(--font-mono);
+  font-size: 1.38rem;
+  font-weight: 800;
+}
+
+.sc-card-title-wrap {
+  min-width: 0;
+}
+
+.sc-card-title {
+  color: var(--text-primary);
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sc-card-meta {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.sc-card-model {
+  min-height: 24px;
+}
+
+.sc-card-prompt {
+  min-height: 58px;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sc-big-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sc-big-metric {
+  min-height: 102px;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.sc-big-metric-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.sc-big-metric-label em {
+  color: inherit;
+  font-style: normal;
+  font-size: 0.69rem;
+  padding: 2px 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  opacity: 0.9;
+}
+
+.sc-big-metric-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: clamp(1.38rem, 2.4vw, 2.15rem);
+  font-weight: 800;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.sc-big-metric.sc-cell-best,
+.sc-card-metric-row.sc-cell-best {
+  border-color: rgba(0, 255, 135, 0.28);
+  background: rgba(0, 255, 135, 0.07);
+}
+
+.sc-big-metric.sc-cell-worst,
+.sc-card-metric-row.sc-cell-worst {
+  border-color: rgba(255, 90, 90, 0.28);
+  background: rgba(255, 90, 90, 0.07);
+}
+
+.sc-card-metric-list {
+  display: grid;
+  gap: 7px;
+  margin-top: auto;
+}
+
+.sc-card-metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.sc-card-metric-row span {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.sc-card-metric-row strong {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+[data-theme="light"] .sc-cards-stage {
+  background:
+    linear-gradient(135deg, rgba(0, 168, 94, 0.08), rgba(47, 111, 212, 0.06) 42%, rgba(180, 83, 9, 0.05));
+}
+
+[data-theme="light"] .sc-compare-card {
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.1);
+}
+
+@media (max-width: 960px) {
+  .sc-view-switch {
+    width: 100%;
+  }
+
+  .sc-view-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .sc-cards-stage {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 520px) {
+  .sc-card-grid,
+  .sc-big-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .sc-compare-card {
+    min-height: 0;
+    padding: 14px;
+  }
 }
 
 .sc-metric-info {
