@@ -3380,16 +3380,9 @@ td.msg-prompt {
   -webkit-backdrop-filter: blur(0px);
 }
 
-.sc-veil-label {
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+.sc-veil-icon {
   color: var(--text-secondary);
-  background: var(--surface-3);
-  border: 1px solid var(--border-2);
-  border-radius: 6px;
-  padding: 8px 18px;
+  opacity: 0.5;
 }
 
 /* ── Session compare card view ── */
