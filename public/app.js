@@ -1600,10 +1600,11 @@ function renderCompareAddSlot(allSessions, variant) {
 
   return `
     <label class="sc-add-slot sc-add-slot--${variant}">
-      <span class="sc-add-plus">+</span>
-      <span class="sc-add-title">Add session</span>
+      <span class="sc-add-plus">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </span>
       <select class="sc-inline-add-select" aria-label="Add session to compare">
-        <option value="">Choose session</option>
+        <option value="">Add session…</option>
         ${addOptions}
       </select>
     </label>
@@ -1684,6 +1685,18 @@ function renderSessionComparePage() {
         </button>
       </div>
 
+      ${(() => {
+        const allSessions = state.data?.allSessions ?? [];
+        const selectedIds = new Set(state.compSelection.map(x => x.id));
+        const opts = allSessions
+          .filter(s => !selectedIds.has(s.id))
+          .map(s => `<option value="${escHtml(s.id)}">${escHtml(sessionDropdownLabel(s))}</option>`)
+          .join('');
+        return opts && state.compSelection.length < COMP_LETTERS.length
+          ? `<select class="sc-toolbar-add-select" id="sc-toolbar-add-select" aria-label="Add session to compare"><option value="">+ Add session</option>${opts}</select>`
+          : '';
+      })()}
+
       ${state.scView === 'card' ? `
         <button class="sc-present-btn${state.scPresent ? ' sc-present-btn--on' : ''}" id="sc-present-toggle">
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg>
@@ -1715,6 +1728,10 @@ function renderSessionComparePage() {
       content.querySelectorAll('[data-order]').forEach(b => b.classList.toggle('sc-view-btn--on', b.dataset.order === state.scOrder));
       renderSessionComparisonResult();
     });
+  });
+
+  document.getElementById('sc-toolbar-add-select')?.addEventListener('change', e => {
+    addCompareSession(e.target.value);
   });
 
   document.getElementById('sc-present-toggle')?.addEventListener('click', () => {
@@ -1901,9 +1918,8 @@ function renderSessionComparisonTable() {
     .map(x => allSessions.find(s => s.id === x.id))
     .filter(Boolean);
 
-  const addSlot = renderCompareAddSlot(allSessions, 'table');
-  if (selected.length === 0 && !addSlot) {
-    wrap.innerHTML = `<div class="empty-state" style="margin-top:24px"><div class="empty-icon">⇄</div><div class="empty-msg">No more sessions available</div></div>`;
+  if (selected.length === 0) {
+    wrap.innerHTML = `<div class="empty-state" style="margin-top:24px"><div class="empty-icon">⇄</div><div class="empty-msg">Use + Add session above to get started</div></div>`;
     return;
   }
 
@@ -1945,10 +1961,6 @@ function renderSessionComparisonTable() {
     </th>`;
   }).join('');
 
-  const addHeader = addSlot
-    ? `<th class="sc-col-header sc-add-col-header">${addSlot}</th>`
-    : '';
-
   const metricRows = metrics.map(m => {
     const vals = selected.map(s => ({ s, v: m.val(s), local: isLocal(s) }));
 
@@ -1970,7 +1982,7 @@ function renderSessionComparisonTable() {
         else if (v === worstV && bestV !== worstV) cls = 'sc-cell-worst';
       }
       return `<td class="sc-cell ${cls}">${m.fmt(s)}</td>`;
-    }).join('') + (addSlot ? '<td class="sc-cell sc-add-cell"></td>' : '');
+    }).join('');
 
     return `<tr><td class="sc-metric-label">${escHtml(m.label)}</td>${cells}</tr>`;
   }).join('');
@@ -1982,7 +1994,6 @@ function renderSessionComparisonTable() {
           <tr>
             <th class="sc-metric-label"></th>
             ${colHeaders}
-            ${addHeader}
           </tr>
         </thead>
         <tbody>${metricRows}</tbody>
@@ -2008,9 +2019,8 @@ function renderSessionComparisonCards() {
     .map(x => allSessions.find(s => s.id === x.id))
     .filter(Boolean);
 
-  const addSlot = renderCompareAddSlot(allSessions, 'card');
-  if (selected.length === 0 && !addSlot) {
-    wrap.innerHTML = `<div class="empty-state" style="margin-top:24px"><div class="empty-icon">⇄</div><div class="empty-msg">No more sessions available</div></div>`;
+  if (selected.length === 0) {
+    wrap.innerHTML = `<div class="empty-state" style="margin-top:24px"><div class="empty-icon">⇄</div><div class="empty-msg">Use + Add session above to get started</div></div>`;
     return;
   }
 
@@ -2100,7 +2110,6 @@ function renderSessionComparisonCards() {
     ${presentHint}
     <div class="sc-cards-grid">
       ${cards}
-      ${addSlot ? `<div class="sc-card sc-add-card">${addSlot}</div>` : ''}
     </div>
     ${selected.length >= 2 ? `
       <div class="sc-legend" style="margin-top:16px">
@@ -2109,8 +2118,6 @@ function renderSessionComparisonCards() {
       </div>
     ` : ''}
   `;
-
-  bindSessionCompareInlineControls(wrap);
 
   if (state.scPresent) {
     wrap.querySelectorAll('.sc-card--present').forEach(card => {

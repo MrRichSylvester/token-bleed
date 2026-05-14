@@ -2889,12 +2889,12 @@ td.msg-prompt {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 12px;
   min-height: 132px;
   width: 100%;
   border: 1px dashed var(--border-2);
   border-radius: var(--radius-sm);
-  background: rgba(255,255,255,0.025);
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   transition: border-color 140ms, background 140ms, color 140ms;
@@ -2902,8 +2902,8 @@ td.msg-prompt {
 
 .sc-add-slot:hover,
 .sc-add-slot:focus-within {
-  border-color: rgba(117, 163, 255, 0.42);
-  background: rgba(117, 163, 255, 0.08);
+  border-color: rgba(117, 163, 255, 0.4);
+  background: rgba(117, 163, 255, 0.05);
   color: var(--text-secondary);
 }
 
@@ -2911,40 +2911,40 @@ td.msg-prompt {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   border: 1px solid var(--border-2);
   background: var(--surface);
-  color: var(--text-secondary);
-  font-size: 1.65rem;
-  font-weight: 300;
-  line-height: 1;
+  color: var(--text-muted);
+  transition: border-color 140ms, color 140ms;
 }
 
-.sc-add-title {
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+.sc-add-slot:hover .sc-add-plus,
+.sc-add-slot:focus-within .sc-add-plus {
+  border-color: rgba(117, 163, 255, 0.5);
+  color: var(--accent);
 }
 
 .sc-inline-add-select {
-  width: min(100%, 220px);
+  width: min(100%, 200px);
   background: var(--surface);
   border: 1px solid var(--border-2);
   border-radius: 5px;
-  color: var(--text-secondary);
-  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-size: 0.81rem;
   font-family: var(--font-sans);
-  padding: 7px 28px 7px 10px;
+  padding: 6px 10px;
   outline: none;
   cursor: pointer;
+  transition: border-color 140ms, color 140ms;
 }
 
-.sc-inline-add-select:focus {
+.sc-inline-add-select:focus,
+.sc-add-slot:hover .sc-inline-add-select {
   border-color: rgba(117, 163, 255, 0.5);
-  box-shadow: 0 0 0 2px rgba(117, 163, 255, 0.12);
+  color: var(--text-secondary);
+  box-shadow: 0 0 0 2px rgba(117, 163, 255, 0.1);
 }
 
 .sc-col-letter {
@@ -3118,6 +3118,8 @@ td.msg-prompt {
   display: flex;
   align-items: center;
   gap: 6px;
+  height: 30px;
+  box-sizing: border-box;
   background: none;
   border: 1px solid var(--border-2);
   border-radius: var(--radius-sm);
@@ -3125,9 +3127,8 @@ td.msg-prompt {
   cursor: pointer;
   font-size: 0.82rem;
   font-family: var(--font-sans);
-  padding: 5px 13px;
+  padding: 0 13px;
   transition: background 150ms, color 150ms, border-color 150ms;
-  margin-left: auto;
   white-space: nowrap;
 }
 
@@ -3141,6 +3142,29 @@ td.msg-prompt {
   color: var(--violet);
   border-color: rgba(185,133,244,0.4);
   background: var(--violet-dim);
+}
+
+.sc-toolbar-add-select {
+  width: 200px;
+  height: 30px;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-family: var(--font-sans);
+  padding: 0 10px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 140ms, color 140ms;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.sc-toolbar-add-select:hover,
+.sc-toolbar-add-select:focus {
+  border-color: rgba(117, 163, 255, 0.45);
+  color: var(--text-secondary);
 }
 
 .sc-present-hint {
