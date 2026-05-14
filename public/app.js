@@ -18,6 +18,28 @@ function fmtTokens(n) {
   return n.toString();
 }
 
+const MIB = 1024 * 1024;
+
+function fmtBytes(n) {
+  if (!Number.isFinite(n) || n <= 0) return '0 B';
+  if (n >= MIB) return `${(n / MIB).toFixed(n >= 10 * MIB ? 0 : 1)} MB`;
+  if (n >= 1024) return `${(n / 1024).toFixed(n >= 10 * 1024 ? 0 : 1)} KB`;
+  return `${Math.round(n)} B`;
+}
+
+function codexHistoryCapText(codexHistory) {
+  if (codexHistory?.persistence === 'none') return 'Off';
+  if (Number.isFinite(codexHistory?.maxBytes) && codexHistory.maxBytes > 0) return fmtBytes(codexHistory.maxBytes);
+  return 'No size cap';
+}
+
+function codexHistoryInputMb(codexHistory) {
+  const maxBytes = Number.isFinite(codexHistory?.maxBytes) && codexHistory.maxBytes > 0
+    ? codexHistory.maxBytes
+    : 100 * MIB;
+  return Math.max(1, Math.round(maxBytes / MIB));
+}
+
 function fmtPct(n) {
   return `${(n * 100).toFixed(1)}%`;
 }
@@ -160,6 +182,7 @@ const api = {
   refresh: () => api.fetch('/api/refresh'),
   meta: () => api.fetch('/api/meta'),
   saveSetting: (key, value) => api.fetch(`/api/settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [key]: value }) }),
+  saveCodexHistory: (maxBytes) => api.fetch('/api/codex-history-settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ maxBytes }) }),
   appSettings: () => api.fetch('/api/app-settings'),
   saveAppSettings: (patch) => api.fetch('/api/app-settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }),
   tips: () => api.fetch('/api/tips'),
@@ -2815,6 +2838,8 @@ async function renderSettings() {
     const { plan, codexPlan, customPricing, builtinPricing, detectedModels, legacyModelKeys = [] } = appSettings;
     const legacySet = new Set(legacyModelKeys);
     const cleanupDays = meta.cleanupPeriodDays ?? 30;
+    const codexHistory = meta.codexHistory ?? {};
+    const codexHistoryMb = codexHistoryInputMb(codexHistory);
 
     // Models that appear in sessions but have no built-in pricing (custom/local/unknown)
     const unknownModels = detectedModels.filter(m => !builtinPricing[m] &&
@@ -2943,19 +2968,37 @@ async function renderSettings() {
         <div class="settings-section-title">Log Retention</div>
         <div class="settings-section-desc">
           Token Bleed reads local session logs from Claude Code and Codex.
-          Claude Code logs are currently kept for <strong>${cleanupDays} days</strong> — after that Claude Code deletes them and they disappear from this dashboard too.
-          Codex manages its own log retention separately.
-          90 days is a good default.
+          Claude Code uses a day limit. Codex uses a size cap for saved local history.
         </div>
-        <div class="retention-row">
-          <span class="settings-label">Keep logs for</span>
-          <input class="settings-number-input" id="retention-days-input" type="number" min="1" max="3650" value="${cleanupDays}">
-          <span class="settings-label">days</span>
-          <button class="btn-primary" id="retention-save-btn">Save</button>
-          <span id="retention-save-status" class="settings-save-status"></span>
+        <div class="retention-subsection">
+          <div class="retention-subsection-title">Claude Code</div>
+          <div class="settings-section-desc">
+            Currently kept for <strong>${cleanupDays} days</strong>. 90 days is a good default.
+          </div>
+          <div class="retention-row">
+            <span class="settings-label">Keep logs for</span>
+            <input class="settings-number-input" id="retention-days-input" type="number" min="1" max="3650" value="${cleanupDays}">
+            <span class="settings-label">days</span>
+            <button class="btn-primary" id="retention-save-btn">Save</button>
+            <span id="retention-save-status" class="settings-save-status"></span>
+          </div>
+          <div class="usage-retention-warning" id="retention-zero-warning" style="display:none">
+            ⚠ Setting to 0 disables transcript writing entirely. Using 1 instead.
+          </div>
         </div>
-        <div class="usage-retention-warning" id="retention-zero-warning" style="display:none">
-          ⚠ Setting to 0 disables transcript writing entirely. Using 1 instead.
+        <div class="retention-subsection">
+          <div class="retention-subsection-title">Codex</div>
+          <div class="settings-section-desc">
+            Current history cap: <strong>${codexHistoryCapText(codexHistory)}</strong>.
+            History file: ${fmtBytes(codexHistory.historyBytes ?? 0)}. Session logs on disk: ${fmtBytes(codexHistory.sessionsBytes ?? 0)}.
+          </div>
+          <div class="retention-row">
+            <span class="settings-label">Keep history up to</span>
+            <input class="settings-number-input" id="codex-history-mb-input" type="number" min="1" max="102400" value="${codexHistoryMb}">
+            <span class="settings-label">MB</span>
+            <button class="btn-primary" id="codex-history-save-btn">Save</button>
+            <span id="codex-history-save-status" class="settings-save-status"></span>
+          </div>
         </div>
       </div>
 
@@ -3187,6 +3230,26 @@ async function renderSettings() {
         await api.saveSetting('cleanupPeriodDays', v);
         status.textContent = 'Saved';
         setTimeout(() => { status.textContent = ''; }, 2000);
+      } catch {
+        status.textContent = 'Error saving';
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // Codex history size save
+    document.getElementById('codex-history-save-btn')?.addEventListener('click', async () => {
+      let v = parseInt(document.getElementById('codex-history-mb-input').value, 10);
+      if (!Number.isFinite(v) || v < 1) return;
+      const btn = document.getElementById('codex-history-save-btn');
+      const status = document.getElementById('codex-history-save-status');
+      btn.disabled = true;
+      status.textContent = 'Saving…';
+      try {
+        const res = await api.saveCodexHistory(v * MIB);
+        const current = res.codexHistory;
+        status.textContent = `Saved · ${codexHistoryCapText(current)}`;
+        setTimeout(() => { status.textContent = ''; }, 2500);
       } catch {
         status.textContent = 'Error saving';
       } finally {
@@ -3788,35 +3851,63 @@ function initOllamaFlow() {
 
 // ── Onboarding / Settings modal ────────────────────────────────
 
-function showSettingsModal(meta) {
+function aboutStatsHtml() {
+  return `
+    <div class="about-stats-row" id="about-stats-row">
+      <span class="about-stat" id="about-stat-downloads"><span class="about-stat-val">—</span><span class="about-stat-label">installs this week</span></span>
+      <span class="about-stat-divider">·</span>
+      <span class="about-stat" id="about-stat-stars"><span class="about-stat-val">—</span><span class="about-stat-label">GitHub stars</span></span>
+    </div>
+  `;
+}
+
+function showRetentionModal(meta) {
   if (document.getElementById('onboarding-overlay')) return;
   const cleanupDays = meta?.cleanupPeriodDays ?? 30;
+  const codexHistory = meta?.codexHistory ?? {};
+  const codexHistoryMb = codexHistoryInputMb(codexHistory);
 
   const overlay = document.createElement('div');
   overlay.id = 'onboarding-overlay';
   overlay.className = 'onboarding-overlay';
   overlay.innerHTML = `
     <div class="onboarding-card">
-      <div class="onboarding-title">Log retention</div>
+      <div class="onboarding-title">Keep enough history</div>
       <p class="onboarding-text">
-        Token Bleed reads local Claude Code session logs.
-        Those logs are currently kept for <strong>${cleanupDays} days</strong> —
-        after that Claude Code deletes them and they're gone from this dashboard too.
+        Token Bleed reads local Claude Code and Codex session logs. If a tool deletes its logs, those sessions disappear from this dashboard too.
       </p>
-      <p class="onboarding-text">
-        Set it to however far back you want history. 90 days is a good default.
-      </p>
+      <div class="retention-status-grid">
+        <div class="retention-status-card">
+          <div class="retention-status-label">Claude Code</div>
+          <div class="retention-status-value">${cleanupDays} days</div>
+          <div class="retention-status-note">Token Bleed can update this setting.</div>
+        </div>
+        <div class="retention-status-card">
+          <div class="retention-status-label">Codex</div>
+          <div class="retention-status-value">${codexHistoryCapText(codexHistory)}</div>
+          <div class="retention-status-note">Codex uses a size cap instead of a day limit. Current history file: ${fmtBytes(codexHistory.historyBytes ?? 0)}.</div>
+        </div>
+      </div>
+      <p class="onboarding-text">Set Claude Code by days and Codex by file size. 90 days and 100 MB are good defaults.</p>
       <div class="onboarding-retention">
-        <span class="usage-config-label">Keep logs for</span>
+        <span class="usage-config-label">Claude logs</span>
         <input class="usage-config-input" id="ob-days-input" type="number" min="1" max="3650" value="${cleanupDays}">
         <span class="usage-config-label">days</span>
         <button class="usage-config-save" id="ob-days-save">Save</button>
+        <span id="ob-days-status" class="settings-save-status"></span>
+      </div>
+      <div class="onboarding-retention">
+        <span class="usage-config-label">Codex history</span>
+        <input class="usage-config-input" id="ob-codex-mb-input" type="number" min="1" max="102400" value="${codexHistoryMb}">
+        <span class="usage-config-label">MB</span>
+        <button class="usage-config-save" id="ob-codex-mb-save">Save</button>
+        <span id="ob-codex-status" class="settings-save-status"></span>
       </div>
       <div class="usage-retention-warning" id="ob-zero-warning" style="display:none">
-        ⚠ 0 disables transcript writing entirely. Setting to 1 instead.
+        0 disables transcript writing entirely. Setting to 1 instead.
       </div>
       <div class="onboarding-footer">
-        <button class="onboarding-dismiss" id="ob-dismiss">Close</button>
+        <button class="onboarding-dismiss" id="ob-dismiss">Maybe later</button>
       </div>
     </div>
   `;
@@ -3824,6 +3915,8 @@ function showSettingsModal(meta) {
 
   const input = overlay.querySelector('#ob-days-input');
   const saveBtn = overlay.querySelector('#ob-days-save');
+  const codexInput = overlay.querySelector('#ob-codex-mb-input');
+  const codexSaveBtn = overlay.querySelector('#ob-codex-mb-save');
   const warning = overlay.querySelector('#ob-zero-warning');
   const dismissBtn = overlay.querySelector('#ob-dismiss');
 
@@ -3845,9 +3938,11 @@ function showSettingsModal(meta) {
     warning.style.display = 'none';
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
+    const status = overlay.querySelector('#ob-days-status');
+    status.textContent = '';
     try {
       await api.saveSetting('cleanupPeriodDays', v);
-      dismiss();
+      status.textContent = 'Saved';
       renderOverview();
     } finally {
       saveBtn.disabled = false;
@@ -3855,11 +3950,28 @@ function showSettingsModal(meta) {
     }
   });
 
+  codexSaveBtn.addEventListener('click', async () => {
+    let v = parseInt(codexInput.value, 10);
+    if (!Number.isFinite(v) || v < 1) return;
+    codexSaveBtn.disabled = true;
+    codexSaveBtn.textContent = 'Saving…';
+    const status = overlay.querySelector('#ob-codex-status');
+    status.textContent = '';
+    try {
+      const res = await api.saveCodexHistory(v * MIB);
+      status.textContent = `Saved · ${codexHistoryCapText(res.codexHistory)}`;
+    } finally {
+      codexSaveBtn.disabled = false;
+      codexSaveBtn.textContent = 'Save';
+    }
+  });
+
   dismissBtn.addEventListener('click', dismiss);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') saveBtn.click(); });
+  codexInput.addEventListener('keydown', e => { if (e.key === 'Enter') codexSaveBtn.click(); });
 }
 
-function showAboutModal() {
+function showAboutModal(options = {}) {
   if (document.getElementById('about-overlay')) return;
 
   const overlay = document.createElement('div');
@@ -3906,12 +4018,6 @@ function showAboutModal() {
           Every line of code is on GitHub.
         </p>
 
-        <div class="about-stats-row" id="about-stats-row">
-          <span class="about-stat" id="about-stat-downloads"><span class="about-stat-val">—</span><span class="about-stat-label">installs this week</span></span>
-          <span class="about-stat-divider">·</span>
-          <span class="about-stat" id="about-stat-stars"><span class="about-stat-val">—</span><span class="about-stat-label">GitHub stars</span></span>
-        </div>
-
         <div class="about-links-row">
           <a class="about-pill" href="https://github.com/mrrichsylvester/token-bleed" target="_blank" rel="noopener">GitHub →</a>
           <a class="about-pill" href="https://youtube.com/@MrRichSylvester" target="_blank" rel="noopener">YouTube →</a>
@@ -3919,7 +4025,7 @@ function showAboutModal() {
         </div>
 
         <div class="onboarding-footer about-footer">
-          <span class="onboarding-hint">Adjust log retention in Settings on the side nav.</span>
+          ${aboutStatsHtml()}
           <button class="onboarding-dismiss" id="about-dismiss">Got it</button>
         </div>
       </div>
@@ -3948,19 +4054,27 @@ function showAboutModal() {
     } catch {}
   })();
 
-  function dismiss() {
+  function dismiss(runAfterGotIt = false) {
     overlay.classList.add('onboarding-out');
-    overlay.addEventListener('animationend', () => overlay.remove(), { once: true });
+    overlay.addEventListener('animationend', () => {
+      overlay.remove();
+      if (runAfterGotIt && typeof options.afterGotIt === 'function') options.afterGotIt();
+    }, { once: true });
   }
 
-  overlay.addEventListener('click', e => { if (e.target === overlay) dismiss(); });
-  overlay.querySelector('#about-dismiss').addEventListener('click', dismiss);
+  overlay.addEventListener('click', e => { if (e.target === overlay) dismiss(false); });
+  overlay.querySelector('#about-dismiss').addEventListener('click', () => dismiss(true));
 }
 
 function showOnboardingIfNeeded() {
   if (localStorage.getItem('br-seen-about')) return;
   localStorage.setItem('br-seen-about', '1');
-  showAboutModal();
+  showAboutModal({
+    afterGotIt: async () => {
+      const meta = await api.meta().catch(() => ({ cleanupPeriodDays: 30 }));
+      showRetentionModal(meta);
+    },
+  });
 }
 
 // ── Theme & Size ───────────────────────────────────────────────

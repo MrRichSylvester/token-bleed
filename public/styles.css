@@ -3771,6 +3771,42 @@ td.msg-prompt {
   margin: 18px 0 6px;
 }
 
+.retention-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.retention-status-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+
+.retention-status-label {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.retention-status-value {
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.retention-status-note {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
 .onboarding-footer {
   display: flex;
   align-items: center;
@@ -4006,6 +4042,27 @@ td.msg-prompt {
   margin-top: 20px;
   padding-top: 16px;
   border-top: 1px solid var(--border);
+}
+
+.about-footer .about-stats-row {
+  margin-bottom: 0;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 560px) {
+  .retention-status-grid,
+  .about-features {
+    grid-template-columns: 1fr;
+  }
+
+  .onboarding-retention {
+    flex-wrap: wrap;
+  }
+
+  .about-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 /* Shared link helpers */
@@ -4330,6 +4387,22 @@ td.msg-prompt {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.retention-subsection {
+  margin-top: 18px;
+}
+
+.retention-subsection + .retention-subsection {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.retention-subsection-title {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 6px;
 }
 
 .settings-label {

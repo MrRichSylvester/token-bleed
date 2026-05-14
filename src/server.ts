@@ -19,7 +19,20 @@ import {
 } from './providers.js';
 
 const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
+const CODEX_HOME = path.join(os.homedir(), '.codex');
+const CODEX_CONFIG_PATH = path.join(CODEX_HOME, 'config.toml');
+const CODEX_HISTORY_PATH = path.join(CODEX_HOME, 'history.jsonl');
+const CODEX_SESSIONS_DIR = path.join(CODEX_HOME, 'sessions');
 const APP_SETTINGS_PATH = path.join(os.homedir(), '.burn-rate-settings.json');
+
+type CodexHistoryPersistence = 'save-all' | 'none';
+
+interface CodexHistorySettings {
+  persistence: CodexHistoryPersistence;
+  maxBytes: number | null;
+  historyBytes: number;
+  sessionsBytes: number;
+}
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
   plan: 'api',
@@ -54,6 +67,136 @@ function readAppSettings(): AppSettings {
 
 function writeAppSettings(settings: AppSettings): void {
   fs.writeFileSync(APP_SETTINGS_PATH, JSON.stringify(settings, null, 2) + '\n');
+}
+
+function fileSize(filePath: string): number {
+  try {
+    return fs.statSync(filePath).size;
+  } catch {
+    return 0;
+  }
+}
+
+function dirSize(dirPath: string): number {
+  let total = 0;
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) total += dirSize(fullPath);
+    if (entry.isFile()) total += fileSize(fullPath);
+  }
+  return total;
+}
+
+function stripTomlComment(value: string): string {
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') inString = !inString;
+    if (ch === '#' && !inString) return value.slice(0, i).trim();
+  }
+  return value.trim();
+}
+
+function readCodexHistorySettings(): CodexHistorySettings {
+  let persistence: CodexHistoryPersistence = 'save-all';
+  let maxBytes: number | null = null;
+
+  try {
+    const lines = fs.readFileSync(CODEX_CONFIG_PATH, 'utf-8').split(/\r?\n/);
+    const sectionStart = lines.findIndex((line) => /^\s*\[history\]\s*(#.*)?$/.test(line));
+    if (sectionStart !== -1) {
+      for (let i = sectionStart + 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (/^\s*\[[^\]]+\]\s*(#.*)?$/.test(line)) break;
+        const match = line.match(/^\s*([A-Za-z0-9_-]+)\s*=\s*(.+?)\s*$/);
+        if (!match) continue;
+        const [, key, rawValue] = match;
+        const value = stripTomlComment(rawValue);
+        if (key === 'persistence') {
+          const parsed = value.replace(/^"|"$/g, '');
+          if (parsed === 'save-all' || parsed === 'none') persistence = parsed;
+        }
+        if (key === 'max_bytes') {
+          const parsed = Number(value);
+          maxBytes = Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : null;
+        }
+      }
+    }
+  } catch {
+    // Defaults match Codex when no config file or [history] section exists.
+  }
+
+  return {
+    persistence,
+    maxBytes,
+    historyBytes: fileSize(CODEX_HISTORY_PATH),
+    sessionsBytes: dirSize(CODEX_SESSIONS_DIR),
+  };
+}
+
+function tomlValue(value: string | number): string {
+  if (typeof value === 'number') return String(value);
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function updateTomlSection(filePath: string, section: string, values: Record<string, string | number>): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const original = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : '';
+  const lines = original ? original.split(/\r?\n/) : [];
+  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+
+  const valueLines = Object.entries(values).map(([key, value]) => `${key} = ${tomlValue(value)}`);
+  const sectionHeader = `[${section}]`;
+  const sectionStart = lines.findIndex((line) => new RegExp(`^\\s*\\[${section}\\]\\s*(#.*)?$`).test(line));
+
+  if (sectionStart === -1) {
+    const nextLines = [...lines];
+    if (nextLines.length > 0) nextLines.push('');
+    nextLines.push(sectionHeader, ...valueLines);
+    fs.writeFileSync(filePath, nextLines.join('\n') + '\n');
+    return;
+  }
+
+  let sectionEnd = lines.length;
+  for (let i = sectionStart + 1; i < lines.length; i++) {
+    if (/^\s*\[[^\]]+\]\s*(#.*)?$/.test(lines[i])) {
+      sectionEnd = i;
+      break;
+    }
+  }
+
+  const remaining = new Set(Object.keys(values));
+  const updatedSection = lines.slice(sectionStart, sectionEnd).map((line) => {
+    const match = line.match(/^(\s*)([A-Za-z0-9_-]+)(\s*=\s*)(.+?)\s*$/);
+    if (!match || !(match[2] in values)) return line;
+    remaining.delete(match[2]);
+    return `${match[1]}${match[2]}${match[3]}${tomlValue(values[match[2]])}`;
+  });
+
+  for (const key of remaining) updatedSection.push(`${key} = ${tomlValue(values[key])}`);
+
+  const nextLines = [
+    ...lines.slice(0, sectionStart),
+    ...updatedSection,
+    ...lines.slice(sectionEnd),
+  ];
+  fs.writeFileSync(filePath, nextLines.join('\n') + '\n');
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -235,7 +378,7 @@ app.get('/api/meta', async () => {
   const latestDate = sorted.length > 0 ? sorted[sorted.length - 1].startTime.slice(0, 10) : null;
   const settings = readClaudeSettings();
   const cleanupPeriodDays = typeof settings.cleanupPeriodDays === 'number' ? settings.cleanupPeriodDays : 30;
-  return { earliestDate, latestDate, cleanupPeriodDays };
+  return { earliestDate, latestDate, cleanupPeriodDays, codexHistory: readCodexHistorySettings() };
 });
 
 app.post('/api/settings', async (req, reply) => {
@@ -248,6 +391,18 @@ app.post('/api/settings', async (req, reply) => {
   existing.cleanupPeriodDays = value;
   fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(existing, null, 2) + '\n');
   return { ok: true, cleanupPeriodDays: value, corrected };
+});
+
+app.post('/api/codex-history-settings', async (req, reply) => {
+  const body = req.body as Record<string, unknown>;
+  const raw = Number(body.maxBytes);
+  if (!Number.isFinite(raw)) { reply.status(400); return { error: 'maxBytes must be a number' }; }
+  const maxBytes = Math.max(1024 * 1024, Math.round(raw));
+  updateTomlSection(CODEX_CONFIG_PATH, 'history', {
+    persistence: 'save-all',
+    max_bytes: maxBytes,
+  });
+  return { ok: true, codexHistory: readCodexHistorySettings() };
 });
 
 app.get('/api/app-settings', async () => {
