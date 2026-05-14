@@ -983,7 +983,7 @@ async function renderOverview() {
         <div class="metric-card">
           <span class="metric-help" data-tooltip="Percentage of input tokens served from Claude&#39;s prompt cache instead of being re-processed. Calculated as cache_read ÷ (input + cache_write + cache_read). Higher means more savings.">?</span>
           <div class="metric-label">Cache Hit Rate</div>
-          <div class="metric-value">${fmtPct(stats.cacheHitRate)}</div>
+          <div class="metric-value mono">${fmtPct(stats.cacheHitRate)}</div>
           <div class="metric-sub">${fmtTokens(stats.cacheReadTokens)} read tokens</div>
         </div>
       </div>
