@@ -2511,12 +2511,7 @@ function renderSessionComparisonCards() {
       </div>`;
   }).join('');
 
-  const presentHint = state.scPresent && selected.length > 0
-    ? `<p class="sc-present-hint">${state.scRevealed.size} of ${selected.length} revealed &mdash; click a card to reveal it</p>`
-    : '';
-
   wrap.innerHTML = `
-    ${presentHint}
     <div class="sc-cards-grid">
       ${cards}
     </div>
@@ -2536,7 +2531,21 @@ function renderSessionComparisonCards() {
         const id = card.dataset.presentId;
         if (state.scRevealed.has(id)) return;
         state.scRevealed.add(id);
-        renderSessionComparisonCards();
+        const veil = card.querySelector('.sc-card-veil');
+        if (veil) {
+          card.classList.add('sc-card--revealed');
+          veil.classList.add('sc-card-veil--out');
+          veil.addEventListener('transitionend', () => {
+            veil.remove();
+            if (state.scRevealed.size >= selected.length) {
+              setTimeout(() => {
+                state.scPresent = false;
+                state.scRevealed.clear();
+                renderSessionComparePage();
+              }, 600);
+            }
+          }, { once: true });
+        }
       });
     });
   }
@@ -3731,6 +3740,12 @@ function showAboutModal() {
           Every line of code is on GitHub.
         </p>
 
+        <div class="about-stats-row" id="about-stats-row">
+          <span class="about-stat" id="about-stat-downloads"><span class="about-stat-val">—</span><span class="about-stat-label">installs this week</span></span>
+          <span class="about-stat-divider">·</span>
+          <span class="about-stat" id="about-stat-stars"><span class="about-stat-val">—</span><span class="about-stat-label">GitHub stars</span></span>
+        </div>
+
         <div class="about-links-row">
           <a class="about-pill" href="https://github.com/mrrichsylvester/token-bleed" target="_blank" rel="noopener">GitHub →</a>
           <a class="about-pill" href="https://youtube.com/@MrRichSylvester" target="_blank" rel="noopener">YouTube →</a>
@@ -3746,6 +3761,26 @@ function showAboutModal() {
     </div>
   `;
   document.body.appendChild(overlay);
+
+  // Fetch live stats
+  (async () => {
+    try {
+      const [npmRes, ghRes] = await Promise.allSettled([
+        fetch('https://api.npmjs.org/downloads/point/last-week/token-bleed'),
+        fetch('https://api.github.com/repos/mrrichsylvester/token-bleed'),
+      ]);
+      if (npmRes.status === 'fulfilled' && npmRes.value.ok) {
+        const { downloads } = await npmRes.value.json();
+        const el = document.querySelector('#about-stat-downloads .about-stat-val');
+        if (el) el.textContent = downloads?.toLocaleString() ?? '—';
+      }
+      if (ghRes.status === 'fulfilled' && ghRes.value.ok) {
+        const { stargazers_count } = await ghRes.value.json();
+        const el = document.querySelector('#about-stat-stars .about-stat-val');
+        if (el) el.textContent = stargazers_count?.toLocaleString() ?? '—';
+      }
+    } catch {}
+  })();
 
   function dismiss() {
     overlay.classList.add('onboarding-out');

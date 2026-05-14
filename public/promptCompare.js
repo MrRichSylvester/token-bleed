@@ -328,15 +328,26 @@ function bindResultListeners(wrap, deps) {
   });
 
   if (state.pcPresent) {
-    wrap.querySelectorAll('.sc-card--present').forEach(card => {
+    const cards = wrap.querySelectorAll('.sc-card--present');
+    cards.forEach(card => {
       card.addEventListener('click', () => {
         const id = card.dataset.presentId;
         if (state.pcRevealed.has(id)) return;
         state.pcRevealed.add(id);
-        const resultWrap = document.getElementById('prompt-comparison-result');
-        if (resultWrap) {
-          resultWrap.innerHTML = renderPromptCompareResult(deps);
-          bindResultListeners(resultWrap, deps);
+        const veil = card.querySelector('.sc-card-veil');
+        if (veil) {
+          card.classList.add('sc-card--revealed');
+          veil.classList.add('sc-card-veil--out');
+          veil.addEventListener('transitionend', () => {
+            veil.remove();
+            if (state.pcRevealed.size >= cards.length) {
+              setTimeout(() => {
+                state.pcPresent = false;
+                state.pcRevealed.clear();
+                renderPromptComparePage(deps);
+              }, 600);
+            }
+          }, { once: true });
         }
       });
     });
@@ -355,11 +366,7 @@ function renderPromptCompareResult(deps) {
     : [...selected];
 
   if (state.pcPresent) {
-    const revealed = ordered.filter(p => state.pcRevealed.has(p.id)).length;
-    const hint = revealed < ordered.length
-      ? `<div class="sc-present-hint">${revealed} of ${ordered.length} revealed — click a card to reveal it</div>`
-      : '';
-    return hint + renderPromptCards(deps, ordered, metrics);
+    return renderPromptCards(deps, ordered, metrics);
   }
 
   return state.pcView === 'card'

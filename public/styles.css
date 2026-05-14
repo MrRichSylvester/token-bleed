@@ -3351,11 +3351,12 @@ td.msg-prompt {
   filter: blur(14px);
   user-select: none;
   pointer-events: none;
+  transition: filter 400ms ease;
 }
 
 .sc-card--present.sc-card--revealed .sc-card-inner {
   filter: none;
-  transition: filter 350ms ease;
+  transition: filter 400ms ease;
 }
 
 .sc-card-veil {
@@ -3367,6 +3368,16 @@ td.msg-prompt {
   border-radius: 14px;
   z-index: 10;
   background: rgba(6, 9, 16, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  opacity: 1;
+  transition: opacity 400ms ease, backdrop-filter 400ms ease, -webkit-backdrop-filter 400ms ease;
+}
+
+.sc-card-veil--out {
+  opacity: 0;
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
 }
 
 .sc-veil-label {
@@ -3837,6 +3848,37 @@ td.msg-prompt {
 
 .about-attribution-line strong {
   color: var(--text-secondary);
+}
+
+/* Live stats */
+.about-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.about-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.about-stat-val {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.about-stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.about-stat-divider {
+  color: var(--border-2);
+  font-size: 0.85rem;
 }
 
 /* Links */

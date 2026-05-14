@@ -1,6 +1,6 @@
 # Token Bleed
 
-**See exactly what Claude Code is costing you. Per session. Per project. Per prompt.**
+**See exactly what Claude Code and Codex are costing you. Per session. Per project. Per prompt.**
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/built_with-TypeScript-3178c6.svg)](https://www.typescriptlang.org/)
@@ -43,9 +43,9 @@ token-bleed fix-retention
 
 ## The problem
 
-Claude Code is productive. It's also expensive when you're not watching.
+Claude Code and Codex are productive. They're also expensive when you're not watching.
 
-It manages context automatically, fires tool calls in the background, and reads files you didn't ask it to read. By the time your Anthropic bill lands, you have no idea which project burned $40 or which prompt pattern is costing you three times what it should.
+They manage context automatically, fire tool calls in the background, and read files you didn't ask them to read. By the time your bill lands, you have no idea which project burned $40 or which prompt pattern is costing you three times what it should.
 
 Token Bleed fixes that. It reads your local Claude Code and Codex session logs and turns them into a real cost dashboard. No API key, no cloud, no telemetry. Your data never leaves your machine.
 
