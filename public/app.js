@@ -3925,6 +3925,21 @@ function init() {
     document.getElementById('sc-fields-btn')?.classList.remove('sc-fields-btn--open');
   });
 
+  // Share button
+  document.getElementById('header-share-btn').addEventListener('click', async () => {
+    const url = 'https://tokenbleed.dev';
+    const text = 'Token Bleed shows you exactly what you\'re spending on Claude Code and Codex. Free at tokenbleed.dev';
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Token Bleed', text, url }); } catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
+      const btn = document.getElementById('header-share-btn');
+      const orig = btn.innerHTML;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.innerHTML = orig; }, 1800);
+    }
+  });
+
   // About button
   document.getElementById('about-btn').addEventListener('click', showAboutModal);
 
