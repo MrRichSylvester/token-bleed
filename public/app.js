@@ -1615,6 +1615,7 @@ function renderMessagesTable(messages, opts = {}) {
       <td class="right mono muted" style="font-size:11px">${totalTok ? fmtTokens(totalTok) : '—'}</td>
       <td class="right mono" style="font-size:11px">${m.cost ? fmtCost(m.cost) : '—'}</td>
       <td class="right muted" style="font-size:11px">${m.toolCalls || '—'}</td>
+      <td class="right muted" style="font-size:11px">${m.responseTimeMs ? fmtDuration(m.responseTimeMs) : '—'}</td>
       ${thinkCell}
     </tr>`;
   }).join('');
@@ -1630,6 +1631,7 @@ function renderMessagesTable(messages, opts = {}) {
         <th class="right">Tokens</th>
         <th class="right">Cost</th>
         <th class="right">Tools</th>
+        <th class="right">Duration</th>
         <th class="right">Think</th>
       </tr>
     </thead>
