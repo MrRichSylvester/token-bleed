@@ -1,6 +1,6 @@
 export async function renderPromptCompare(deps) {
   const {
-    state, api, setLoading, showError, escHtml, fmtCost, fmtTokens, fmtPct, fmtDateTime,
+    state, api, setLoading, showError, escHtml, fmtCost, fmtTokens, fmtPct, fmtDateTime, fmtDuration,
     modelBadgeHtml, agentBadgeHtml, COMP_LETTERS, renderPromptCompareBar,
     savePromptCompSelection, syncPromptCheckboxes,
   } = deps;
@@ -60,7 +60,7 @@ function rankPrompts(prompts, metrics) {
 }
 
 function metricDefs(deps) {
-  const { fmtCost, fmtTokens, fmtPct } = deps;
+  const { fmtCost, fmtTokens, fmtPct, fmtDuration } = deps;
   return [
     { key: 'cost', label: 'Cost', val: p => p.cost, fmt: p => p.cost ? fmtCost(p.cost) : '—', lowerBetter: true },
     { key: 'totalTokens', label: 'Total Tokens', val: promptTotalTokens, fmt: p => fmtTokens(promptTotalTokens(p)), lowerBetter: true },
@@ -69,6 +69,7 @@ function metricDefs(deps) {
     { key: 'cacheRead', label: 'Cache Read', val: p => p.cacheReadTokens, fmt: p => fmtTokens(p.cacheReadTokens), lowerBetter: false },
     { key: 'cacheWrite', label: 'Cache Write', val: p => p.cacheCreationTokens, fmt: p => fmtTokens(p.cacheCreationTokens), lowerBetter: true },
     { key: 'cacheHitRate', label: 'Cache Hit Rate', val: p => p.cacheHitRate, fmt: p => fmtPct(p.cacheHitRate || 0), lowerBetter: false },
+    { key: 'responseTime', label: 'Response Time', val: p => p.responseTimeMs || 0, fmt: p => p.responseTimeMs > 0 ? fmtDuration(p.responseTimeMs) : '—', lowerBetter: true },
     { key: 'toolCalls', label: 'Tool Calls', val: p => p.toolCalls, fmt: p => (p.toolCalls || 0).toString(), lowerBetter: true },
     { key: 'thinking', label: 'Thinking', val: p => p.hasThinking ? 1 : 0, fmt: p => p.hasThinking ? 'yes' : 'no', lowerBetter: null },
   ];

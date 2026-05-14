@@ -266,10 +266,15 @@ export function parseCodexSessionMessages(sessionId: string): SessionMessage[] {
     usage: TokenUsage;
     toolCalls: number;
     hasThinking: boolean;
+    firstResponseTs: string;
   } | null = null;
 
   function flushPending(): void {
     if (!pending) return;
+    const responseTimeMs =
+      pending.firstResponseTs && pending.timestamp
+        ? Math.max(0, new Date(pending.firstResponseTs).getTime() - new Date(pending.timestamp).getTime())
+        : 0;
     messages.push({
       index: pending.index,
       timestamp: pending.timestamp,
@@ -282,6 +287,7 @@ export function parseCodexSessionMessages(sessionId: string): SessionMessage[] {
       cost: calculateCost(currentModel, pending.usage),
       toolCalls: pending.toolCalls,
       hasThinking: pending.hasThinking,
+      responseTimeMs,
     });
     pending = null;
   }
@@ -305,6 +311,7 @@ export function parseCodexSessionMessages(sessionId: string): SessionMessage[] {
         usage: tokenUsageFromCodex(undefined),
         toolCalls: 0,
         hasThinking: false,
+        firstResponseTs: '',
       };
     }
 
@@ -315,6 +322,7 @@ export function parseCodexSessionMessages(sessionId: string): SessionMessage[] {
     }
 
     if (entry.type === 'response_item') {
+      if (!pending.firstResponseTs && entry.timestamp) pending.firstResponseTs = entry.timestamp;
       if (payload.type === 'function_call') pending.toolCalls++;
       if (payload.type === 'reasoning') pending.hasThinking = true;
     }

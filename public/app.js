@@ -2430,7 +2430,7 @@ async function renderView() {
     case 'comparison':      return renderComparison();
     case 'session-compare': return renderSessionCompare();
     case 'prompt-compare':  return renderPromptCompare({
-      state, api, setLoading, showError, escHtml, fmtCost, fmtTokens, fmtPct, fmtDateTime,
+      state, api, setLoading, showError, escHtml, fmtCost, fmtTokens, fmtPct, fmtDateTime, fmtDuration,
       modelBadgeHtml, agentBadgeHtml, COMP_LETTERS, renderPromptCompareBar, savePromptCompSelection,
       syncPromptCheckboxes, promptCompareLabel,
     });

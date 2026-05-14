@@ -2570,7 +2570,7 @@ td.msg-prompt {
 .check-cell {
   width: 36px;
   padding: 0 6px 0 12px !important;
-  vertical-align: middle;
+  vertical-align: middle !important;
 }
 
 .session-check,

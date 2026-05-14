@@ -279,6 +279,17 @@ export function invalidateCache(): void {
   cache = null;
 }
 
+type PendingResponse = {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  toolCalls: number;
+  hasThinking: boolean;
+  lastTs: string;
+};
+
 export function parseSessionMessages(sessionId: string, projectId: string, source: Session['source'] = 'claude'): SessionMessage[] {
   if (source === 'codex') return parseCodexSessionMessages(sessionId);
 
@@ -293,9 +304,41 @@ export function parseSessionMessages(sessionId: string, projectId: string, sourc
   const lines = raw.split('\n').filter(Boolean);
   const messages: SessionMessage[] = [];
 
-  // Collect user turns, then look ahead for the next assistant turn to get token usage
   let pendingUser: { index: number; timestamp: string; prompt: string } | null = null;
+  let pendingResponse: PendingResponse | null = null;
   let turnIndex = 0;
+
+  function flushTurn(): void {
+    if (!pendingUser) return;
+    const r = pendingResponse;
+    const responseTimeMs =
+      r?.lastTs && pendingUser.timestamp
+        ? Math.max(0, new Date(r.lastTs).getTime() - new Date(pendingUser.timestamp).getTime())
+        : 0;
+    const model = r?.model ?? 'unknown';
+    const usage: TokenUsage = {
+      inputTokens: r?.inputTokens ?? 0,
+      outputTokens: r?.outputTokens ?? 0,
+      cacheCreationTokens: r?.cacheCreationTokens ?? 0,
+      cacheReadTokens: r?.cacheReadTokens ?? 0,
+      cache5mTokens: 0,
+      cache1hTokens: 0,
+    };
+    messages.push({
+      ...pendingUser,
+      model,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cacheCreationTokens: usage.cacheCreationTokens,
+      cacheReadTokens: usage.cacheReadTokens,
+      cost: calculateCost(model, usage),
+      toolCalls: r?.toolCalls ?? 0,
+      hasThinking: r?.hasThinking ?? false,
+      responseTimeMs,
+    });
+    pendingUser = null;
+    pendingResponse = null;
+  }
 
   for (const line of lines) {
     let entry: RawEntry;
@@ -313,70 +356,33 @@ export function parseSessionMessages(sessionId: string, projectId: string, sourc
       const isSystemInjected = /^(Caveat:|The messages below|<command|hook output|DO NOT respond)/i.test(text);
       if (!text || text.length <= 2 || isSystemInjected) continue;
 
-      // Flush any pending user turn without a matched assistant response
-      if (pendingUser) {
-        messages.push({
-          ...pendingUser,
-          model: 'unknown',
-          inputTokens: 0,
-          outputTokens: 0,
-          cacheCreationTokens: 0,
-          cacheReadTokens: 0,
-          cost: 0,
-          toolCalls: 0,
-          hasThinking: false,
-        });
-      }
-
+      flushTurn();
       pendingUser = { index: turnIndex++, timestamp: entry.timestamp ?? '', prompt: text.slice(0, 500) };
     }
 
     if (entry.type === 'assistant' && entry.message?.usage && pendingUser) {
       const u = entry.message.usage;
-      const usage: TokenUsage = {
-        inputTokens: u.input_tokens ?? 0,
-        outputTokens: u.output_tokens ?? 0,
-        cacheCreationTokens: u.cache_creation_input_tokens ?? 0,
-        cacheReadTokens: u.cache_read_input_tokens ?? 0,
-        cache5mTokens: u.cache_creation?.ephemeral_5m_input_tokens ?? 0,
-        cache1hTokens: u.cache_creation?.ephemeral_1h_input_tokens ?? 0,
-      };
-      const model = entry.message.model ?? 'unknown';
       const content = Array.isArray(entry.message.content)
         ? (entry.message.content as Array<{ type?: string }>)
         : [];
-      const toolCalls = content.filter((c) => c.type === 'tool_use').length;
-      const hasThinking = content.some((c) => c.type === 'thinking');
-
-      messages.push({
-        ...pendingUser,
-        model,
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
-        cacheCreationTokens: usage.cacheCreationTokens,
-        cacheReadTokens: usage.cacheReadTokens,
-        cost: calculateCost(model, usage),
-        toolCalls,
-        hasThinking,
-      });
-      pendingUser = null;
+      // Last-wins: each streaming chunk overwrites with the latest usage + timestamp.
+      // Read fields from pendingResponse via a non-narrowed reference to avoid TS over-narrowing.
+      const cur: PendingResponse | null = pendingResponse;
+      const nextResponse: PendingResponse = {
+        model: entry.message.model ?? (cur !== null ? cur.model : 'unknown'),
+        inputTokens: u.input_tokens ?? 0,
+        outputTokens: u.output_tokens ?? (cur !== null ? cur.outputTokens : 0),
+        cacheCreationTokens: u.cache_creation_input_tokens ?? 0,
+        cacheReadTokens: u.cache_read_input_tokens ?? 0,
+        toolCalls: (cur !== null ? cur.toolCalls : 0) + content.filter((c) => c.type === 'tool_use').length,
+        hasThinking: (cur !== null ? cur.hasThinking : false) || content.some((c) => c.type === 'thinking'),
+        lastTs: entry.timestamp ?? (cur !== null ? cur.lastTs : ''),
+      };
+      pendingResponse = nextResponse;
     }
   }
 
-  // Flush final user turn if no trailing assistant response
-  if (pendingUser) {
-    messages.push({
-      ...pendingUser,
-      model: 'unknown',
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheCreationTokens: 0,
-      cacheReadTokens: 0,
-      cost: 0,
-      toolCalls: 0,
-      hasThinking: false,
-    });
-  }
+  flushTurn();
 
   return messages;
 }
