@@ -150,55 +150,6 @@ function readCodexHistorySettings(): CodexHistorySettings {
   };
 }
 
-function tomlValue(value: string | number): string {
-  if (typeof value === 'number') return String(value);
-  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-}
-
-function updateTomlSection(filePath: string, section: string, values: Record<string, string | number>): void {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  const original = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : '';
-  const lines = original ? original.split(/\r?\n/) : [];
-  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
-
-  const valueLines = Object.entries(values).map(([key, value]) => `${key} = ${tomlValue(value)}`);
-  const sectionHeader = `[${section}]`;
-  const sectionStart = lines.findIndex((line) => new RegExp(`^\\s*\\[${section}\\]\\s*(#.*)?$`).test(line));
-
-  if (sectionStart === -1) {
-    const nextLines = [...lines];
-    if (nextLines.length > 0) nextLines.push('');
-    nextLines.push(sectionHeader, ...valueLines);
-    fs.writeFileSync(filePath, nextLines.join('\n') + '\n');
-    return;
-  }
-
-  let sectionEnd = lines.length;
-  for (let i = sectionStart + 1; i < lines.length; i++) {
-    if (/^\s*\[[^\]]+\]\s*(#.*)?$/.test(lines[i])) {
-      sectionEnd = i;
-      break;
-    }
-  }
-
-  const remaining = new Set(Object.keys(values));
-  const updatedSection = lines.slice(sectionStart, sectionEnd).map((line) => {
-    const match = line.match(/^(\s*)([A-Za-z0-9_-]+)(\s*=\s*)(.+?)\s*$/);
-    if (!match || !(match[2] in values)) return line;
-    remaining.delete(match[2]);
-    return `${match[1]}${match[2]}${match[3]}${tomlValue(values[match[2]])}`;
-  });
-
-  for (const key of remaining) updatedSection.push(`${key} = ${tomlValue(values[key])}`);
-
-  const nextLines = [
-    ...lines.slice(0, sectionStart),
-    ...updatedSection,
-    ...lines.slice(sectionEnd),
-  ];
-  fs.writeFileSync(filePath, nextLines.join('\n') + '\n');
-}
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
@@ -393,18 +344,6 @@ app.post('/api/settings', async (req, reply) => {
   existing.cleanupPeriodDays = value;
   fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(existing, null, 2) + '\n');
   return { ok: true, cleanupPeriodDays: value, corrected };
-});
-
-app.post('/api/codex-history-settings', async (req, reply) => {
-  const body = req.body as Record<string, unknown>;
-  const raw = Number(body.maxBytes);
-  if (!Number.isFinite(raw)) { reply.status(400); return { error: 'maxBytes must be a number' }; }
-  const maxBytes = Math.max(1024 * 1024, Math.round(raw));
-  updateTomlSection(CODEX_CONFIG_PATH, 'history', {
-    persistence: 'save-all',
-    max_bytes: maxBytes,
-  });
-  return { ok: true, codexHistory: readCodexHistorySettings() };
 });
 
 app.get('/api/app-settings', async () => {

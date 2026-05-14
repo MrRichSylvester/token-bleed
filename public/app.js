@@ -27,19 +27,6 @@ function fmtBytes(n) {
   return `${Math.round(n)} B`;
 }
 
-function codexHistoryCapText(codexHistory) {
-  if (codexHistory?.persistence === 'none') return 'Off';
-  if (Number.isFinite(codexHistory?.maxBytes) && codexHistory.maxBytes > 0) return fmtBytes(codexHistory.maxBytes);
-  return 'No size cap';
-}
-
-function codexHistoryInputMb(codexHistory) {
-  const maxBytes = Number.isFinite(codexHistory?.maxBytes) && codexHistory.maxBytes > 0
-    ? codexHistory.maxBytes
-    : 100 * MIB;
-  return Math.max(1, Math.round(maxBytes / MIB));
-}
-
 function fmtPct(n) {
   return `${(n * 100).toFixed(1)}%`;
 }
@@ -182,7 +169,6 @@ const api = {
   refresh: () => api.fetch('/api/refresh'),
   meta: () => api.fetch('/api/meta'),
   saveSetting: (key, value) => api.fetch(`/api/settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [key]: value }) }),
-  saveCodexHistory: (maxBytes) => api.fetch('/api/codex-history-settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ maxBytes }) }),
   appSettings: () => api.fetch('/api/app-settings'),
   saveAppSettings: (patch) => api.fetch('/api/app-settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }),
   tips: () => api.fetch('/api/tips'),
@@ -2975,7 +2961,6 @@ async function renderSettings() {
     const legacySet = new Set(legacyModelKeys);
     const cleanupDays = meta.cleanupPeriodDays ?? 30;
     const codexHistory = meta.codexHistory ?? {};
-    const codexHistoryMb = codexHistoryInputMb(codexHistory);
 
     // Models that appear in sessions but have no built-in pricing (custom/local/unknown)
     const unknownModels = detectedModels.filter(m => !builtinPricing[m] &&
@@ -3104,7 +3089,7 @@ async function renderSettings() {
         <div class="settings-section-title">Log Retention</div>
         <div class="settings-section-desc">
           Token Bleed reads local session logs from Claude Code and Codex.
-          Claude Code uses a day limit. Codex uses a size cap for saved local history.
+          Claude Code exposes a day limit. Codex session logs are stored separately, so Token Bleed shows their size without changing a retention setting.
         </div>
         <div class="retention-subsection">
           <div class="retention-subsection-title">Claude Code</div>
@@ -3125,15 +3110,8 @@ async function renderSettings() {
         <div class="retention-subsection">
           <div class="retention-subsection-title">Codex</div>
           <div class="settings-section-desc">
-            Current history.jsonl cap: <strong>${codexHistoryCapText(codexHistory)}</strong>.
-            history.jsonl is ${fmtBytes(codexHistory.historyBytes ?? 0)}. Session logs Token Bleed reads are separate: ${fmtBytes(codexHistory.sessionsBytes ?? 0)}.
-          </div>
-          <div class="retention-row">
-            <span class="settings-label">Keep history up to</span>
-            <input class="settings-number-input" id="codex-history-mb-input" type="number" min="1" max="102400" value="${codexHistoryMb}">
-            <span class="settings-label">MB</span>
-            <button class="btn-primary" id="codex-history-save-btn">Save</button>
-            <span id="codex-history-save-status" class="settings-save-status"></span>
+            Session logs Token Bleed reads: <strong>${fmtBytes(codexHistory.sessionsBytes ?? 0)}</strong>.
+            history.jsonl: ${fmtBytes(codexHistory.historyBytes ?? 0)}.
           </div>
         </div>
       </div>
@@ -3366,26 +3344,6 @@ async function renderSettings() {
         await api.saveSetting('cleanupPeriodDays', v);
         status.textContent = 'Saved';
         setTimeout(() => { status.textContent = ''; }, 2000);
-      } catch {
-        status.textContent = 'Error saving';
-      } finally {
-        btn.disabled = false;
-      }
-    });
-
-    // Codex history size save
-    document.getElementById('codex-history-save-btn')?.addEventListener('click', async () => {
-      let v = parseInt(document.getElementById('codex-history-mb-input').value, 10);
-      if (!Number.isFinite(v) || v < 1) return;
-      const btn = document.getElementById('codex-history-save-btn');
-      const status = document.getElementById('codex-history-save-status');
-      btn.disabled = true;
-      status.textContent = 'Saving…';
-      try {
-        const res = await api.saveCodexHistory(v * MIB);
-        const current = res.codexHistory;
-        status.textContent = `Saved · ${codexHistoryCapText(current)}`;
-        setTimeout(() => { status.textContent = ''; }, 2500);
       } catch {
         status.textContent = 'Error saving';
       } finally {
@@ -4001,7 +3959,6 @@ function showRetentionModal(meta, appSettings = state.appSettings ?? {}) {
   if (document.getElementById('onboarding-overlay')) return;
   const cleanupDays = meta?.cleanupPeriodDays ?? 30;
   const codexHistory = meta?.codexHistory ?? {};
-  const codexHistoryMb = codexHistoryInputMb(codexHistory);
   const plan = appSettings.plan ?? 'api';
   const codexPlan = appSettings.codexPlan ?? 'api';
 
@@ -4048,24 +4005,17 @@ function showRetentionModal(meta, appSettings = state.appSettings ?? {}) {
         </div>
         <div class="retention-status-card">
           <div class="retention-status-label">Codex</div>
-          <div class="retention-status-value">${codexHistoryCapText(codexHistory)}</div>
-          <div class="retention-status-note">This cap is for history.jsonl, currently ${fmtBytes(codexHistory.historyBytes ?? 0)}. Session logs Token Bleed reads are separate: ${fmtBytes(codexHistory.sessionsBytes ?? 0)}.</div>
+          <div class="retention-status-value">${fmtBytes(codexHistory.sessionsBytes ?? 0)}</div>
+          <div class="retention-status-note">Session logs Token Bleed reads. history.jsonl: ${fmtBytes(codexHistory.historyBytes ?? 0)}.</div>
         </div>
       </div>
-      <p class="onboarding-text">Set Claude Code by days and Codex by file size. 90 days and 100 MB are good defaults.</p>
+      <p class="onboarding-text">Set Claude Code by days. Codex is shown as read-only sizes because its Token Bleed-readable session logs are separate.</p>
       <div class="onboarding-retention">
         <span class="usage-config-label">Claude logs</span>
         <input class="usage-config-input" id="ob-days-input" type="number" min="1" max="3650" value="${cleanupDays}">
         <span class="usage-config-label">days</span>
         <button class="usage-config-save" id="ob-days-save">Save</button>
         <span id="ob-days-status" class="settings-save-status"></span>
-      </div>
-      <div class="onboarding-retention">
-        <span class="usage-config-label">Codex history</span>
-        <input class="usage-config-input" id="ob-codex-mb-input" type="number" min="1" max="102400" value="${codexHistoryMb}">
-        <span class="usage-config-label">MB</span>
-        <button class="usage-config-save" id="ob-codex-mb-save">Save</button>
-        <span id="ob-codex-status" class="settings-save-status"></span>
       </div>
       <div class="usage-retention-warning" id="ob-zero-warning" style="display:none">
         0 disables transcript writing entirely. Setting to 1 instead.
@@ -4079,8 +4029,6 @@ function showRetentionModal(meta, appSettings = state.appSettings ?? {}) {
 
   const input = overlay.querySelector('#ob-days-input');
   const saveBtn = overlay.querySelector('#ob-days-save');
-  const codexInput = overlay.querySelector('#ob-codex-mb-input');
-  const codexSaveBtn = overlay.querySelector('#ob-codex-mb-save');
   const warning = overlay.querySelector('#ob-zero-warning');
   const dismissBtn = overlay.querySelector('#ob-dismiss');
 
@@ -4150,25 +4098,8 @@ function showRetentionModal(meta, appSettings = state.appSettings ?? {}) {
     }
   });
 
-  codexSaveBtn.addEventListener('click', async () => {
-    let v = parseInt(codexInput.value, 10);
-    if (!Number.isFinite(v) || v < 1) return;
-    codexSaveBtn.disabled = true;
-    codexSaveBtn.textContent = 'Saving…';
-    const status = overlay.querySelector('#ob-codex-status');
-    status.textContent = '';
-    try {
-      const res = await api.saveCodexHistory(v * MIB);
-      status.textContent = `Saved · ${codexHistoryCapText(res.codexHistory)}`;
-    } finally {
-      codexSaveBtn.disabled = false;
-      codexSaveBtn.textContent = 'Save';
-    }
-  });
-
   dismissBtn.addEventListener('click', dismiss);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') saveBtn.click(); });
-  codexInput.addEventListener('keydown', e => { if (e.key === 'Enter') codexSaveBtn.click(); });
 }
 
 function showAboutModal(options = {}) {
