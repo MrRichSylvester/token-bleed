@@ -244,6 +244,10 @@ const state = {
   promptCompSelection: [], // [{id, label}] max 6
   pcView: 'table',
   pcOrder: 'added',
+  pcHiddenMetrics: new Set(),
+  pcMetricsOrder: null,    // null = default; array of keys when user has reordered
+  pcPresent: false,
+  pcRevealed: new Set(),   // set of prompt IDs revealed in present mode
   appSettings: null,
   compModel1: '',
   compModel2: '',
@@ -3692,6 +3696,14 @@ function init() {
   if (localStorage.getItem('sc-order') === 'ranked') state.scOrder = 'ranked';
   if (localStorage.getItem('pc-view') === 'card') state.pcView = 'card';
   if (localStorage.getItem('pc-order') === 'ranked') state.pcOrder = 'ranked';
+  try {
+    const savedPcHidden = localStorage.getItem('pc-hidden-metrics');
+    if (savedPcHidden) JSON.parse(savedPcHidden).forEach(k => state.pcHiddenMetrics.add(k));
+  } catch {}
+  try {
+    const savedPcOrder = localStorage.getItem('pc-metrics-order');
+    if (savedPcOrder) state.pcMetricsOrder = JSON.parse(savedPcOrder);
+  } catch {}
   renderCompareBar();
   renderPromptCompareBar();
   try {
