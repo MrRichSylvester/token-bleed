@@ -535,7 +535,7 @@ if (Object.keys(initialSettings.customPricing).length > 0) {
 
 try {
   await app.listen({ port: PORT, host: HOST });
-  console.log(`burn-rate running at http://${HOST}:${PORT}`);
+  console.log(`token-bleed running at http://${HOST}:${PORT}`);
   getData();
 } catch (err) {
   console.error(err);

@@ -2893,128 +2893,167 @@ td.msg-prompt {
 /* ── Session compare card view ── */
 .sc-cards-grid {
   display: flex;
-  gap: 16px;
+  gap: 20px;
   overflow-x: auto;
   padding-bottom: 8px;
+  align-items: flex-start;
 }
 
 .sc-card {
   flex: 1;
-  min-width: 220px;
+  min-width: 260px;
+  max-width: 380px;
   background: var(--surface);
   border: 1px solid var(--border-2);
-  border-radius: var(--radius);
+  border-radius: 14px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
-.sc-card-header {
+/* Hero header */
+.sc-card-hero {
+  position: relative;
   display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  padding: 18px 18px 16px;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 20px 18px;
+  background: linear-gradient(135deg, var(--surface-3) 0%, var(--surface-2) 100%);
   border-bottom: 1px solid var(--border);
-  background: var(--surface-2);
+  overflow: hidden;
 }
 
-.sc-card-letter {
-  font-size: 2rem;
-  font-weight: 800;
+.sc-card-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(0,255,135,0.06) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.sc-card-hero-letter {
+  font-size: 3.2rem;
+  font-weight: 900;
   color: var(--accent);
   font-family: var(--font-mono);
   line-height: 1;
   flex-shrink: 0;
-  margin-top: 2px;
-  text-shadow: 0 0 20px rgba(0,255,135,0.35);
+  text-shadow: 0 0 28px rgba(0,255,135,0.55), 0 0 60px rgba(0,255,135,0.2);
+  position: relative;
 }
 
-.sc-card-meta {
+.sc-card-hero-info {
   min-width: 0;
+  position: relative;
 }
 
 .sc-card-project {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-bottom: 3px;
 }
 
 .sc-card-date {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  margin-top: 2px;
+  margin-bottom: 7px;
 }
 
+.sc-card-model-row {
+  display: flex;
+}
+
+/* Prompt strip */
 .sc-card-prompt {
-  font-size: 0.8rem;
+  padding: 10px 20px;
+  font-size: 0.78rem;
   color: var(--text-muted);
-  margin-top: 6px;
-  line-height: 1.4;
+  line-height: 1.5;
+  border-bottom: 1px solid var(--border);
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  background: var(--surface-2);
 }
 
-.sc-card-stats {
-  display: flex;
-  flex-direction: column;
+/* Metric tiles grid */
+.sc-card-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
   flex: 1;
 }
 
-.sc-card-stat {
+.sc-tile {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--border);
-  transition: background 100ms;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 12px 16px;
+  background: var(--surface);
+  text-align: center;
+  gap: 6px;
+  transition: background 150ms;
 }
 
-.sc-card-stat:last-child {
-  border-bottom: none;
-}
-
-.sc-card-stat-label {
-  font-size: 0.78rem;
+.sc-tile-label {
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.1em;
   color: var(--text-muted);
-  flex-shrink: 0;
+  line-height: 1;
 }
 
-.sc-card-stat-value {
-  font-size: 1.35rem;
-  font-weight: 700;
+.sc-tile-value {
+  font-size: 1.65rem;
+  font-weight: 800;
   font-family: var(--font-mono);
   color: var(--text-primary);
-  text-align: right;
-  line-height: 1.1;
+  line-height: 1;
+  word-break: break-all;
 }
 
-.sc-card-stat--best {
-  background: rgba(0, 255, 135, 0.06);
+.sc-tile:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 
-.sc-card-stat--best .sc-card-stat-value {
+.sc-tile--best {
+  background: linear-gradient(160deg, rgba(0,255,135,0.1) 0%, rgba(0,255,135,0.04) 100%);
+}
+
+.sc-tile--best .sc-tile-label {
+  color: rgba(0,255,135,0.6);
+}
+
+.sc-tile--best .sc-tile-value {
   color: var(--accent);
-  text-shadow: 0 0 18px rgba(0,255,135,0.4);
+  text-shadow: 0 0 22px rgba(0,255,135,0.6), 0 0 50px rgba(0,255,135,0.25);
 }
 
-.sc-card-stat--worst {
-  background: rgba(255, 90, 90, 0.05);
+.sc-tile--worst {
+  background: linear-gradient(160deg, rgba(255,90,90,0.09) 0%, rgba(255,90,90,0.03) 100%);
 }
 
-.sc-card-stat--worst .sc-card-stat-value {
+.sc-tile--worst .sc-tile-label {
+  color: rgba(255,90,90,0.55);
+}
+
+.sc-tile--worst .sc-tile-value {
   color: var(--red);
-  text-shadow: 0 0 18px rgba(255,90,90,0.35);
+  text-shadow: 0 0 22px rgba(255,90,90,0.55), 0 0 50px rgba(255,90,90,0.2);
 }
+
+/* legend swatches for card view */
+.sc-legend-swatch.sc-tile--best  { background: rgba(0,255,135,0.45); }
+.sc-legend-swatch.sc-tile--worst { background: rgba(255,90,90,0.45); }
 
 /* ── Onboarding modal ── */
 .onboarding-overlay {

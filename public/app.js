@@ -1708,41 +1708,41 @@ function renderSessionComparisonCards() {
 
   const cards = selected.map((s, i) => {
     const local = isLocal(s);
-    const stats = metrics.map(m => {
+    const tiles = metrics.map(m => {
       const v = m.val(s);
       const score = metricScores.get(m.key);
       let cls = '';
       if (score && !(m.skipLocal && local)) {
-        if (v === score.bestV && score.bestV !== score.worstV) cls = 'sc-card-stat--best';
-        else if (v === score.worstV && score.bestV !== score.worstV) cls = 'sc-card-stat--worst';
+        if (v === score.bestV && score.bestV !== score.worstV) cls = 'sc-tile--best';
+        else if (v === score.worstV && score.bestV !== score.worstV) cls = 'sc-tile--worst';
       }
       return `
-        <div class="sc-card-stat ${cls}">
-          <div class="sc-card-stat-label">${escHtml(m.label)}</div>
-          <div class="sc-card-stat-value">${m.fmt(s)}</div>
+        <div class="sc-tile ${cls}">
+          <div class="sc-tile-label">${escHtml(m.label)}</div>
+          <div class="sc-tile-value">${m.fmt(s)}</div>
         </div>`;
     }).join('');
 
     return `
       <div class="sc-card">
-        <div class="sc-card-header">
-          <div class="sc-card-letter">${COMP_LETTERS[i]}</div>
-          <div class="sc-card-meta">
+        <div class="sc-card-hero">
+          <div class="sc-card-hero-letter">${COMP_LETTERS[i]}</div>
+          <div class="sc-card-hero-info">
             <div class="sc-card-project">${escHtml(s.projectName)}</div>
             <div class="sc-card-date">${fmtDateTime(s.startTime)}</div>
-            <div style="margin-top:6px">${modelBadgeHtml(s.primaryModel, local)}</div>
-            <div class="sc-card-prompt" title="${escHtml(s.firstPrompt)}">${escHtml(s.firstPrompt.slice(0, 70))}${s.firstPrompt.length > 70 ? '…' : ''}</div>
+            <div class="sc-card-model-row">${modelBadgeHtml(s.primaryModel, local)}</div>
           </div>
         </div>
-        <div class="sc-card-stats">${stats}</div>
+        <div class="sc-card-prompt" title="${escHtml(s.firstPrompt)}">${escHtml(s.firstPrompt.slice(0, 80))}${s.firstPrompt.length > 80 ? '…' : ''}</div>
+        <div class="sc-card-tiles">${tiles}</div>
       </div>`;
   }).join('');
 
   wrap.innerHTML = `
     <div class="sc-cards-grid">${cards}</div>
-    <div class="sc-legend">
-      <span class="sc-legend-item"><span class="sc-card-stat--best sc-legend-swatch"></span> Best</span>
-      <span class="sc-legend-item"><span class="sc-card-stat--worst sc-legend-swatch"></span> Worst</span>
+    <div class="sc-legend" style="margin-top:16px">
+      <span class="sc-legend-item"><span class="sc-tile--best sc-legend-swatch"></span> Best</span>
+      <span class="sc-legend-item"><span class="sc-tile--worst sc-legend-swatch"></span> Worst</span>
     </div>
   `;
 }
