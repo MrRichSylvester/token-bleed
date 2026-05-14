@@ -58,9 +58,11 @@ const app = Fastify({ logger: false });
 await app.register(FastifyCors, { origin: true });
 await app.register(FastifyStatic, { root: PUBLIC_DIR, prefix: '/' });
 
-function getSessions(since?: string) {
+function getSessions(since?: string, source?: string) {
   const { sessions } = getData();
-  return filterByDate(sessions, since);
+  let filtered = filterByDate(sessions, since);
+  if (source) filtered = filtered.filter((s) => s.source === source);
+  return filtered;
 }
 
 app.get('/api/refresh', async () => {
@@ -70,20 +72,20 @@ app.get('/api/refresh', async () => {
 });
 
 app.get('/api/stats', async (req) => {
-  const { since } = req.query as Record<string, string>;
-  const sessions = getSessions(since);
+  const { since, source } = req.query as Record<string, string>;
+  const sessions = getSessions(since, source);
   const projects = computeProjects(sessions);
   return computeStats(sessions, projects);
 });
 
 app.get('/api/daily', async (req) => {
-  const { since } = req.query as Record<string, string>;
-  return computeDaily(getSessions(since));
+  const { since, source } = req.query as Record<string, string>;
+  return computeDaily(getSessions(since, source));
 });
 
 app.get('/api/projects', async (req) => {
-  const { since } = req.query as Record<string, string>;
-  return computeProjects(getSessions(since));
+  const { since, source } = req.query as Record<string, string>;
+  return computeProjects(getSessions(since, source));
 });
 
 app.get('/api/sessions', async (req) => {
@@ -123,8 +125,8 @@ app.get('/api/sessions/:id/messages', async (req, reply) => {
 });
 
 app.get('/api/models', async (req) => {
-  const { since } = req.query as Record<string, string>;
-  return computeModelStats(getSessions(since));
+  const { since, source } = req.query as Record<string, string>;
+  return computeModelStats(getSessions(since, source));
 });
 
 app.get('/api/meta', async () => {

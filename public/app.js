@@ -51,7 +51,27 @@ function modelBadgeHtml(model, isLocal) {
   if (isLocal) {
     return `<span class="model-badge local">${model}</span>`;
   }
-  return `<span class="model-badge claude">${model}</span>`;
+  if (/^(claude-|anthropic\/)/i.test(model)) {
+    return `<span class="model-badge claude">${model}</span>`;
+  }
+  if (/^(gpt-|openai\/|codex-|o[1345])/i.test(model)) {
+    return `<span class="model-badge codex">${model}</span>`;
+  }
+  return `<span class="model-badge unknown">${model}</span>`;
+}
+
+function sourceMeta(source) {
+  if (source === 'codex') return { label: 'Codex', icon: 'Cx', cls: 'codex' };
+  return { label: 'Claude Code', icon: 'Cc', cls: 'claude' };
+}
+
+function agentBadgeHtml(source, opts = {}) {
+  const meta = sourceMeta(source);
+  const label = opts.short ? meta.label.replace(' Code', '') : meta.label;
+  return `<span class="agent-badge agent-badge--${meta.cls}" title="Agent: ${escHtml(meta.label)}">
+    <span class="agent-badge-icon">${escHtml(meta.icon)}</span>
+    <span class="agent-badge-label">${escHtml(label)}</span>
+  </span>`;
 }
 
 function isRemoteModelName(model) {
@@ -120,11 +140,11 @@ const api = {
     const qs = new URLSearchParams(params).toString();
     return `${base}${qs ? '?' + qs : ''}`;
   },
-  stats: () => api.fetch(api.withSince('/api/stats')),
-  daily: () => api.fetch(api.withSince('/api/daily')),
-  projects: () => api.fetch(api.withSince('/api/projects')),
+  stats: (params = {}) => api.fetch(api.withSince('/api/stats', params)),
+  daily: (params = {}) => api.fetch(api.withSince('/api/daily', params)),
+  projects: (params = {}) => api.fetch(api.withSince('/api/projects', params)),
   sessions: (params = {}) => api.fetch(api.withSince('/api/sessions', params)),
-  models: () => api.fetch(api.withSince('/api/models')),
+  models: (params = {}) => api.fetch(api.withSince('/api/models', params)),
   comparison: (m1, m2) => {
     const extra = m1 && m2 ? { model1: m1, model2: m2 } : {};
     return api.fetch(api.withSince('/api/models/comparison', extra));
@@ -206,9 +226,11 @@ const state = {
   periodMode: 'calendar',
   period: 'all',
   overviewSessionSort: 'cost',
+  overviewFilter: { sources: ['claude', 'codex'] },
   sessionsPage: 0,
   sessionsLimit: 50,
-  sessionsFilter: { projectId: '', model: '' },
+  sessionsFilter: { projectId: '', model: '', sources: ['claude', 'codex'] },
+  projectsFilter: { sources: ['claude', 'codex'] },
   appSettings: null,
   compModel1: '',
   compModel2: '',
@@ -217,9 +239,10 @@ const state = {
   compSelection: [], // [{id, label}] max 6
   scHiddenMetrics: new Set(),
   scView: 'table',
-  scOrder: 'added',   // 'added' | 'ranked'
+  scOrder: 'added',        // 'added' | 'ranked'
+  scMetricsOrder: null,   // null = default; array of keys when user has reordered
   scPresent: false,
-  scRevealed: new Set(), // set of session IDs revealed in present mode
+  scRevealed: new Set(),  // set of session IDs revealed in present mode
   data: {
     stats: null,
     daily: null,
@@ -605,9 +628,14 @@ function scaleUsageGrid() {
 async function renderOverview() {
   setLoading();
   try {
+    const activeSources = state.overviewFilter.sources;
+    const sourceParams = activeSources.length === 1 ? { source: activeSources[0] } : {};
     const [stats, daily, models, projects, dailyAll] = await Promise.all([
-      api.stats(), api.daily(), api.models(), api.projects(),
-      api.fetch('/api/daily'),
+      api.stats(sourceParams),
+      api.daily(sourceParams),
+      api.models(sourceParams),
+      api.projects(sourceParams),
+      api.fetch(`/api/daily${sourceParams.source ? `?source=${encodeURIComponent(sourceParams.source)}` : ''}`),
     ]);
     state.data.stats = stats;
     state.data.daily = daily;
@@ -637,7 +665,13 @@ async function renderOverview() {
     const content = document.getElementById('content');
     content.innerHTML = `
       <h1 class="page-title">Overview</h1>
-      <p class="page-subtitle">${periodLabel()} · ${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</p>
+      <div class="page-subtitle-row">
+        <p class="page-subtitle">${periodLabel()} · ${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</p>
+        <div class="sc-view-toggle agent-source-toggle" aria-label="Overview agent filter">
+          <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-overview-source="claude">Claude Code</button>
+          <button class="sc-view-btn agent-source-btn${activeSources.includes('codex') ? ' sc-view-btn--on' : ''}" data-overview-source="codex">Codex</button>
+        </div>
+      </div>
 
       <div class="overview-top">
         <div class="metric-card accent-left">
@@ -653,7 +687,7 @@ async function renderOverview() {
           <div class="metric-sub">per paid session</div>
         </div>
         <div class="metric-card">
-          <span class="metric-help" data-tooltip="Number of Claude Code sessions in the selected period. Each session is one conversation stored as a .jsonl file in ~/.claude/projects/.">?</span>
+          <span class="metric-help" data-tooltip="Number of Claude Code and Codex sessions in the selected period. Each session is one local conversation log.">?</span>
           <div class="metric-label">Sessions</div>
           <div class="metric-value mono">${stats.totalSessions.toLocaleString()}</div>
           <div class="metric-sub">${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</div>
@@ -662,7 +696,7 @@ async function renderOverview() {
           ${renderUsageGrid(dailyAll)}
         </div>
         <div class="metric-card">
-          <span class="metric-help" data-tooltip="Number of user messages sent across all sessions in the selected period. Each time you send a prompt in Claude Code counts as one.">?</span>
+          <span class="metric-help" data-tooltip="Number of user messages sent across all sessions in the selected period. Each time you send a prompt to an agent counts as one.">?</span>
           <div class="metric-label">Total Prompts</div>
           <div class="metric-value mono">${stats.totalMessages.toLocaleString()}</div>
           <div class="metric-sub">${stats.totalSessions > 0 ? '~' + Math.round(stats.totalMessages / stats.totalSessions) + ' per session' : '—'}</div>
@@ -743,6 +777,19 @@ async function renderOverview() {
     });
     showOnboardingIfNeeded();
 
+    content.querySelectorAll('[data-overview-source]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const source = btn.dataset.overviewSource;
+        const current = state.overviewFilter.sources;
+        const isActive = current.includes(source);
+        if (isActive && current.length === 1) return;
+        state.overviewFilter.sources = isActive
+          ? current.filter(s => s !== source)
+          : [...current, source].sort();
+        renderOverview();
+      });
+    });
+
     document.getElementById('overview-session-sort')?.addEventListener('change', async (e) => {
       state.overviewSessionSort = e.target.value;
       await loadOverviewSessions();
@@ -756,6 +803,8 @@ async function renderOverview() {
 
 async function loadOverviewSessions() {
   const sessionsParams = { limit: 10, offset: 0 };
+  const activeSources = state.overviewFilter.sources;
+  if (activeSources.length === 1) sessionsParams.source = activeSources[0];
   if (state.overviewSessionSort === 'cost') sessionsParams.sort = 'cost';
 
   const recentWrap = document.getElementById('recent-sessions-wrap');
@@ -772,15 +821,36 @@ async function loadOverviewSessions() {
 async function renderProjects() {
   setLoading();
   try {
-    const projects = await api.projects();
+    const activeSources = state.projectsFilter.sources;
+    const projectParams = activeSources.length === 1 ? { source: activeSources[0] } : {};
+    const projects = await api.projects(projectParams);
     state.data.projects = projects;
 
     const content = document.getElementById('content');
     content.innerHTML = `
       <h1 class="page-title">Projects</h1>
-      <p class="page-subtitle">${periodLabel()} · ${projects.length} project${projects.length !== 1 ? 's' : ''}</p>
+      <div class="page-subtitle-row">
+        <p class="page-subtitle">${periodLabel()} · ${projects.length} project${projects.length !== 1 ? 's' : ''}</p>
+        <div class="sc-view-toggle agent-source-toggle" aria-label="Project agent filter">
+          <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-project-source="claude">Claude Code</button>
+          <button class="sc-view-btn agent-source-btn${activeSources.includes('codex') ? ' sc-view-btn--on' : ''}" data-project-source="codex">Codex</button>
+        </div>
+      </div>
       <div class="project-list">${projects.map(renderProjectCard).join('')}</div>
     `;
+
+    content.querySelectorAll('[data-project-source]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const source = btn.dataset.projectSource;
+        const current = state.projectsFilter.sources;
+        const isActive = current.includes(source);
+        if (isActive && current.length === 1) return;
+        state.projectsFilter.sources = isActive
+          ? current.filter(s => s !== source)
+          : [...current, source].sort();
+        renderProjects();
+      });
+    });
 
     content.querySelectorAll('.project-card[data-project]').forEach(el => {
       el.querySelector('.project-card-header').addEventListener('click', () => {
@@ -823,12 +893,16 @@ async function toggleProject(projectId, cardEl) {
 
 function renderProjectCard(p) {
   const isLocal = !p.totalCost && !isRemoteModelName(p.topModel);
+  const agentBadges = (p.sources && p.sources.length ? p.sources : [p.source]).map(source => agentBadgeHtml(source, { short: true })).join('');
   return `
     <div class="project-card" data-project="${escHtml(p.id)}">
       <div class="project-card-header">
-        <div>
-          <div class="project-name">${escHtml(p.name)}</div>
-          <div class="project-path">${escHtml(p.path)}</div>
+        <div class="project-title-block">
+          <div class="project-title-row">
+            <div class="project-agent-stack">${agentBadges}</div>
+            <div class="project-name">${escHtml(p.name)}</div>
+            <div class="project-path">${escHtml(p.path)}</div>
+          </div>
         </div>
         <div class="project-meta">
           ${modelBadgeHtml(p.topModel, isLocal)}
@@ -865,10 +939,13 @@ function renderProjectCard(p) {
 async function renderSessions() {
   setLoading();
   try {
+    const activeSources = state.sessionsFilter.sources;
+    const sessionSourceParams = activeSources.length === 1 ? { source: activeSources[0] } : {};
     const [{ sessions, total }, projects, models] = await Promise.all([
       api.sessions({
         limit: state.sessionsLimit,
         offset: state.sessionsPage * state.sessionsLimit,
+        ...sessionSourceParams,
         ...(state.sessionsFilter.projectId ? { projectId: state.sessionsFilter.projectId } : {}),
         ...(state.sessionsFilter.model ? { model: state.sessionsFilter.model } : {}),
       }),
@@ -906,8 +983,12 @@ async function renderSessions() {
           <option value="">All models</option>
           ${modelOptions}
         </select>
-        <span class="filter-count">${total.toLocaleString()} session${total !== 1 ? 's' : ''}</span>
         <a class="export-csv-btn" href="${api.withSince('/api/export/sessions.csv')}" download>↓ CSV</a>
+        <span class="filter-count sessions-filter-count">${total.toLocaleString()} session${total !== 1 ? 's' : ''}</span>
+        <div class="sc-view-toggle agent-source-toggle sessions-agent-toggle" aria-label="Session agent filter">
+          <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-session-source="claude">Claude Code</button>
+          <button class="sc-view-btn agent-source-btn${activeSources.includes('codex') ? ' sc-view-btn--on' : ''}" data-session-source="codex">Codex</button>
+        </div>
       </div>
 
       <div class="table-wrap" id="sessions-table-wrap">
@@ -919,6 +1000,20 @@ async function renderSessions() {
     const tableWrap = document.getElementById('sessions-table-wrap');
     bindSessionExpansion(tableWrap);
     bindSelectableRows(tableWrap, sessions);
+
+    content.querySelectorAll('[data-session-source]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const source = btn.dataset.sessionSource;
+        const current = state.sessionsFilter.sources;
+        const isActive = current.includes(source);
+        if (isActive && current.length === 1) return;
+        state.sessionsFilter.sources = isActive
+          ? current.filter(s => s !== source)
+          : [...current, source].sort();
+        state.sessionsPage = 0;
+        renderSessions();
+      });
+    });
 
     document.getElementById('filter-project').addEventListener('change', e => {
       state.sessionsFilter.projectId = e.target.value;
@@ -949,7 +1044,7 @@ function renderSessionsTable(sessions, opts = {}) {
   }
 
   const checkCol = opts.selectable ? 1 : 0;
-  const colCount = (opts.compact ? 8 : 9) + checkCol;
+  const colCount = (opts.compact ? 9 : 10) + checkCol;
 
   const rows = sessions.map(s => {
     const local = isLocalSession(s);
@@ -970,6 +1065,7 @@ function renderSessionsTable(sessions, opts = {}) {
 
     return `<tr class="session-row" data-session-id="${escHtml(s.id)}" data-project-id="${escHtml(s.projectId)}"
       data-entrypoint="${escHtml(s.entrypoint || '')}"
+      data-source="${escHtml(s.source || 'claude')}"
       data-git-branch="${escHtml(s.gitBranch || '')}"
       data-version="${escHtml(s.version || '')}"
       data-permission-mode="${escHtml(s.permissionMode || '')}"
@@ -980,6 +1076,7 @@ function renderSessionsTable(sessions, opts = {}) {
       <td class="muted nowrap" style="font-size:12px">${fmtDateTime(s.startTime)}</td>
       ${opts.compact ? '' : `<td class="secondary" style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(s.projectName)}</td>`}
       <td class="prompt">${thinkingBadge}${subagentBadge}<span title="${escHtml(s.firstPrompt)}">${escHtml(displayTitle)}</span></td>
+      <td>${agentBadgeHtml(s.source || 'claude', { short: opts.compact })}</td>
       <td>${modelBadgeHtml(s.primaryModel, local)}</td>
       <td class="right mono" style="font-size:12px">${fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens)}</td>
       <td class="right">${costCell}</td>
@@ -1006,6 +1103,7 @@ function renderSessionsTable(sessions, opts = {}) {
         <th>Started</th>
         ${projectCol}
         <th>Prompt</th>
+        <th>Agent</th>
         <th>Model</th>
         <th class="right">Tokens</th>
         <th class="right">Cost</th>
@@ -1127,6 +1225,7 @@ function renderCompareBar() {
 
 function renderSessionMeta(row) {
   const d = row.dataset;
+  const source = d.source || 'claude';
   const entrypoint = d.entrypoint || '';
   const branch = d.gitBranch || '';
   const version = d.version || '';
@@ -1139,6 +1238,7 @@ function renderSessionMeta(row) {
   const permLabel = perm === 'bypassPermissions' ? 'auto-approve' : perm;
 
   const chips = [
+    `<span class="meta-chip meta-chip-agent">${agentBadgeHtml(source)}</span>`,
     entrypoint && `<span class="meta-chip">${escHtml(entrypointLabel)}</span>`,
     branch && `<span class="meta-chip">⎇ ${escHtml(branch)}</span>`,
     perm && perm !== 'default' && `<span class="meta-chip perm-chip">${escHtml(permLabel)}</span>`,
@@ -1443,6 +1543,16 @@ const SESSION_COMPARE_METRICS = [
   { key: 'thinkingTurns', label: 'Thinking Turns' },
 ];
 
+function getOrderedMetrics() {
+  if (!state.scMetricsOrder || state.scMetricsOrder.length === 0) return SESSION_COMPARE_METRICS;
+  const pos = new Map(state.scMetricsOrder.map((k, i) => [k, i]));
+  return [...SESSION_COMPARE_METRICS].sort((a, b) => {
+    const ai = pos.has(a.key) ? pos.get(a.key) : 999;
+    const bi = pos.has(b.key) ? pos.get(b.key) : 999;
+    return ai - bi;
+  });
+}
+
 async function renderSessionCompare() {
   setLoading();
   try {
@@ -1492,36 +1602,9 @@ function renderSessionComparePage() {
     </div>
   `).join('');
 
-  const metricToggles = SESSION_COMPARE_METRICS.map(m => {
-    const on = !state.scHiddenMetrics.has(m.key);
-    return `<button class="sc-metric-toggle${on ? ' sc-metric-toggle--on' : ''}" data-metric="${escHtml(m.key)}">${escHtml(m.label)}</button>`;
-  }).join('');
-
-  const toolbar = `
-    <div class="sc-toolbar">
-      <div class="sc-view-toggle">
-        <button class="sc-view-btn${state.scView === 'table' ? ' sc-view-btn--on' : ''}" data-view="table" title="Table view">
-          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="3" rx="1" fill="currentColor" opacity=".5"/><rect x="1" y="6" width="12" height="2" rx="1" fill="currentColor"/><rect x="1" y="10" width="12" height="2" rx="1" fill="currentColor" opacity=".7"/></svg>
-          Table
-        </button>
-        <button class="sc-view-btn${state.scView === 'card' ? ' sc-view-btn--on' : ''}" data-view="card" title="Card view">
-          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5.5" height="12" rx="1.5" fill="currentColor"/><rect x="7.5" y="1" width="5.5" height="12" rx="1.5" fill="currentColor" opacity=".7"/></svg>
-          Cards
-        </button>
-      </div>
-      <div class="sc-view-toggle">
-        <button class="sc-view-btn${state.scOrder === 'added' ? ' sc-view-btn--on' : ''}" data-order="added" title="Order by when sessions were added">Added order</button>
-        <button class="sc-view-btn${state.scOrder === 'ranked' ? ' sc-view-btn--on' : ''}" data-order="ranked" title="Rank by cost + tokens + duration">
-          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 12L5 7L8 9L12 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Best Overall
-        </button>
-      </div>
-      <button class="sc-present-btn${state.scPresent ? ' sc-present-btn--on' : ''}" id="sc-present-toggle">
-        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg>
-        ${state.scPresent ? 'Exit Present' : 'Present'}
-      </button>
-    </div>
-  `;
+  const hiddenCount = state.scHiddenMetrics.size;
+  const totalCount  = SESSION_COMPARE_METRICS.length;
+  const fieldCount  = hiddenCount > 0 ? ` <span class="sc-fields-count">${totalCount - hiddenCount}/${totalCount}</span>` : '';
 
   const content = document.getElementById('content');
   content.innerHTML = `
@@ -1540,12 +1623,40 @@ function renderSessionComparePage() {
       ` : ''}
     </div>
 
-    <div class="sc-metrics-bar">
-      <span class="sc-metrics-bar-label">Metrics</span>
-      <div class="sc-metric-toggles">${metricToggles}</div>
-    </div>
+    <div class="sc-toolbar">
+      <div class="sc-dropdown" id="sc-fields-dropdown">
+        <button class="sc-view-btn sc-fields-btn${hiddenCount > 0 ? ' sc-fields-btn--filtered' : ''}" id="sc-fields-btn">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M1 3h12M3 7h8M5 11h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          Fields${fieldCount} <span class="sc-dropdown-chevron">▾</span>
+        </button>
+      </div>
 
-    ${toolbar}
+      <div class="sc-view-toggle">
+        <button class="sc-view-btn${state.scView === 'table' ? ' sc-view-btn--on' : ''}" data-view="table">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="3" rx="1" fill="currentColor" opacity=".5"/><rect x="1" y="6" width="12" height="2" rx="1" fill="currentColor"/><rect x="1" y="10" width="12" height="2" rx="1" fill="currentColor" opacity=".7"/></svg>
+          Table
+        </button>
+        <button class="sc-view-btn${state.scView === 'card' ? ' sc-view-btn--on' : ''}" data-view="card">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5.5" height="12" rx="1.5" fill="currentColor"/><rect x="7.5" y="1" width="5.5" height="12" rx="1.5" fill="currentColor" opacity=".7"/></svg>
+          Cards
+        </button>
+      </div>
+
+      <div class="sc-view-toggle">
+        <button class="sc-view-btn${state.scOrder === 'added' ? ' sc-view-btn--on' : ''}" data-order="added">Added</button>
+        <button class="sc-view-btn${state.scOrder === 'ranked' ? ' sc-view-btn--on' : ''}" data-order="ranked">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 12L5 7L8 9L12 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Best Overall
+        </button>
+      </div>
+
+      ${state.scView === 'card' ? `
+        <button class="sc-present-btn${state.scPresent ? ' sc-present-btn--on' : ''}" id="sc-present-toggle">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg>
+          ${state.scPresent ? 'Exit Present' : 'Present'}
+        </button>
+      ` : ''}
+    </div>
 
     <div id="session-comparison-result"></div>
   `;
@@ -1575,27 +1686,15 @@ function renderSessionComparePage() {
     });
   }
 
-  content.querySelectorAll('[data-metric]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const key = btn.dataset.metric;
-      if (state.scHiddenMetrics.has(key)) {
-        state.scHiddenMetrics.delete(key);
-        btn.classList.add('sc-metric-toggle--on');
-      } else {
-        state.scHiddenMetrics.add(key);
-        btn.classList.remove('sc-metric-toggle--on');
-      }
-      localStorage.setItem('sc-hidden-metrics', JSON.stringify([...state.scHiddenMetrics]));
-      renderSessionComparisonResult();
-    });
-  });
-
   content.querySelectorAll('[data-view]').forEach(btn => {
     btn.addEventListener('click', () => {
       state.scView = btn.dataset.view;
       localStorage.setItem('sc-view', state.scView);
-      content.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('sc-view-btn--on', b.dataset.view === state.scView));
-      renderSessionComparisonResult();
+      if (state.scView === 'table') {
+        state.scPresent = false;
+        state.scRevealed.clear();
+      }
+      renderSessionComparePage();
     });
   });
 
@@ -1615,7 +1714,168 @@ function renderSessionComparePage() {
     renderSessionComparePage();
   });
 
+  const fieldsBtn = document.getElementById('sc-fields-btn');
+  if (fieldsBtn) {
+    fieldsBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const existing = document.getElementById('sc-fields-panel');
+      if (existing) {
+        existing.remove();
+        fieldsBtn.classList.remove('sc-fields-btn--open');
+        return;
+      }
+      const panel = document.createElement('div');
+      panel.id = 'sc-fields-panel';
+      panel.className = 'sc-dropdown-panel';
+      document.body.appendChild(panel);
+      buildFieldsPanel(panel);
+      positionFieldsPanel(fieldsBtn, panel);
+      fieldsBtn.classList.add('sc-fields-btn--open');
+    });
+  }
+
   renderSessionComparisonResult();
+}
+
+function rankSessions(sessions) {
+  const hidden = state.scHiddenMetrics;
+  const useCost     = !hidden.has('cost');
+  const useTokens   = !hidden.has('totalTokens');
+  const useDuration = !hidden.has('duration');
+  if (!useCost && !useTokens && !useDuration) return sessions; // nothing scoreable
+
+  function isLocal(s) { return s.cost === 0 && (s.usage.inputTokens + s.usage.outputTokens) > 0; }
+
+  const dims = sessions.map(s => ({
+    s,
+    cost:     useCost     ? (isLocal(s) ? null : s.cost) : null,
+    tokens:   useTokens   ? s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens : null,
+    duration: useDuration ? s.duration : null,
+  }));
+
+  const norm = key => {
+    const vs = dims.map(d => d[key]).filter(v => v !== null && v > 0);
+    if (vs.length < 2) return dims.map(() => 0);
+    const lo = Math.min(...vs), hi = Math.max(...vs);
+    if (lo === hi) return dims.map(() => 0);
+    return dims.map(d => d[key] !== null && d[key] > 0 ? (d[key] - lo) / (hi - lo) : 0.5);
+  };
+
+  const nc = norm('cost'), nt = norm('tokens'), nd = norm('duration');
+  const scored = dims.map((d, i) => ({ s: d.s, score: nc[i] + nt[i] + nd[i] }));
+  scored.sort((a, b) => a.score - b.score);
+  return scored.map(x => x.s);
+}
+
+function positionFieldsPanel(btn, panel) {
+  const r = btn.getBoundingClientRect();
+  panel.style.top  = `${r.bottom + 6}px`;
+  panel.style.left = `${r.left}px`;
+}
+
+function buildFieldsPanel(panel) {
+  const ordered = getOrderedMetrics();
+  panel.innerHTML = `
+    <div class="sc-fields-list">
+      ${ordered.map(m => {
+        const on = !state.scHiddenMetrics.has(m.key);
+        return `
+          <div class="sc-fields-item${on ? '' : ' sc-fields-item--off'}" draggable="true" data-key="${escHtml(m.key)}">
+            <span class="sc-fields-drag">⠿</span>
+            <span class="sc-fields-name">${escHtml(m.label)}</span>
+            <button class="sc-fields-toggle${on ? ' sc-fields-toggle--on' : ''}" data-toggle="${escHtml(m.key)}">
+              ${on
+                ? '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 7C2 7 4 3 7 3C10 3 12 7 12 7C12 7 10 11 7 11C4 11 2 7 2 7Z" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="1.8" fill="currentColor"/></svg>'
+                : '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 2L12 12M3.5 4.5C2.7 5.3 2 6.2 2 7C2 7 4 11 7 11C8.1 11 9.1 10.5 9.9 9.8M5.1 2.2C5.7 2.1 6.4 2 7 2C10 2 12 7 12 7C11.6 7.7 11.1 8.4 10.5 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'}
+            </button>
+          </div>`;
+      }).join('')}
+    </div>
+    <div class="sc-fields-footer">
+      <button class="sc-fields-reset" id="sc-fields-reset">Reset defaults</button>
+    </div>
+  `;
+
+  // Visibility toggles
+  panel.querySelectorAll('[data-toggle]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const key = btn.dataset.toggle;
+      if (state.scHiddenMetrics.has(key)) state.scHiddenMetrics.delete(key);
+      else state.scHiddenMetrics.add(key);
+      localStorage.setItem('sc-hidden-metrics', JSON.stringify([...state.scHiddenMetrics]));
+      // Refresh count badge on Fields button
+      const hc = state.scHiddenMetrics.size, tc = SESSION_COMPARE_METRICS.length;
+      const fb = document.getElementById('sc-fields-btn');
+      if (fb) {
+        fb.querySelector('.sc-fields-count')?.remove();
+        if (hc > 0) {
+          const badge = document.createElement('span');
+          badge.className = 'sc-fields-count';
+          badge.textContent = `${tc - hc}/${tc}`;
+          fb.querySelector('.sc-dropdown-chevron').before(badge);
+          fb.classList.add('sc-fields-btn--filtered');
+        } else {
+          fb.classList.remove('sc-fields-btn--filtered');
+        }
+      }
+      buildFieldsPanel(panel);
+      renderSessionComparisonResult();
+    });
+  });
+
+  // Drag-to-reorder
+  let dragKey = null;
+  panel.querySelectorAll('.sc-fields-item').forEach(item => {
+    item.addEventListener('dragstart', e => {
+      dragKey = item.dataset.key;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => item.classList.add('sc-fields-item--dragging'), 0);
+    });
+    item.addEventListener('dragend', () => {
+      panel.querySelectorAll('.sc-fields-item').forEach(el => {
+        el.classList.remove('sc-fields-item--dragging', 'sc-fields-item--over');
+      });
+      dragKey = null;
+    });
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (!dragKey || dragKey === item.dataset.key) return;
+      panel.querySelectorAll('.sc-fields-item--over').forEach(el => el.classList.remove('sc-fields-item--over'));
+      item.classList.add('sc-fields-item--over');
+    });
+    item.addEventListener('dragleave', () => item.classList.remove('sc-fields-item--over'));
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      item.classList.remove('sc-fields-item--over');
+      if (!dragKey || dragKey === item.dataset.key) return;
+      const keys = getOrderedMetrics().map(m => m.key);
+      const from = keys.indexOf(dragKey), to = keys.indexOf(item.dataset.key);
+      if (from === -1 || to === -1) return;
+      keys.splice(from, 1);
+      keys.splice(to, 0, dragKey);
+      state.scMetricsOrder = keys;
+      localStorage.setItem('sc-metrics-order', JSON.stringify(keys));
+      buildFieldsPanel(panel);
+      renderSessionComparisonResult();
+    });
+  });
+
+  // Reset
+  document.getElementById('sc-fields-reset')?.addEventListener('click', e => {
+    e.stopPropagation();
+    state.scMetricsOrder = null;
+    state.scHiddenMetrics.clear();
+    localStorage.removeItem('sc-metrics-order');
+    localStorage.removeItem('sc-hidden-metrics');
+    const fb = document.getElementById('sc-fields-btn');
+    if (fb) {
+      fb.querySelector('.sc-fields-count')?.remove();
+      fb.classList.remove('sc-fields-btn--filtered');
+    }
+    buildFieldsPanel(panel);
+    renderSessionComparisonResult();
+  });
 }
 
 function renderSessionComparisonResult() {
@@ -1640,23 +1900,7 @@ function renderSessionComparisonTable() {
   function isLocal(s) { return isLocalSession(s); }
 
   if (state.scOrder === 'ranked' && selected.length >= 2) {
-    const dims = selected.map(s => ({
-      s,
-      cost: isLocal(s) ? null : s.cost,
-      tokens: s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens,
-      duration: s.duration,
-    }));
-    const norm = (key) => {
-      const vs = dims.map(d => d[key]).filter(v => v !== null && v > 0);
-      if (vs.length < 2) return dims.map(() => 0);
-      const lo = Math.min(...vs), hi = Math.max(...vs);
-      if (lo === hi) return dims.map(() => 0);
-      return dims.map(d => d[key] !== null && d[key] > 0 ? (d[key] - lo) / (hi - lo) : 0.5);
-    };
-    const nc = norm('cost'), nt = norm('tokens'), nd = norm('duration');
-    const scored = dims.map((d, i) => ({ s: d.s, score: nc[i] + nt[i] + nd[i] }));
-    scored.sort((a, b) => a.score - b.score);
-    selected.splice(0, selected.length, ...scored.map(x => x.s));
+    selected.splice(0, selected.length, ...rankSessions(selected));
   }
 
   const localTooltip = LOCAL_TOKEN_TIP;
@@ -1674,7 +1918,9 @@ function renderSessionComparisonTable() {
     { key: 'toolCalls',     label: 'Tool Calls',     val: s => s.toolCallCount,               fmt: s => s.toolCallCount.toString(),               lowerBetter: null  },
     { key: 'thinkingTurns', label: 'Thinking Turns', val: s => s.thinkingBlocks || 0,         fmt: s => (s.thinkingBlocks || 0).toString(),       lowerBetter: null  },
   ];
-  const metrics = allMetrics.filter(m => !state.scHiddenMetrics.has(m.key));
+  const metrics = getOrderedMetrics()
+    .map(om => allMetrics.find(m => m.key === om.key))
+    .filter(m => m && !state.scHiddenMetrics.has(m.key));
 
   const colHeaders = selected.map((s, i) => {
     const local = isLocal(s);
@@ -1750,23 +1996,7 @@ function renderSessionComparisonCards() {
 
   // Sort by composite rank if requested
   if (state.scOrder === 'ranked' && selected.length >= 2) {
-    const dims = selected.map(s => ({
-      s,
-      cost: isLocal(s) ? null : s.cost,
-      tokens: s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens,
-      duration: s.duration,
-    }));
-    const norm = (key) => {
-      const vs = dims.map(d => d[key]).filter(v => v !== null && v > 0);
-      if (vs.length < 2) return dims.map(() => 0);
-      const lo = Math.min(...vs), hi = Math.max(...vs);
-      if (lo === hi) return dims.map(() => 0);
-      return dims.map(d => d[key] !== null && d[key] > 0 ? (d[key] - lo) / (hi - lo) : 0.5);
-    };
-    const nc = norm('cost'), nt = norm('tokens'), nd = norm('duration');
-    const scored = dims.map((d, i) => ({ s: d.s, score: nc[i] + nt[i] + nd[i] }));
-    scored.sort((a, b) => a.score - b.score);
-    selected.splice(0, selected.length, ...scored.map(x => x.s));
+    selected.splice(0, selected.length, ...rankSessions(selected));
   }
 
   const allMetrics = [
@@ -1782,7 +2012,9 @@ function renderSessionComparisonCards() {
     { key: 'toolCalls',     label: 'Tool Calls',     val: s => s.toolCallCount,               fmt: s => s.toolCallCount.toString(),               lowerBetter: null  },
     { key: 'thinkingTurns', label: 'Thinking Turns', val: s => s.thinkingBlocks || 0,         fmt: s => (s.thinkingBlocks || 0).toString(),       lowerBetter: null  },
   ];
-  const metrics = allMetrics.filter(m => !state.scHiddenMetrics.has(m.key));
+  const metrics = getOrderedMetrics()
+    .map(om => allMetrics.find(m => m.key === om.key))
+    .filter(m => m && !state.scHiddenMetrics.has(m.key));
 
   // Pre-compute best/worst per metric
   const metricScores = new Map();
@@ -1893,6 +2125,9 @@ function showError(e) {
 // ── Render dispatch ────────────────────────────────────────────
 
 async function renderView() {
+  // Close the Fields dropdown panel if it was left open from session compare
+  document.getElementById('sc-fields-panel')?.remove();
+  document.getElementById('sc-fields-btn')?.classList.remove('sc-fields-btn--open');
   updateNav();
   switch (state.view) {
     case 'overview':        return renderOverview();
@@ -2101,8 +2336,8 @@ async function renderSettings() {
                 <th>Model</th>
                 <th class="right">Input $/M</th>
                 <th class="right">Output $/M</th>
-                <th class="right">Cache Write $/M</th>
-                <th class="right">Cache Read $/M</th>
+                <th class="right">Cache W $/M</th>
+                <th class="right">Cache R $/M</th>
                 <th></th>
               </tr>
             </thead>
@@ -2356,13 +2591,8 @@ async function renderSettings() {
 // ── Provider indicator ─────────────────────────────────────────
 
 async function updateProviderIndicator() {
-  try {
-    const data = await api.providers();
-    const el = document.querySelector('#header .header-left');
-    if (el) {
-      el.innerHTML = `<span class="active-provider-chip">via <strong>${escHtml(data.activeProvider)}</strong></span>`;
-    }
-  } catch { /* non-critical */ }
+  const el = document.querySelector('#header .header-left');
+  if (el) el.innerHTML = '';
 }
 
 // ── Provider settings section HTML ─────────────────────────────
@@ -2391,7 +2621,7 @@ function renderProvidersSectionHtml(providerData) {
       <div class="settings-section-title">Model Providers</div>
       <div class="settings-section-desc">
         Connect alternative providers through LiteLLM to use with Claude Code.
-        The active provider shown in the header is read from <code>~/.claude/settings.json</code>.
+        Claude Code provider settings are read from <code>~/.claude/settings.json</code>.
       </div>
 
       ${providerRow('claude', 'Claude (native)', null, 'connected')}
@@ -3110,7 +3340,7 @@ function init() {
   document.querySelectorAll('.nav-item[data-view]').forEach(el => {
     el.addEventListener('click', (e) => {
       e.preventDefault();
-      state.sessionsFilter = { projectId: '', model: '' };
+      state.sessionsFilter = { projectId: '', model: '', sources: ['claude', 'codex'] };
       state.sessionsPage = 0;
       navigate(el.dataset.view);
     });
@@ -3129,6 +3359,10 @@ function init() {
   } catch {}
   if (localStorage.getItem('sc-view') === 'card') state.scView = 'card';
   if (localStorage.getItem('sc-order') === 'ranked') state.scOrder = 'ranked';
+  try {
+    const savedOrder = localStorage.getItem('sc-metrics-order');
+    if (savedOrder) state.scMetricsOrder = JSON.parse(savedOrder);
+  } catch {}
 
   // Prompt modal
   const promptModal = document.getElementById('prompt-modal');
@@ -3141,6 +3375,16 @@ function init() {
     if (!el) return;
     promptModalBody.textContent = el.dataset.prompt;
     promptModal.hidden = false;
+  });
+
+  // Close Fields dropdown on outside click
+  document.addEventListener('click', e => {
+    const panel = document.getElementById('sc-fields-panel');
+    if (!panel) return;
+    const dropdown = document.getElementById('sc-fields-dropdown');
+    if (dropdown?.contains(e.target) || panel.contains(e.target)) return;
+    panel.remove();
+    document.getElementById('sc-fields-btn')?.classList.remove('sc-fields-btn--open');
   });
 
   // About button

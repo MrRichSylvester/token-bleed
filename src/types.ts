@@ -34,6 +34,8 @@ export interface Session {
 
 export interface ProjectSummary {
   id: string;
+  source: 'claude' | 'codex';
+  sources: Array<'claude' | 'codex'>;
   path: string;
   name: string;
   sessionCount: number;

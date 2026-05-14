@@ -36,18 +36,26 @@ export function computeProjects(sessions: Session[]): ProjectSummary[] {
     const usage = emptyUsage();
     let cost = 0;
     const modelCounts: Record<string, number> = {};
+    const sourceCounts: Record<Session['source'], number> = { claude: 0, codex: 0 };
 
     for (const s of pSessions) {
       addUsage(usage, s.usage);
       cost += s.cost;
       modelCounts[s.primaryModel] = (modelCounts[s.primaryModel] ?? 0) + 1;
+      sourceCounts[s.source] += 1;
     }
 
     const topModel = Object.entries(modelCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'unknown';
+    const sources = (Object.entries(sourceCounts) as Array<[Session['source'], number]>)
+      .filter(([, count]) => count > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([source]) => source);
     const first = pSessions[0];
 
     projects.push({
       id: projectId,
+      source: sources[0] ?? first?.source ?? 'claude',
+      sources,
       path: first?.projectPath ?? projectId,
       name: first?.projectName ?? projectId,
       sessionCount: pSessions.length,
