@@ -1826,31 +1826,6 @@ td.msg-prompt {
   letter-spacing: 0.05em;
 }
 
-/* ── Session Compare ── */
-.session-picker-select {
-  background: var(--surface);
-  border: 1px solid var(--border-2);
-  color: var(--text-primary);
-  padding: 9px 36px 9px 14px;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-sans);
-  font-size: 1rem;
-  cursor: pointer;
-  min-width: 340px;
-  max-width: 460px;
-  outline: none;
-  transition: border-color 150ms, box-shadow 150ms;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%233D4E6E' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-}
-
-.session-picker-select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-dim);
-}
-
 .comp-session-date {
   font-size: 0.85rem;
   color: var(--text-muted);
@@ -2679,76 +2654,6 @@ td.msg-prompt {
   color: var(--red);
 }
 
-/* ── Session compare page ── */
-.sc-selector {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 28px;
-  flex-wrap: wrap;
-}
-
-.sc-chips {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  flex: 1;
-}
-
-.sc-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 11px;
-  background: var(--surface);
-  border: 1px solid var(--border-2);
-  border-radius: var(--radius-sm);
-}
-
-.sc-chip-letter {
-  font-size: 0.77rem;
-  font-weight: 700;
-  color: var(--accent);
-  background: var(--accent-dim);
-  border: 1px solid rgba(0, 255, 135, 0.2);
-  border-radius: 3px;
-  padding: 1px 5px;
-  font-family: var(--font-mono);
-  flex-shrink: 0;
-}
-
-.sc-chip-name {
-  font-size: 0.92rem;
-  color: var(--text-secondary);
-}
-
-.sc-chip-remove {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 1.08rem;
-  padding: 0 2px;
-  line-height: 1;
-  transition: color 120ms;
-}
-
-.sc-chip-remove:hover { color: var(--red); }
-
-.sc-empty-hint {
-  font-size: 1rem;
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.sc-add-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
 /* ── Fields dropdown ── */
 .sc-dropdown {
   position: relative;
@@ -2936,10 +2841,110 @@ td.msg-prompt {
 }
 
 .sc-col-header {
+  position: relative;
   padding: 14px 20px;
   text-align: left;
   min-width: 180px;
   vertical-align: top;
+}
+
+.sc-remove-session-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  transition: color 120ms, border-color 120ms, background 120ms;
+  z-index: 2;
+}
+
+.sc-remove-session-btn:hover {
+  color: var(--red);
+  border-color: rgba(255, 90, 90, 0.35);
+  background: rgba(255, 90, 90, 0.08);
+}
+
+.sc-add-col-header {
+  padding: 10px;
+  min-width: 210px;
+}
+
+.sc-add-cell {
+  background: rgba(255,255,255,0.015);
+  border-left: 1px dashed var(--border-2);
+}
+
+.sc-add-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 132px;
+  width: 100%;
+  border: 1px dashed var(--border-2);
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.025);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 140ms, background 140ms, color 140ms;
+}
+
+.sc-add-slot:hover,
+.sc-add-slot:focus-within {
+  border-color: rgba(117, 163, 255, 0.42);
+  background: rgba(117, 163, 255, 0.08);
+  color: var(--text-secondary);
+}
+
+.sc-add-plus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 1.65rem;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.sc-add-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.sc-inline-add-select {
+  width: min(100%, 220px);
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-family: var(--font-sans);
+  padding: 7px 28px 7px 10px;
+  outline: none;
+  cursor: pointer;
+}
+
+.sc-inline-add-select:focus {
+  border-color: rgba(117, 163, 255, 0.5);
+  box-shadow: 0 0 0 2px rgba(117, 163, 255, 0.12);
 }
 
 .sc-col-letter {
@@ -3225,6 +3230,33 @@ td.msg-prompt {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.sc-add-card {
+  min-height: 300px;
+  background: rgba(255,255,255,0.018);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.sc-add-card .sc-add-slot {
+  min-height: 300px;
+  flex: 1;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.sc-add-slot--card .sc-inline-add-select {
+  width: calc(100% - 40px);
+}
+
+.sc-card-remove {
+  position: relative;
+  top: auto;
+  right: auto;
+  margin-left: 0;
+  flex-shrink: 0;
 }
 
 /* Hero header */
@@ -3878,7 +3910,11 @@ td.msg-prompt {
   outline: none;
   text-align: right;
   transition: border-color 150ms;
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
+.pricing-input::-webkit-outer-spin-button,
+.pricing-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .pricing-input:focus { border-color: var(--accent); }
 .pricing-input::placeholder { color: var(--text-muted); }
 
@@ -3991,7 +4027,11 @@ td.msg-prompt {
   outline: none;
   text-align: center;
   transition: border-color 150ms;
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
+.settings-number-input::-webkit-outer-spin-button,
+.settings-number-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .settings-number-input:focus { border-color: var(--accent); }
 
 /* ── Model Providers ── */
