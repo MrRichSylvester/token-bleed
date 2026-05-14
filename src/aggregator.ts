@@ -120,11 +120,13 @@ export function computeDaily(sessions: Session[]): DailyActivity[] {
   const map = new Map<string, DailyActivity>();
   for (const s of sessions) {
     const date = s.startTime.slice(0, 10);
-    const entry = map.get(date) ?? { date, cost: 0, sessions: 0, messages: 0, tokens: 0 };
+    const entry = map.get(date) ?? { date, cost: 0, sessions: 0, messages: 0, tokens: 0, claudeCost: 0, codexCost: 0 };
     entry.cost += s.cost;
     entry.sessions += 1;
     entry.messages += s.messageCount;
     entry.tokens += totalTokens(s.usage);
+    if (s.source === 'claude') entry.claudeCost += s.cost;
+    else if (s.source === 'codex') entry.codexCost += s.cost;
     map.set(date, entry);
   }
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));

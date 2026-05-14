@@ -89,6 +89,8 @@ export interface DailyActivity {
   sessions: number;
   messages: number;
   tokens: number;
+  claudeCost: number;
+  codexCost: number;
 }
 
 export interface ParsedData {

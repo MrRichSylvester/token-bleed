@@ -683,6 +683,11 @@ function renderUsageGrid(dailyAll) {
   const WEEKS = Math.ceil((Math.floor((today - alignedStart) / 86400000) + 1) / 7);
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+  // Claude orange: rgb(217,119,87)  Codex blue: rgb(91,141,239)
+  const CLAUDE_RGB = [217, 119, 87];
+  const CODEX_RGB  = [91, 141, 239];
+  const LEVEL_OPACITY = [0, 0.18, 0.38, 0.62, 0.88];
+
   function getLevel(cost) {
     if (cost === 0) return 0;
     const pct = cost / maxCost;
@@ -690,6 +695,16 @@ function renderUsageGrid(dailyAll) {
     if (pct < 0.3) return 2;
     if (pct < 0.6) return 3;
     return 4;
+  }
+
+  function blendCellColor(claudeCost, codexCost, level) {
+    const total = claudeCost + codexCost;
+    if (total === 0 || level === 0) return null;
+    const ratio = claudeCost / total; // 1 = all claude, 0 = all codex
+    const r = Math.round(CODEX_RGB[0] + (CLAUDE_RGB[0] - CODEX_RGB[0]) * ratio);
+    const g = Math.round(CODEX_RGB[1] + (CLAUDE_RGB[1] - CODEX_RGB[1]) * ratio);
+    const b = Math.round(CODEX_RGB[2] + (CLAUDE_RGB[2] - CODEX_RGB[2]) * ratio);
+    return `rgba(${r},${g},${b},${LEVEL_OPACITY[level]})`;
   }
 
   const weekCols = [];
@@ -720,8 +735,12 @@ function renderUsageGrid(dailyAll) {
           ? `${dateStr}  ${fmtCost(cost)}  ${sessions} session${sessions !== 1 ? 's' : ''}`
           : `${dateStr}  no activity`;
         const level = getLevel(cost);
-        const delayAttr = level > 0 ? ` style="--cd:${Math.floor(Math.random() * 2400)}ms"` : '';
-        cells.push(`<div class="usage-cell" data-level="${level}" data-tip="${escHtml(tip)}"${delayAttr}></div>`);
+        const blended = blendCellColor(data?.claudeCost || 0, data?.codexCost || 0, level);
+        const styleVal = level > 0
+          ? `--cd:${Math.floor(Math.random() * 2400)}ms${blended ? `;--cell-color:${blended}` : ''}`
+          : '';
+        const styleAttr = styleVal ? ` style="${styleVal}"` : '';
+        cells.push(`<div class="usage-cell" data-level="${level}" data-tip="${escHtml(tip)}"${styleAttr}></div>`);
       }
     }
     weekCols.push(`<div class="usage-week">${cells.join('')}</div>`);
