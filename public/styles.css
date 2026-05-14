@@ -582,6 +582,11 @@ html[data-size="large"]  { font-size: 17px; }
   font-weight: 700;
 }
 
+.metric-sub-divider {
+  color: var(--text-muted);
+  margin: 0 2px;
+}
+
 .metric-sub-link {
   color: var(--text-secondary);
   text-decoration: underline;

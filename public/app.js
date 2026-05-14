@@ -238,6 +238,10 @@ const CODEX_PLAN_MONTHLY = {
 
 const CLAUDE_RECOMMENDED_PLAN = { label: 'Claude Pro', monthly: 20 };
 const CODEX_RECOMMENDED_PLAN = { label: 'Codex Go', monthly: 8 };
+const RECOMMENDED_PLANS_BY_SOURCE = {
+  claude: CLAUDE_RECOMMENDED_PLAN,
+  codex: CODEX_RECOMMENDED_PLAN,
+};
 
 function periodToSince(mode, period) {
   if (period === 'all') return undefined;
@@ -297,49 +301,81 @@ function selectedPlanMonthlyCost(appSettings, activeSources) {
   return monthly;
 }
 
-function recommendedPlanForSources(activeSources) {
-  const plans = [];
-  if (activeSources.includes('claude')) plans.push(CLAUDE_RECOMMENDED_PLAN);
-  if (activeSources.includes('codex')) plans.push(CODEX_RECOMMENDED_PLAN);
-  if (plans.length === 0) return null;
-
-  return {
-    label: plans.map(p => p.label).join(' + '),
-    monthly: plans.reduce((sum, p) => sum + p.monthly, 0),
-    isBundle: plans.length > 1,
-  };
+function sourceApiCost(source, totalCost, activeSources, sourceCosts = {}) {
+  if (Object.hasOwn(sourceCosts, source)) return sourceCosts[source];
+  return activeSources.length === 1 && activeSources[0] === source ? totalCost : 0;
 }
 
-function apiPlanRecommendationText(totalCost, daily, activeSources) {
-  const recommendation = recommendedPlanForSources(activeSources);
-  if (!recommendation) return 'API pricing selected';
-
-  const planCost = (recommendation.monthly / 30) * selectedPeriodDays(daily);
-  const savings = totalCost - planCost;
-  const planWord = recommendation.isBundle ? 'plans' : 'plan';
-  const planLabel = `${recommendation.label} ${planWord}`;
-  const planLink = `<a class="metric-sub-link" href="#settings">${planLabel}</a>`;
-
-  if (savings > 0) {
-    return `<span class="metric-sub-savings">Save ${fmtCost(savings)}</span> with ${planLink}`;
+function selectedSourcePlanCost(source, apiCost, appSettings, periodDays) {
+  if (source === 'claude') {
+    const monthly = CLAUDE_PLAN_MONTHLY[appSettings?.plan] ?? 0;
+    return monthly > 0 ? (monthly / 30) * periodDays : apiCost;
   }
-  if (savings < 0) {
-    return `API is cheaper than ${planLink} for this period`;
+
+  if (source === 'codex') {
+    const monthly = CODEX_PLAN_MONTHLY[appSettings?.codexPlan] ?? 0;
+    return monthly > 0 ? (monthly / 30) * periodDays : apiCost;
   }
-  return `Break-even with ${planLink}`;
+
+  return apiCost;
 }
 
-function selectedPlanSavingsText(totalCost, daily, appSettings, activeSources) {
+function isSourceOnApiPlan(source, appSettings) {
+  if (source === 'claude') return (appSettings?.plan ?? 'api') === 'api';
+  if (source === 'codex') return (appSettings?.codexPlan ?? 'api') === 'api';
+  return true;
+}
+
+function planRecommendationLink(recommendations) {
+  const planWord = recommendations.length > 1 ? 'plans' : 'plan';
+  const planLabel = `${recommendations.map(rec => rec.label).join(' + ')} ${planWord}`;
+  return `<a class="metric-sub-link" href="#settings">${planLabel}</a>`;
+}
+
+function apiSourceRecommendations(totalCost, daily, activeSources, sourceCosts = {}, appSettings = null) {
+  const periodDays = selectedPeriodDays(daily);
+  return activeSources
+    .filter(source => isSourceOnApiPlan(source, appSettings))
+    .map(source => {
+      const plan = RECOMMENDED_PLANS_BY_SOURCE[source];
+      if (!plan) return null;
+      const apiCost = sourceApiCost(source, totalCost, activeSources, sourceCosts);
+      const planCost = (plan.monthly / 30) * periodDays;
+      return { ...plan, savings: apiCost - planCost };
+    })
+    .filter(Boolean)
+    .filter(rec => rec.savings > 0);
+}
+
+function apiPlanRecommendationText(totalCost, daily, activeSources, sourceCosts = {}) {
+  const recommendations = apiSourceRecommendations(totalCost, daily, activeSources, sourceCosts);
+
+  if (recommendations.length === 0) return 'API is cheaper for this period';
+
+  const totalSavings = recommendations.reduce((sum, rec) => sum + rec.savings, 0);
+  return `<span class="metric-sub-savings">Save ${fmtCost(totalSavings)}</span> with ${planRecommendationLink(recommendations)}`;
+}
+
+function selectedPlanSavingsText(totalCost, daily, appSettings, activeSources, sourceCosts = {}) {
   const monthly = selectedPlanMonthlyCost(appSettings, activeSources);
-  if (monthly <= 0) return apiPlanRecommendationText(totalCost, daily, activeSources);
+  if (monthly <= 0) return apiPlanRecommendationText(totalCost, daily, activeSources, sourceCosts);
+  const recommendations = apiSourceRecommendations(totalCost, daily, activeSources, sourceCosts, appSettings);
+  const recommendationText = recommendations.length > 0
+    ? ` <span class="metric-sub-divider">·</span> <span class="metric-sub-savings">Save ${fmtCost(recommendations.reduce((sum, rec) => sum + rec.savings, 0))} more</span> with ${planRecommendationLink(recommendations)}`
+    : '';
 
-  const planCost = (monthly / 30) * selectedPeriodDays(daily);
-  const savings = totalCost - planCost;
+  const periodDays = selectedPeriodDays(daily);
+  const apiCost = activeSources.reduce((sum, source) => sum + sourceApiCost(source, totalCost, activeSources, sourceCosts), 0);
+  const selectedCost = activeSources.reduce((sum, source) => {
+    const sourceCost = sourceApiCost(source, totalCost, activeSources, sourceCosts);
+    return sum + selectedSourcePlanCost(source, sourceCost, appSettings, periodDays);
+  }, 0);
+  const savings = apiCost - selectedCost;
   if (savings < 0) {
-    return `<span class="metric-sub-over">-${fmtCost(Math.abs(savings))}</span> over-provisioned vs API on <a class="metric-sub-link" href="#settings">selected plan</a>`;
+    return `<span class="metric-sub-over">-${fmtCost(Math.abs(savings))}</span> over-provisioned vs API on <a class="metric-sub-link" href="#settings">selected plan</a>${recommendationText}`;
   }
-  if (savings === 0) return `Break-even vs API on <a class="metric-sub-link" href="#settings">selected plan</a>`;
-  return `<span class="metric-sub-savings">${fmtCost(savings)} saved</span> vs API on <a class="metric-sub-link" href="#settings">selected plan</a>`;
+  if (savings === 0) return `Break-even vs API on <a class="metric-sub-link" href="#settings">selected plan</a>${recommendationText}`;
+  return `<span class="metric-sub-savings">${fmtCost(savings)} saved</span> vs API on <a class="metric-sub-link" href="#settings">selected plan</a>${recommendationText}`;
 }
 
 // ── State ──────────────────────────────────────────────────────
@@ -872,21 +908,26 @@ async function renderOverview() {
   try {
     const activeSources = state.overviewFilter.sources;
     const sourceParams = activeSources.length === 1 ? { source: activeSources[0] } : {};
-    const [stats, daily, models, projects, dailyAll, appSettings] = await Promise.all([
+    const sourceStatsPromise = Promise.all(activeSources.map(source =>
+      api.stats({ source }).then(sourceStats => [source, sourceStats])
+    ));
+    const [stats, daily, models, projects, dailyAll, appSettings, sourceStatsEntries] = await Promise.all([
       api.stats(sourceParams),
       api.daily(sourceParams),
       api.models(sourceParams),
       api.projects(sourceParams),
       api.fetch(`/api/daily${sourceParams.source ? `?source=${encodeURIComponent(sourceParams.source)}` : ''}`),
       api.appSettings(),
+      sourceStatsPromise,
     ]);
+    const sourceCosts = Object.fromEntries(sourceStatsEntries.map(([source, sourceStats]) => [source, sourceStats.totalCost]));
     state.appSettings = appSettings;
     state.data.stats = stats;
     state.data.daily = daily;
     state.data.models = models;
     state.data.projects = projects;
     stampDataFetch();
-    const planSavings = selectedPlanSavingsText(stats.totalCost, daily, appSettings, activeSources);
+    const planSavings = selectedPlanSavingsText(stats.totalCost, daily, appSettings, activeSources, sourceCosts);
 
     // Usage by model — all models, session count as universal bar metric
     const modelRows = models.slice(0, 8).map(m => ({
