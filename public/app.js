@@ -361,7 +361,7 @@ function selectedPlanSavingsText(totalCost, daily, appSettings, activeSources, s
   if (monthly <= 0) return apiPlanRecommendationText(totalCost, daily, activeSources, sourceCosts);
   const recommendations = apiSourceRecommendations(totalCost, daily, activeSources, sourceCosts, appSettings);
   const recommendationText = recommendations.length > 0
-    ? ` <span class="metric-sub-divider">·</span> <span class="metric-sub-savings">Save ${fmtCost(recommendations.reduce((sum, rec) => sum + rec.savings, 0))} more</span> with ${planRecommendationLink(recommendations)}`
+    ? `<span class="metric-sub-extra"><span class="metric-sub-savings">Save ${fmtCost(recommendations.reduce((sum, rec) => sum + rec.savings, 0))} more</span> with ${planRecommendationLink(recommendations)}</span>`
     : '';
 
   const periodDays = selectedPeriodDays(daily);
@@ -3997,18 +3997,46 @@ function aboutStatsHtml() {
   `;
 }
 
-function showRetentionModal(meta) {
+function showRetentionModal(meta, appSettings = state.appSettings ?? {}) {
   if (document.getElementById('onboarding-overlay')) return;
   const cleanupDays = meta?.cleanupPeriodDays ?? 30;
   const codexHistory = meta?.codexHistory ?? {};
   const codexHistoryMb = codexHistoryInputMb(codexHistory);
+  const plan = appSettings.plan ?? 'api';
+  const codexPlan = appSettings.codexPlan ?? 'api';
 
   const overlay = document.createElement('div');
   overlay.id = 'onboarding-overlay';
   overlay.className = 'onboarding-overlay';
   overlay.innerHTML = `
-    <div class="onboarding-card">
-      <div class="onboarding-title">Keep enough history</div>
+    <div class="onboarding-card retention-card">
+      <div class="onboarding-title">Which plans are you on?</div>
+      <p class="onboarding-text">Select your Claude and Codex plans so the savings card compares API-rate usage against the subscriptions you actually have.</p>
+      <div class="onboarding-plan-grid">
+        <div class="onboarding-plan-group">
+          <div class="retention-status-label">Claude Plan</div>
+          <div class="onboarding-plan-selector">
+            ${PLAN_OPTIONS.map(p => `
+              <button class="plan-btn onboarding-plan-btn ${plan === p.key ? 'active' : ''}" data-ob-plan="${p.key}">
+                <span class="plan-btn-label">${p.label}</span>
+                <span class="plan-btn-sub">${p.sub}</span>
+              </button>`).join('')}
+          </div>
+          <div id="ob-plan-status" class="settings-save-status onboarding-save-status"></div>
+        </div>
+        <div class="onboarding-plan-group">
+          <div class="retention-status-label">Codex Plan</div>
+          <div class="onboarding-plan-selector">
+            ${CODEX_PLAN_OPTIONS.map(p => `
+              <button class="plan-btn onboarding-plan-btn ${codexPlan === p.key ? 'active' : ''}" data-ob-codex-plan="${p.key}">
+                <span class="plan-btn-label">${p.label}</span>
+                <span class="plan-btn-sub">${p.sub}</span>
+              </button>`).join('')}
+          </div>
+          <div id="ob-codex-plan-status" class="settings-save-status onboarding-save-status"></div>
+        </div>
+      </div>
+      <div class="onboarding-section-title">Keep enough history</div>
       <p class="onboarding-text">
         Token Bleed reads local Claude Code and Codex session logs. If a tool deletes its logs, those sessions disappear from this dashboard too.
       </p>
@@ -4042,8 +4070,8 @@ function showRetentionModal(meta) {
       <div class="usage-retention-warning" id="ob-zero-warning" style="display:none">
         0 disables transcript writing entirely. Setting to 1 instead.
       </div>
-      <div class="onboarding-footer">
-        <button class="onboarding-dismiss" id="ob-dismiss">Maybe later</button>
+      <div class="onboarding-footer retention-footer">
+        <button class="onboarding-dismiss" id="ob-dismiss">Done</button>
       </div>
     </div>
   `;
@@ -4062,6 +4090,42 @@ function showRetentionModal(meta) {
   }
 
   overlay.addEventListener('click', e => { if (e.target === overlay) dismiss(); });
+
+  overlay.querySelectorAll('[data-ob-plan]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const selected = btn.dataset.obPlan;
+      btn.disabled = true;
+      const status = overlay.querySelector('#ob-plan-status');
+      status.textContent = '';
+      try {
+        await api.saveAppSettings({ plan: selected });
+        state.appSettings = { ...(state.appSettings ?? {}), plan: selected };
+        overlay.querySelectorAll('[data-ob-plan]').forEach(b => b.classList.toggle('active', b === btn));
+        status.textContent = 'Saved';
+        renderOverview();
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  overlay.querySelectorAll('[data-ob-codex-plan]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const selected = btn.dataset.obCodexPlan;
+      btn.disabled = true;
+      const status = overlay.querySelector('#ob-codex-plan-status');
+      status.textContent = '';
+      try {
+        await api.saveAppSettings({ codexPlan: selected });
+        state.appSettings = { ...(state.appSettings ?? {}), codexPlan: selected };
+        overlay.querySelectorAll('[data-ob-codex-plan]').forEach(b => b.classList.toggle('active', b === btn));
+        status.textContent = 'Saved';
+        renderOverview();
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
 
   input.addEventListener('input', () => {
     warning.style.display = parseInt(input.value, 10) === 0 ? 'block' : 'none';
@@ -4207,8 +4271,12 @@ function showOnboardingIfNeeded() {
   localStorage.setItem('br-seen-about', '1');
   showAboutModal({
     afterGotIt: async () => {
-      const meta = await api.meta().catch(() => ({ cleanupPeriodDays: 30 }));
-      showRetentionModal(meta);
+      const [meta, appSettings] = await Promise.all([
+        api.meta().catch(() => ({ cleanupPeriodDays: 30 })),
+        api.appSettings().catch(() => state.appSettings ?? {}),
+      ]);
+      state.appSettings = appSettings;
+      showRetentionModal(meta, appSettings);
     },
   });
 }
