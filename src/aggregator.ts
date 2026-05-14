@@ -1,6 +1,8 @@
 import type { Session, ProjectSummary, GlobalStats, DailyActivity, ModelStats, TokenUsage } from './types.js';
 import { isLocalModel } from './pricing.js';
 
+export type DurationMode = 'active' | 'wallclock';
+
 function emptyUsage(): TokenUsage {
   return { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, cache5mTokens: 0, cache1hTokens: 0 };
 }
@@ -21,6 +23,10 @@ function cacheHitRate(u: TokenUsage): number {
 
 function totalTokens(u: TokenUsage): number {
   return u.inputTokens + u.outputTokens + u.cacheCreationTokens + u.cacheReadTokens;
+}
+
+export function sessionDuration(s: Session, mode: DurationMode): number {
+  return mode === 'active' ? s.activeDuration : s.duration;
 }
 
 export function computeProjects(sessions: Session[]): ProjectSummary[] {
@@ -124,7 +130,7 @@ export function computeDaily(sessions: Session[]): DailyActivity[] {
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export function computeModelStats(sessions: Session[]): ModelStats[] {
+export function computeModelStats(sessions: Session[], durationMode: DurationMode = 'active'): ModelStats[] {
   const map = new Map<string, Session[]>();
   for (const s of sessions) {
     const list = map.get(s.primaryModel) ?? [];
@@ -145,7 +151,7 @@ export function computeModelStats(sessions: Session[]): ModelStats[] {
       cost += s.cost;
       msgs += s.messageCount;
       tools += s.toolCallCount;
-      dur += s.duration;
+      dur += sessionDuration(s, durationMode);
     }
 
     const count = mSessions.length;

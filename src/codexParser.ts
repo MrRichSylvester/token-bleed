@@ -34,6 +34,28 @@ function asNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+function elapsedMs(startIso: string, endIso: string): number {
+  const start = new Date(startIso).getTime();
+  const end = new Date(endIso).getTime();
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : 0;
+}
+
+function isTurnSetupEntry(entry: CodexEntry, payload: Record<string, unknown>): boolean {
+  if (entry.type === 'turn_context') return true;
+  if (entry.type === 'event_msg' && payload.type === 'task_started') return true;
+  if (entry.type === 'response_item' && payload.type === 'message') {
+    const role = asString(payload.role);
+    return role === 'user' || role === 'developer' || role === 'system';
+  }
+  return false;
+}
+
+function isTurnActivityEntry(entry: CodexEntry, payload: Record<string, unknown>): boolean {
+  if (entry.type !== 'event_msg' && entry.type !== 'response_item') return false;
+  if (entry.type === 'event_msg' && payload.type === 'user_message') return false;
+  return !isTurnSetupEntry(entry, payload);
+}
+
 function parseJsonLine(line: string): CodexEntry | null {
   try {
     return JSON.parse(line) as CodexEntry;
@@ -156,7 +178,16 @@ function parseCodexSessionFile(filePath: string, titles: Map<string, string>): S
   let assistantMessages = 0;
   let toolCallCount = 0;
   let thinkingBlocks = 0;
+  let activeDuration = 0;
+  let pendingUserTs = '';
+  let lastTurnActivityTs = '';
   let usage: TokenUsage = tokenUsageFromCodex(undefined);
+
+  function flushActiveTurn(): void {
+    if (!pendingUserTs || !lastTurnActivityTs) return;
+    const turnMs = elapsedMs(pendingUserTs, lastTurnActivityTs);
+    if (turnMs > 0) activeDuration += turnMs;
+  }
 
   for (const line of lines) {
     const entry = parseJsonLine(line);
@@ -183,9 +214,14 @@ function parseCodexSessionFile(filePath: string, titles: Map<string, string>): S
 
     if (entry.type === 'event_msg') {
       if (payload.type === 'user_message') {
+        flushActiveTurn();
+        pendingUserTs = entry.timestamp ?? '';
+        lastTurnActivityTs = '';
         messageCount++;
         const text = asString(payload.message).replace(/\s+/g, ' ').trim();
         if (!firstPrompt && text) firstPrompt = text.slice(0, 200);
+      } else if (pendingUserTs && entry.timestamp && isTurnActivityEntry(entry, payload)) {
+        lastTurnActivityTs = entry.timestamp;
       }
       if (payload.type === 'token_count') {
         usage = tokenUsageFromCodex(getTokenUsagePayload(payload));
@@ -193,6 +229,7 @@ function parseCodexSessionFile(filePath: string, titles: Map<string, string>): S
     }
 
     if (entry.type === 'response_item') {
+      if (pendingUserTs && entry.timestamp && isTurnActivityEntry(entry, payload)) lastTurnActivityTs = entry.timestamp;
       if (payload.type === 'function_call') toolCallCount++;
       if (payload.type === 'reasoning') thinkingBlocks++;
       if (payload.type === 'message') {
@@ -204,6 +241,8 @@ function parseCodexSessionFile(filePath: string, titles: Map<string, string>): S
       }
     }
   }
+
+  flushActiveTurn();
 
   if (!startTime) return null;
 
@@ -221,8 +260,8 @@ function parseCodexSessionFile(filePath: string, titles: Map<string, string>): S
     projectPath: project,
     startTime,
     endTime,
-    duration: endTime ? new Date(endTime).getTime() - new Date(startTime).getTime() : 0,
-    activeDuration: 0,
+    duration: endTime ? elapsedMs(startTime, endTime) : 0,
+    activeDuration,
     models,
     primaryModel: model,
     usage,
@@ -266,14 +305,14 @@ export function parseCodexSessionMessages(sessionId: string): SessionMessage[] {
     usage: TokenUsage;
     toolCalls: number;
     hasThinking: boolean;
-    firstResponseTs: string;
+    lastActivityTs: string;
   } | null = null;
 
   function flushPending(): void {
     if (!pending) return;
     const responseTimeMs =
-      pending.firstResponseTs && pending.timestamp
-        ? Math.max(0, new Date(pending.firstResponseTs).getTime() - new Date(pending.timestamp).getTime())
+      pending.lastActivityTs && pending.timestamp
+        ? elapsedMs(pending.timestamp, pending.lastActivityTs)
         : 0;
     messages.push({
       index: pending.index,
@@ -311,18 +350,20 @@ export function parseCodexSessionMessages(sessionId: string): SessionMessage[] {
         usage: tokenUsageFromCodex(undefined),
         toolCalls: 0,
         hasThinking: false,
-        firstResponseTs: '',
+        lastActivityTs: '',
       };
+      continue;
     }
 
     if (!pending) continue;
+
+    if (entry.timestamp && isTurnActivityEntry(entry, payload)) pending.lastActivityTs = entry.timestamp;
 
     if (entry.type === 'event_msg' && payload.type === 'token_count') {
       pending.usage = tokenUsageFromCodex(getLastTokenUsagePayload(payload));
     }
 
     if (entry.type === 'response_item') {
-      if (!pending.firstResponseTs && entry.timestamp) pending.firstResponseTs = entry.timestamp;
       if (payload.type === 'function_call') pending.toolCalls++;
       if (payload.type === 'reasoning') pending.hasThinking = true;
     }

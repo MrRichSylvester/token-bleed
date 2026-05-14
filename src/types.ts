@@ -112,7 +112,7 @@ export interface SessionMessage {
   cost: number;
   toolCalls: number;
   hasThinking: boolean;
-  responseTimeMs: number; // ms from user submit to first assistant response (0 if unavailable)
+  responseTimeMs: number; // ms from user submit to last logged activity in the turn (0 if unavailable)
 }
 
 export interface PromptTurn extends SessionMessage {

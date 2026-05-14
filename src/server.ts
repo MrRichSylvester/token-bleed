@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { exec, spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { getData, invalidateCache, parseSessionMessages } from './parser.js';
-import { filterByDate, computeProjects, computeStats, computeDaily, computeModelStats } from './aggregator.js';
+import { filterByDate, computeProjects, computeStats, computeDaily, computeModelStats, sessionDuration } from './aggregator.js';
 import { PRICING, LEGACY_MODEL_KEYS, setCustomPricing } from './pricing.js';
 import { computeTips } from './tips.js';
 import type { AppSettings, PromptTurn, Session } from './types.js';
@@ -274,8 +274,10 @@ app.get('/api/projects', async (req) => {
 app.get('/api/sessions', async (req) => {
   const query = req.query as Record<string, string>;
   const sessions = getSessions(query.since);
+  const appSettings = readAppSettings();
+  const durationMode = appSettings.durationMode;
   const includeNoPrompt = query.includeNoPrompt === undefined
-    ? readAppSettings().showNoPromptSessions
+    ? appSettings.showNoPromptSessions
     : query.includeNoPrompt === 'true';
 
   let filtered = sessions;
@@ -303,7 +305,7 @@ app.get('/api/sessions', async (req) => {
         case 'cost': return s.cost;
         case 'cacheHitRate': return s.cacheHitRate;
         case 'messageCount': return s.messageCount;
-        case 'duration': return s.duration;
+        case 'duration': return sessionDuration(s, durationMode);
         case 'startTime':
         default: return new Date(s.startTime).getTime();
       }
@@ -368,7 +370,7 @@ app.get('/api/prompts', async (req) => {
 
 app.get('/api/models', async (req) => {
   const { since, source } = req.query as Record<string, string>;
-  return computeModelStats(getSessions(since, source));
+  return computeModelStats(getSessions(since, source), readAppSettings().durationMode);
 });
 
 app.get('/api/meta', async () => {
@@ -495,11 +497,12 @@ app.get('/api/tips', async (req) => {
 app.get('/api/export/sessions.csv', async (req, reply) => {
   const { since } = req.query as Record<string, string>;
   const sessions = getSessions(since);
+  const durationMode = readAppSettings().durationMode;
 
   const headers = [
     'id', 'source', 'project', 'date', 'model', 'cost',
     'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_creation_tokens',
-    'cache_hit_rate', 'duration_ms', 'messages', 'tool_calls',
+    'cache_hit_rate', 'duration_mode', 'duration_ms', 'messages', 'tool_calls',
   ];
 
   function csvVal(v: string | number): string {
@@ -514,7 +517,7 @@ app.get('/api/export/sessions.csv', async (req, reply) => {
       s.id, s.source, s.projectName, s.startTime.slice(0, 10), s.primaryModel,
       s.cost.toFixed(6), s.usage.inputTokens, s.usage.outputTokens,
       s.usage.cacheReadTokens, s.usage.cacheCreationTokens,
-      s.cacheHitRate.toFixed(4), s.duration, s.messageCount, s.toolCallCount,
+      s.cacheHitRate.toFixed(4), durationMode, sessionDuration(s, durationMode), s.messageCount, s.toolCallCount,
     ].map(csvVal).join(','),
   );
 

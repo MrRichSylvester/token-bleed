@@ -2105,7 +2105,7 @@ function rankSessions(sessions) {
     s,
     cost: useCost ? (isLocal(s) ? null : s.cost) : null,
     tokens: useTokens ? s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens : null,
-    duration: useDuration ? s.duration : null,
+    duration: useDuration ? sessionDuration(s) : null,
   }));
 
   const norm = key => {
