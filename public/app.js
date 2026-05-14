@@ -3125,8 +3125,8 @@ async function renderSettings() {
         <div class="retention-subsection">
           <div class="retention-subsection-title">Codex</div>
           <div class="settings-section-desc">
-            Current history cap: <strong>${codexHistoryCapText(codexHistory)}</strong>.
-            History file: ${fmtBytes(codexHistory.historyBytes ?? 0)}. Session logs on disk: ${fmtBytes(codexHistory.sessionsBytes ?? 0)}.
+            Current history.jsonl cap: <strong>${codexHistoryCapText(codexHistory)}</strong>.
+            history.jsonl is ${fmtBytes(codexHistory.historyBytes ?? 0)}. Session logs Token Bleed reads are separate: ${fmtBytes(codexHistory.sessionsBytes ?? 0)}.
           </div>
           <div class="retention-row">
             <span class="settings-label">Keep history up to</span>
@@ -4049,7 +4049,7 @@ function showRetentionModal(meta, appSettings = state.appSettings ?? {}) {
         <div class="retention-status-card">
           <div class="retention-status-label">Codex</div>
           <div class="retention-status-value">${codexHistoryCapText(codexHistory)}</div>
-          <div class="retention-status-note">Codex uses a size cap instead of a day limit. Current history file: ${fmtBytes(codexHistory.historyBytes ?? 0)}.</div>
+          <div class="retention-status-note">This cap is for history.jsonl, currently ${fmtBytes(codexHistory.historyBytes ?? 0)}. Session logs Token Bleed reads are separate: ${fmtBytes(codexHistory.sessionsBytes ?? 0)}.</div>
         </div>
       </div>
       <p class="onboarding-text">Set Claude Code by days and Codex by file size. 90 days and 100 MB are good defaults.</p>
