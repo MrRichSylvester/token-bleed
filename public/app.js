@@ -2541,7 +2541,9 @@ function renderSessionComparisonCards() {
               setTimeout(() => {
                 state.scPresent = false;
                 state.scRevealed.clear();
-                renderSessionComparePage();
+                wrap.querySelectorAll('.sc-card--present').forEach(c => c.classList.remove('sc-card--present', 'sc-card--revealed'));
+                const btn = document.getElementById('sc-present-toggle');
+                if (btn) { btn.classList.remove('sc-present-btn--on'); btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg> Present`; }
               }, 600);
             }
           }, { once: true });
