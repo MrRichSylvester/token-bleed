@@ -686,7 +686,7 @@ function renderUsageGrid(dailyAll) {
   // Claude orange: rgb(217,119,87)  Codex blue: rgb(91,141,239)
   const CLAUDE_RGB = [217, 119, 87];
   const CODEX_RGB  = [91, 141, 239];
-  const LEVEL_OPACITY = [0, 0.18, 0.38, 0.62, 0.88];
+  const LEVEL_OPACITY = [0, 0.32, 0.52, 0.72, 0.92];
 
   function getLevel(cost) {
     if (cost === 0) return 0;
