@@ -1210,6 +1210,7 @@ function bindSelectableRows(container, sessions) {
       } else {
         if (idx !== -1) state.compSelection.splice(idx, 1);
       }
+      saveCompSelection();
       syncAllCheckboxes();
       renderCompareBar();
     });
