@@ -204,8 +204,9 @@ const state = {
   compModel2: '',
   compSession1Id: '',
   compSession2Id: '',
-  compSelection: [], // [{id, label}] max 2
+  compSelection: [], // [{id, label}] max 6
   scHiddenMetrics: new Set(),
+  scView: 'table',
   data: {
     stats: null,
     daily: null,
@@ -1478,6 +1479,19 @@ function renderSessionComparePage() {
     return `<button class="sc-metric-toggle${on ? ' sc-metric-toggle--on' : ''}" data-metric="${escHtml(m.key)}">${escHtml(m.label)}</button>`;
   }).join('');
 
+  const viewToggle = `
+    <div class="sc-view-toggle">
+      <button class="sc-view-btn${state.scView === 'table' ? ' sc-view-btn--on' : ''}" data-view="table" title="Table view">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="3" rx="1" fill="currentColor" opacity=".5"/><rect x="1" y="6" width="12" height="2" rx="1" fill="currentColor"/><rect x="1" y="10" width="12" height="2" rx="1" fill="currentColor" opacity=".7"/></svg>
+        Table
+      </button>
+      <button class="sc-view-btn${state.scView === 'card' ? ' sc-view-btn--on' : ''}" data-view="card" title="Card view">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5.5" height="12" rx="1.5" fill="currentColor"/><rect x="7.5" y="1" width="5.5" height="12" rx="1.5" fill="currentColor" opacity=".7"/></svg>
+        Cards
+      </button>
+    </div>
+  `;
+
   const content = document.getElementById('content');
   content.innerHTML = `
     <h1 class="page-title">Session Compare</h1>
@@ -1498,6 +1512,8 @@ function renderSessionComparePage() {
     <div class="sc-metrics-bar">
       <span class="sc-metrics-bar-label">Metrics</span>
       <div class="sc-metric-toggles">${metricToggles}</div>
+      <div class="sc-metrics-bar-spacer"></div>
+      ${viewToggle}
     </div>
 
     <div id="session-comparison-result"></div>
@@ -1536,11 +1552,26 @@ function renderSessionComparePage() {
         state.scHiddenMetrics.add(key);
         btn.classList.remove('sc-metric-toggle--on');
       }
-      renderSessionComparisonTable();
+      localStorage.setItem('sc-hidden-metrics', JSON.stringify([...state.scHiddenMetrics]));
+      renderSessionComparisonResult();
     });
   });
 
-  renderSessionComparisonTable();
+  content.querySelectorAll('[data-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.scView = btn.dataset.view;
+      localStorage.setItem('sc-view', state.scView);
+      content.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('sc-view-btn--on', b.dataset.view === state.scView));
+      renderSessionComparisonResult();
+    });
+  });
+
+  renderSessionComparisonResult();
+}
+
+function renderSessionComparisonResult() {
+  if (state.scView === 'card') renderSessionComparisonCards();
+  else renderSessionComparisonTable();
 }
 
 function renderSessionComparisonTable() {
@@ -1628,6 +1659,90 @@ function renderSessionComparisonTable() {
     <div class="sc-legend">
       <span class="sc-legend-item"><span class="sc-cell-best sc-legend-swatch"></span> Best</span>
       <span class="sc-legend-item"><span class="sc-cell-worst sc-legend-swatch"></span> Worst</span>
+    </div>
+  `;
+}
+
+function renderSessionComparisonCards() {
+  const wrap = document.getElementById('session-comparison-result');
+  if (!wrap) return;
+
+  const allSessions = state.data.allSessions ?? [];
+  const selected = state.compSelection
+    .map(x => allSessions.find(s => s.id === x.id))
+    .filter(Boolean);
+
+  if (selected.length < 2) {
+    wrap.innerHTML = `<div class="empty-state" style="margin-top:24px"><div class="empty-icon">⇄</div><div class="empty-msg">Add at least 2 sessions to compare</div></div>`;
+    return;
+  }
+
+  function isLocal(s) { return s.cost === 0 && (s.usage.inputTokens + s.usage.outputTokens) > 0; }
+
+  const allMetrics = [
+    { key: 'cost',          label: 'Cost',           val: s => s.cost,                                                                                             fmt: s => isLocal(s) ? 'local' : fmtCost(s.cost),                    lowerBetter: true,  skipLocal: true },
+    { key: 'totalTokens',   label: 'Total Tokens',   val: s => s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens, fmt: s => fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens), lowerBetter: true  },
+    { key: 'inputTokens',   label: 'Input Tokens',   val: s => s.usage.inputTokens,           fmt: s => fmtTokens(s.usage.inputTokens),   lowerBetter: true  },
+    { key: 'outputTokens',  label: 'Output Tokens',  val: s => s.usage.outputTokens,          fmt: s => fmtTokens(s.usage.outputTokens),  lowerBetter: true  },
+    { key: 'cacheRead',     label: 'Cache Read',     val: s => s.usage.cacheReadTokens,       fmt: s => fmtTokens(s.usage.cacheReadTokens),       lowerBetter: false },
+    { key: 'cacheWrite',    label: 'Cache Write',    val: s => s.usage.cacheCreationTokens,   fmt: s => fmtTokens(s.usage.cacheCreationTokens),   lowerBetter: true  },
+    { key: 'cacheHitRate',  label: 'Cache Hit Rate', val: s => s.cacheHitRate,                fmt: s => fmtPct(s.cacheHitRate),                   lowerBetter: false },
+    { key: 'duration',      label: 'Duration',       val: s => s.duration,                    fmt: s => fmtDuration(s.duration),                  lowerBetter: true  },
+    { key: 'messages',      label: 'Messages',       val: s => s.messageCount,                fmt: s => s.messageCount.toString(),                lowerBetter: null  },
+    { key: 'toolCalls',     label: 'Tool Calls',     val: s => s.toolCallCount,               fmt: s => s.toolCallCount.toString(),               lowerBetter: null  },
+    { key: 'thinkingTurns', label: 'Thinking Turns', val: s => s.thinkingBlocks || 0,         fmt: s => (s.thinkingBlocks || 0).toString(),       lowerBetter: null  },
+  ];
+  const metrics = allMetrics.filter(m => !state.scHiddenMetrics.has(m.key));
+
+  // Pre-compute best/worst per metric
+  const metricScores = new Map();
+  metrics.forEach(m => {
+    if (m.lowerBetter === null) return;
+    const scoreable = selected.filter(s => !(m.skipLocal && isLocal(s)) && m.val(s) > 0);
+    if (scoreable.length < 2) return;
+    const vs = scoreable.map(s => m.val(s));
+    const bestV  = m.lowerBetter ? Math.min(...vs) : Math.max(...vs);
+    const worstV = m.lowerBetter ? Math.max(...vs) : Math.min(...vs);
+    metricScores.set(m.key, { bestV, worstV });
+  });
+
+  const cards = selected.map((s, i) => {
+    const local = isLocal(s);
+    const stats = metrics.map(m => {
+      const v = m.val(s);
+      const score = metricScores.get(m.key);
+      let cls = '';
+      if (score && !(m.skipLocal && local)) {
+        if (v === score.bestV && score.bestV !== score.worstV) cls = 'sc-card-stat--best';
+        else if (v === score.worstV && score.bestV !== score.worstV) cls = 'sc-card-stat--worst';
+      }
+      return `
+        <div class="sc-card-stat ${cls}">
+          <div class="sc-card-stat-label">${escHtml(m.label)}</div>
+          <div class="sc-card-stat-value">${m.fmt(s)}</div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="sc-card">
+        <div class="sc-card-header">
+          <div class="sc-card-letter">${COMP_LETTERS[i]}</div>
+          <div class="sc-card-meta">
+            <div class="sc-card-project">${escHtml(s.projectName)}</div>
+            <div class="sc-card-date">${fmtDateTime(s.startTime)}</div>
+            <div style="margin-top:6px">${modelBadgeHtml(s.primaryModel, local)}</div>
+            <div class="sc-card-prompt" title="${escHtml(s.firstPrompt)}">${escHtml(s.firstPrompt.slice(0, 70))}${s.firstPrompt.length > 70 ? '…' : ''}</div>
+          </div>
+        </div>
+        <div class="sc-card-stats">${stats}</div>
+      </div>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="sc-cards-grid">${cards}</div>
+    <div class="sc-legend">
+      <span class="sc-legend-item"><span class="sc-card-stat--best sc-legend-swatch"></span> Best</span>
+      <span class="sc-legend-item"><span class="sc-card-stat--worst sc-legend-swatch"></span> Worst</span>
     </div>
   `;
 }
@@ -2883,6 +2998,13 @@ function init() {
   });
 
   initAppearancePanel();
+
+  // Restore session compare preferences
+  try {
+    const savedHidden = localStorage.getItem('sc-hidden-metrics');
+    if (savedHidden) JSON.parse(savedHidden).forEach(k => state.scHiddenMetrics.add(k));
+  } catch {}
+  if (localStorage.getItem('sc-view') === 'card') state.scView = 'card';
 
   // Prompt modal
   const promptModal = document.getElementById('prompt-modal');
