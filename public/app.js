@@ -21,7 +21,7 @@ function fmtPct(n) {
 }
 
 function sessionDuration(s) {
-  return state.appSettings?.durationMode === 'active' ? (s.activeDuration ?? s.duration) : s.duration;
+  return (state.appSettings?.durationMode ?? 'active') === 'active' ? (s.activeDuration ?? s.duration) : s.duration;
 }
 
 function fmtDuration(ms) {
@@ -3615,6 +3615,7 @@ function init() {
 
   state.view = getView();
   renderView();
+  api.appSettings().then(s => { state.appSettings = s; }).catch(() => {});
 }
 
 init();

@@ -1993,7 +1993,7 @@ td.msg-prompt {
 
 .project-sort-meta {
   display: grid;
-  grid-template-columns: 280px 88px 78px 64px 86px 96px 22px;
+  grid-template-columns: 280px 100px 88px 84px 96px 104px 22px;
   column-gap: 24px;
   align-items: center;
   flex-shrink: 0;
@@ -2023,8 +2023,16 @@ td.msg-prompt {
 .sort-header-btn:hover,
 .sort-header-btn--active {
   color: var(--accent);
-  background: rgba(0,255,135,0.045);
-  border-color: rgba(0,255,135,0.18);
+}
+
+.sort-header-btn:hover {
+  background: rgba(0,255,135,0.04);
+  border-color: rgba(0,255,135,0.12);
+}
+
+.sort-header-btn--active {
+  background: transparent;
+  border-color: transparent;
 }
 
 .sort-header-icon {
@@ -2144,7 +2152,7 @@ td.msg-prompt {
 
 .project-meta {
   display: grid;
-  grid-template-columns: 280px 88px 78px 64px 86px 96px 22px;
+  grid-template-columns: 280px 100px 88px 84px 96px 104px 22px;
   column-gap: 24px;
   align-items: center;
   flex-shrink: 0;
