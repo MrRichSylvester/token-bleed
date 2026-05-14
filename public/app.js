@@ -1102,7 +1102,7 @@ async function renderOverview() {
 
 async function loadOverviewSessions() {
   const sessionsParams = { limit: 10, offset: 0 };
-  const activeSources = state.overviewFilter.sources;
+  const activeSources = state.agentSources;
   if (activeSources.length === 1) sessionsParams.source = activeSources[0];
   if (state.overviewSessionSort === 'cost') sessionsParams.sort = 'cost';
 
@@ -1120,7 +1120,7 @@ async function loadOverviewSessions() {
 async function renderProjects() {
   setLoading();
   try {
-    const activeSources = state.projectsFilter.sources;
+    const activeSources = state.agentSources;
     const projectParams = activeSources.length === 1 ? { source: activeSources[0] } : {};
     const projects = await api.projects(projectParams);
     const sortedProjects = sortProjects(projects);
@@ -1151,12 +1151,13 @@ async function renderProjects() {
     content.querySelectorAll('[data-project-source]').forEach(btn => {
       btn.addEventListener('click', () => {
         const source = btn.dataset.projectSource;
-        const current = state.projectsFilter.sources;
+        const current = state.agentSources;
         const isActive = current.includes(source);
         if (isActive && current.length === 1) return;
-        state.projectsFilter.sources = isActive
+        state.agentSources = isActive
           ? current.filter(s => s !== source)
           : [...current, source].sort();
+        localStorage.setItem('agent-sources', JSON.stringify(state.agentSources));
         renderProjects();
       });
     });
@@ -1235,7 +1236,7 @@ function renderProjectCard(p) {
 async function renderSessions() {
   setLoading();
   try {
-    const activeSources = state.sessionsFilter.sources;
+    const activeSources = state.agentSources;
     const sessionSourceParams = activeSources.length === 1 ? { source: activeSources[0] } : {};
     const [{ sessions, total }, projects, models] = await Promise.all([
       api.sessions({
@@ -1311,12 +1312,13 @@ async function renderSessions() {
     content.querySelectorAll('[data-session-source]').forEach(btn => {
       btn.addEventListener('click', () => {
         const source = btn.dataset.sessionSource;
-        const current = state.sessionsFilter.sources;
+        const current = state.agentSources;
         const isActive = current.includes(source);
         if (isActive && current.length === 1) return;
-        state.sessionsFilter.sources = isActive
+        state.agentSources = isActive
           ? current.filter(s => s !== source)
           : [...current, source].sort();
+        localStorage.setItem('agent-sources', JSON.stringify(state.agentSources));
         state.sessionsPage = 0;
         renderSessions();
       });
@@ -4325,7 +4327,7 @@ function init() {
   document.querySelectorAll('.nav-item[data-view]').forEach(el => {
     el.addEventListener('click', (e) => {
       e.preventDefault();
-      state.sessionsFilter = { projectId: '', model: '', sources: ['claude', 'codex'] };
+      state.sessionsFilter = { projectId: '', model: '' };
       state.sessionsPage = 0;
       navigate(el.dataset.view);
     });
@@ -4357,6 +4359,13 @@ function init() {
   try {
     const savedPcOrder = localStorage.getItem('pc-metrics-order');
     if (savedPcOrder) state.pcMetricsOrder = JSON.parse(savedPcOrder);
+  } catch { }
+  try {
+    const savedAgentSources = localStorage.getItem('agent-sources');
+    if (savedAgentSources) {
+      const parsed = JSON.parse(savedAgentSources);
+      if (Array.isArray(parsed) && parsed.length > 0) state.agentSources = parsed;
+    }
   } catch { }
   try {
     const savedSessHidden = localStorage.getItem('sess-hidden-cols');
