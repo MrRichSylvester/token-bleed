@@ -1,6 +1,6 @@
 {
   "name": "token-bleed",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "description": "See exactly what your Claude Code and Codex sessions cost. Per prompt. Per session. Per project.",
   "type": "module",
   "bin": {
