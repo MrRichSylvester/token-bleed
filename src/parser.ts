@@ -4,6 +4,7 @@ import os from 'node:os';
 import type { Session, ParsedData, RawEntry, TokenUsage, SessionMessage } from './types.js';
 import { calculateCost } from './pricing.js';
 import { computeProjects, computeStats, computeDaily, computeModelStats } from './aggregator.js';
+import { parseCodexSessionMessages, parseCodexSessions } from './codexParser.js';
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
@@ -166,6 +167,7 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
 
   return {
     id: sessionId,
+    source: 'claude',
     projectId,
     projectName,
     projectPath,
@@ -189,8 +191,10 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
   };
 }
 
-function parseAll(): ParsedData {
+function parseClaudeSessions(): Session[] {
   const sessions: Session[] = [];
+
+  if (!fs.existsSync(CLAUDE_PROJECTS_DIR)) return sessions;
 
   const projectFolders = fs.readdirSync(CLAUDE_PROJECTS_DIR).filter((f) => {
     try {
@@ -230,6 +234,12 @@ function parseAll(): ParsedData {
     }
   }
 
+  return sessions;
+}
+
+function parseAll(): ParsedData {
+  const sessions = [...parseClaudeSessions(), ...parseCodexSessions()];
+
   sessions.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
   const projects = computeProjects(sessions);
@@ -252,7 +262,9 @@ export function invalidateCache(): void {
   cache = null;
 }
 
-export function parseSessionMessages(sessionId: string, projectId: string): SessionMessage[] {
+export function parseSessionMessages(sessionId: string, projectId: string, source: Session['source'] = 'claude'): SessionMessage[] {
+  if (source === 'codex') return parseCodexSessionMessages(sessionId);
+
   const filePath = path.join(CLAUDE_PROJECTS_DIR, projectId, `${sessionId}.jsonl`);
   let raw: string;
   try {

@@ -2850,14 +2850,18 @@ td.msg-prompt {
   border-radius: 3px;
 }
 
-/* ── Session compare view toggle ── */
-.sc-metrics-bar-spacer {
-  flex: 1;
+/* ── Session compare toolbar ── */
+.sc-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
 }
 
 .sc-view-toggle {
   display: flex;
-  gap: 4px;
+  gap: 3px;
   background: var(--surface);
   border: 1px solid var(--border-2);
   border-radius: var(--radius-sm);
@@ -2868,16 +2872,17 @@ td.msg-prompt {
 .sc-view-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   background: none;
   border: none;
   border-radius: 4px;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-family: var(--font-sans);
   padding: 4px 10px;
   transition: background 120ms, color 120ms;
+  white-space: nowrap;
 }
 
 .sc-view-btn--on {
@@ -2890,6 +2895,102 @@ td.msg-prompt {
   background: rgba(255,255,255,0.04);
 }
 
+.sc-present-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-family: var(--font-sans);
+  padding: 5px 13px;
+  transition: background 150ms, color 150ms, border-color 150ms;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.sc-present-btn:hover {
+  color: var(--violet);
+  border-color: rgba(185,133,244,0.35);
+  background: var(--violet-dim);
+}
+
+.sc-present-btn--on {
+  color: var(--violet);
+  border-color: rgba(185,133,244,0.4);
+  background: var(--violet-dim);
+}
+
+.sc-present-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+
+/* ── Presenter mode card blurring ── */
+.sc-card-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+
+.sc-card--present:not(.sc-card--revealed) {
+  cursor: pointer;
+}
+
+.sc-card--present:not(.sc-card--revealed) .sc-card-inner {
+  filter: blur(14px);
+  user-select: none;
+  pointer-events: none;
+}
+
+.sc-card--present.sc-card--revealed .sc-card-inner {
+  filter: none;
+  transition: filter 350ms ease;
+}
+
+.sc-card-veil {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  z-index: 10;
+  background: rgba(6, 9, 16, 0.2);
+}
+
+.sc-veil-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+  background: var(--surface-3);
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  padding: 8px 18px;
+}
+
+/* ── Rank badge ── */
+.sc-card-rank {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  padding: 2px 7px;
+  align-self: flex-start;
+  flex-shrink: 0;
+}
+
 /* ── Session compare card view ── */
 .sc-cards-grid {
   display: flex;
@@ -2900,6 +3001,7 @@ td.msg-prompt {
 }
 
 .sc-card {
+  position: relative;
   flex: 1;
   min-width: 260px;
   max-width: 380px;

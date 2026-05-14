@@ -9,6 +9,7 @@ export interface TokenUsage {
 
 export interface Session {
   id: string;
+  source: 'claude' | 'codex';
   projectId: string;
   projectName: string;
   projectPath: string;

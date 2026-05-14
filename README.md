@@ -47,7 +47,7 @@ Claude Code is productive. It's also expensive when you're not watching.
 
 It manages context automatically, fires tool calls in the background, and reads files you didn't ask it to read. By the time your Anthropic bill lands, you have no idea which project burned $40 or which prompt pattern is costing you three times what it should.
 
-Token Bleed fixes that. It reads your local session logs and turns them into a real cost dashboard. No API key, no cloud, no telemetry. Your data never leaves your machine.
+Token Bleed fixes that. It reads your local Claude Code and Codex session logs and turns them into a real cost dashboard. No API key, no cloud, no telemetry. Your data never leaves your machine.
 
 ---
 
@@ -99,7 +99,7 @@ Token Bleed isn't just a dashboard—it helps you connect Claude Code to non-Ant
 
 ## How it works
 
-Claude Code writes a `.jsonl` file for every session to `~/.claude/projects/`. Token Bleed reads those files on startup, parses token usage and model info from each assistant turn, and computes cost using Anthropic's published pricing.
+Claude Code writes a `.jsonl` file for every session to `~/.claude/projects/`. Codex writes rollout logs to `~/.codex/sessions/`. Token Bleed reads those files on startup, parses token usage and model info from each assistant turn, and computes cost using built-in model pricing where available.
 
 No network requests. No accounts. Runs at `localhost:3847`.
 
@@ -145,7 +145,7 @@ The server exposes a REST API if you want to build on top of it.
 | ------ | ---------------------------- | ------------------------------------------------------- |
 | GET    | `/api/stats`                 | Global totals and summary                               |
 | GET    | `/api/projects`              | Per-project cost and usage                              |
-| GET    | `/api/sessions`              | Paginated session list (filterable by project, model)   |
+| GET    | `/api/sessions`              | Paginated session list (filterable by source, project, model) |
 | GET    | `/api/sessions/:id`          | Single session detail                                   |
 | GET    | `/api/sessions/:id/messages` | Per-message breakdown for a session                     |
 | GET    | `/api/models`                | Per-model aggregated stats                              |

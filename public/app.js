@@ -54,6 +54,16 @@ function modelBadgeHtml(model, isLocal) {
   return `<span class="model-badge claude">${model}</span>`;
 }
 
+function isRemoteModelName(model) {
+  if (!model) return false;
+  return /^(claude-|anthropic\/|gpt-|openai\/|codex-|o[1345]|gemini|google\/)/i.test(model);
+}
+
+function isLocalSession(s) {
+  const hasUsage = s && s.usage && (s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheReadTokens + s.usage.cacheCreationTokens) > 0;
+  return !!hasUsage && s.cost === 0 && !isRemoteModelName(s.primaryModel);
+}
+
 function shortModelName(model) {
   // claude-opus-4-7 → Opus 4.7
   // claude-sonnet-4-6 → Sonnet 4.6
@@ -207,6 +217,9 @@ const state = {
   compSelection: [], // [{id, label}] max 6
   scHiddenMetrics: new Set(),
   scView: 'table',
+  scOrder: 'added',   // 'added' | 'ranked'
+  scPresent: false,
+  scRevealed: new Set(), // set of session IDs revealed in present mode
   data: {
     stats: null,
     daily: null,
@@ -809,7 +822,7 @@ async function toggleProject(projectId, cardEl) {
 }
 
 function renderProjectCard(p) {
-  const isLocal = !p.totalCost;
+  const isLocal = !p.totalCost && !isRemoteModelName(p.topModel);
   return `
     <div class="project-card" data-project="${escHtml(p.id)}">
       <div class="project-card-header">
@@ -939,7 +952,7 @@ function renderSessionsTable(sessions, opts = {}) {
   const colCount = (opts.compact ? 8 : 9) + checkCol;
 
   const rows = sessions.map(s => {
-    const local = s.cost === 0 && s.usage.inputTokens + s.usage.outputTokens > 0;
+    const local = isLocalSession(s);
     const costCell = local
       ? `<span class="amber mono">${fmtTokens(s.usage.inputTokens + s.usage.outputTokens)}</span>`
       : `<span class="mono">${fmtCost(s.cost)}</span>`;
@@ -1035,6 +1048,10 @@ function bindSelectableRows(container, sessions) {
   });
 }
 
+function saveCompSelection() {
+  localStorage.setItem('sc-selection', JSON.stringify(state.compSelection));
+}
+
 function syncAllCheckboxes() {
   document.querySelectorAll('.session-check').forEach(cb => {
     cb.checked = state.compSelection.some(x => x.id === cb.dataset.sessionId);
@@ -1102,6 +1119,7 @@ function renderCompareBar() {
 
   bar.querySelector('#compare-bar-dismiss').addEventListener('click', () => {
     state.compSelection = [];
+    saveCompSelection();
     syncAllCheckboxes();
     renderCompareBar();
   });
@@ -1479,15 +1497,28 @@ function renderSessionComparePage() {
     return `<button class="sc-metric-toggle${on ? ' sc-metric-toggle--on' : ''}" data-metric="${escHtml(m.key)}">${escHtml(m.label)}</button>`;
   }).join('');
 
-  const viewToggle = `
-    <div class="sc-view-toggle">
-      <button class="sc-view-btn${state.scView === 'table' ? ' sc-view-btn--on' : ''}" data-view="table" title="Table view">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="3" rx="1" fill="currentColor" opacity=".5"/><rect x="1" y="6" width="12" height="2" rx="1" fill="currentColor"/><rect x="1" y="10" width="12" height="2" rx="1" fill="currentColor" opacity=".7"/></svg>
-        Table
-      </button>
-      <button class="sc-view-btn${state.scView === 'card' ? ' sc-view-btn--on' : ''}" data-view="card" title="Card view">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5.5" height="12" rx="1.5" fill="currentColor"/><rect x="7.5" y="1" width="5.5" height="12" rx="1.5" fill="currentColor" opacity=".7"/></svg>
-        Cards
+  const toolbar = `
+    <div class="sc-toolbar">
+      <div class="sc-view-toggle">
+        <button class="sc-view-btn${state.scView === 'table' ? ' sc-view-btn--on' : ''}" data-view="table" title="Table view">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="3" rx="1" fill="currentColor" opacity=".5"/><rect x="1" y="6" width="12" height="2" rx="1" fill="currentColor"/><rect x="1" y="10" width="12" height="2" rx="1" fill="currentColor" opacity=".7"/></svg>
+          Table
+        </button>
+        <button class="sc-view-btn${state.scView === 'card' ? ' sc-view-btn--on' : ''}" data-view="card" title="Card view">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5.5" height="12" rx="1.5" fill="currentColor"/><rect x="7.5" y="1" width="5.5" height="12" rx="1.5" fill="currentColor" opacity=".7"/></svg>
+          Cards
+        </button>
+      </div>
+      <div class="sc-view-toggle">
+        <button class="sc-view-btn${state.scOrder === 'added' ? ' sc-view-btn--on' : ''}" data-order="added" title="Order by when sessions were added">Added order</button>
+        <button class="sc-view-btn${state.scOrder === 'ranked' ? ' sc-view-btn--on' : ''}" data-order="ranked" title="Rank by cost + tokens + duration">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 12L5 7L8 9L12 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Best Overall
+        </button>
+      </div>
+      <button class="sc-present-btn${state.scPresent ? ' sc-present-btn--on' : ''}" id="sc-present-toggle">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg>
+        ${state.scPresent ? 'Exit Present' : 'Present'}
       </button>
     </div>
   `;
@@ -1512,9 +1543,9 @@ function renderSessionComparePage() {
     <div class="sc-metrics-bar">
       <span class="sc-metrics-bar-label">Metrics</span>
       <div class="sc-metric-toggles">${metricToggles}</div>
-      <div class="sc-metrics-bar-spacer"></div>
-      ${viewToggle}
     </div>
+
+    ${toolbar}
 
     <div id="session-comparison-result"></div>
   `;
@@ -1522,6 +1553,7 @@ function renderSessionComparePage() {
   content.querySelectorAll('[data-remove]').forEach(btn => {
     btn.addEventListener('click', () => {
       state.compSelection.splice(parseInt(btn.dataset.remove), 1);
+      saveCompSelection();
       syncAllCheckboxes();
       renderCompareBar();
       renderSessionComparePage();
@@ -1536,6 +1568,7 @@ function renderSessionComparePage() {
       const s = allSessions.find(x => x.id === id);
       if (!s) return;
       state.compSelection.push({ id, label: sessionChipLabel(s) });
+      saveCompSelection();
       syncAllCheckboxes();
       renderCompareBar();
       renderSessionComparePage();
@@ -1566,6 +1599,22 @@ function renderSessionComparePage() {
     });
   });
 
+  content.querySelectorAll('[data-order]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.scOrder = btn.dataset.order;
+      localStorage.setItem('sc-order', state.scOrder);
+      state.scRevealed.clear();
+      content.querySelectorAll('[data-order]').forEach(b => b.classList.toggle('sc-view-btn--on', b.dataset.order === state.scOrder));
+      renderSessionComparisonResult();
+    });
+  });
+
+  document.getElementById('sc-present-toggle')?.addEventListener('click', () => {
+    state.scPresent = !state.scPresent;
+    state.scRevealed.clear();
+    renderSessionComparePage();
+  });
+
   renderSessionComparisonResult();
 }
 
@@ -1588,7 +1637,27 @@ function renderSessionComparisonTable() {
     return;
   }
 
-  function isLocal(s) { return s.cost === 0 && (s.usage.inputTokens + s.usage.outputTokens) > 0; }
+  function isLocal(s) { return isLocalSession(s); }
+
+  if (state.scOrder === 'ranked' && selected.length >= 2) {
+    const dims = selected.map(s => ({
+      s,
+      cost: isLocal(s) ? null : s.cost,
+      tokens: s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens,
+      duration: s.duration,
+    }));
+    const norm = (key) => {
+      const vs = dims.map(d => d[key]).filter(v => v !== null && v > 0);
+      if (vs.length < 2) return dims.map(() => 0);
+      const lo = Math.min(...vs), hi = Math.max(...vs);
+      if (lo === hi) return dims.map(() => 0);
+      return dims.map(d => d[key] !== null && d[key] > 0 ? (d[key] - lo) / (hi - lo) : 0.5);
+    };
+    const nc = norm('cost'), nt = norm('tokens'), nd = norm('duration');
+    const scored = dims.map((d, i) => ({ s: d.s, score: nc[i] + nt[i] + nd[i] }));
+    scored.sort((a, b) => a.score - b.score);
+    selected.splice(0, selected.length, ...scored.map(x => x.s));
+  }
 
   const localTooltip = LOCAL_TOKEN_TIP;
 
@@ -1677,7 +1746,28 @@ function renderSessionComparisonCards() {
     return;
   }
 
-  function isLocal(s) { return s.cost === 0 && (s.usage.inputTokens + s.usage.outputTokens) > 0; }
+  function isLocal(s) { return isLocalSession(s); }
+
+  // Sort by composite rank if requested
+  if (state.scOrder === 'ranked' && selected.length >= 2) {
+    const dims = selected.map(s => ({
+      s,
+      cost: isLocal(s) ? null : s.cost,
+      tokens: s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens,
+      duration: s.duration,
+    }));
+    const norm = (key) => {
+      const vs = dims.map(d => d[key]).filter(v => v !== null && v > 0);
+      if (vs.length < 2) return dims.map(() => 0);
+      const lo = Math.min(...vs), hi = Math.max(...vs);
+      if (lo === hi) return dims.map(() => 0);
+      return dims.map(d => d[key] !== null && d[key] > 0 ? (d[key] - lo) / (hi - lo) : 0.5);
+    };
+    const nc = norm('cost'), nt = norm('tokens'), nd = norm('duration');
+    const scored = dims.map((d, i) => ({ s: d.s, score: nc[i] + nt[i] + nd[i] }));
+    scored.sort((a, b) => a.score - b.score);
+    selected.splice(0, selected.length, ...scored.map(x => x.s));
+  }
 
   const allMetrics = [
     { key: 'cost',          label: 'Cost',           val: s => s.cost,                                                                                             fmt: s => isLocal(s) ? 'local' : fmtCost(s.cost),                    lowerBetter: true,  skipLocal: true },
@@ -1708,6 +1798,9 @@ function renderSessionComparisonCards() {
 
   const cards = selected.map((s, i) => {
     const local = isLocal(s);
+    const revealed = state.scRevealed.has(s.id);
+    const presentCls = state.scPresent ? (revealed ? ' sc-card--present sc-card--revealed' : ' sc-card--present') : '';
+
     const tiles = metrics.map(m => {
       const v = m.val(s);
       const score = metricScores.get(m.key);
@@ -1723,28 +1816,52 @@ function renderSessionComparisonCards() {
         </div>`;
     }).join('');
 
+    const rankBadge = state.scOrder === 'ranked'
+      ? `<div class="sc-card-rank">#${i + 1}</div>`
+      : '';
+
     return `
-      <div class="sc-card">
-        <div class="sc-card-hero">
-          <div class="sc-card-hero-letter">${COMP_LETTERS[i]}</div>
-          <div class="sc-card-hero-info">
-            <div class="sc-card-project">${escHtml(s.projectName)}</div>
-            <div class="sc-card-date">${fmtDateTime(s.startTime)}</div>
-            <div class="sc-card-model-row">${modelBadgeHtml(s.primaryModel, local)}</div>
+      <div class="sc-card${presentCls}" data-present-id="${escHtml(s.id)}">
+        <div class="sc-card-inner">
+          <div class="sc-card-hero">
+            <div class="sc-card-hero-letter">${COMP_LETTERS[i]}</div>
+            <div class="sc-card-hero-info">
+              <div class="sc-card-project">${escHtml(s.projectName)}</div>
+              <div class="sc-card-date">${fmtDateTime(s.startTime)}</div>
+              <div class="sc-card-model-row">${modelBadgeHtml(s.primaryModel, local)}</div>
+            </div>
+            ${rankBadge}
           </div>
+          <div class="sc-card-prompt" title="${escHtml(s.firstPrompt)}">${escHtml(s.firstPrompt.slice(0, 80))}${s.firstPrompt.length > 80 ? '…' : ''}</div>
+          <div class="sc-card-tiles">${tiles}</div>
         </div>
-        <div class="sc-card-prompt" title="${escHtml(s.firstPrompt)}">${escHtml(s.firstPrompt.slice(0, 80))}${s.firstPrompt.length > 80 ? '…' : ''}</div>
-        <div class="sc-card-tiles">${tiles}</div>
+        ${state.scPresent && !revealed ? `<div class="sc-card-veil"><span class="sc-veil-label">Click to reveal</span></div>` : ''}
       </div>`;
   }).join('');
 
+  const presentHint = state.scPresent
+    ? `<p class="sc-present-hint">${state.scRevealed.size} of ${selected.length} revealed &mdash; click a card to reveal it</p>`
+    : '';
+
   wrap.innerHTML = `
+    ${presentHint}
     <div class="sc-cards-grid">${cards}</div>
     <div class="sc-legend" style="margin-top:16px">
       <span class="sc-legend-item"><span class="sc-tile--best sc-legend-swatch"></span> Best</span>
       <span class="sc-legend-item"><span class="sc-tile--worst sc-legend-swatch"></span> Worst</span>
     </div>
   `;
+
+  if (state.scPresent) {
+    wrap.querySelectorAll('.sc-card--present').forEach(card => {
+      card.addEventListener('click', () => {
+        const id = card.dataset.presentId;
+        if (state.scRevealed.has(id)) return;
+        state.scRevealed.add(id);
+        renderSessionComparisonCards();
+      });
+    });
+  }
 }
 
 function periodLabel() {
@@ -1821,6 +1938,7 @@ function renderPeriodSelector() {
       state.sessionsPage = 0;
       state.data.allSessions = null;
       state.compSelection = [];
+      saveCompSelection();
       renderCompareBar();
       renderPeriodSelector();
       renderView();
@@ -1834,6 +1952,7 @@ function renderPeriodSelector() {
       state.sessionsPage = 0;
       state.data.allSessions = null;
       state.compSelection = [];
+      saveCompSelection();
       renderCompareBar();
       renderPeriodSelector();
       renderView();
@@ -3004,7 +3123,12 @@ function init() {
     const savedHidden = localStorage.getItem('sc-hidden-metrics');
     if (savedHidden) JSON.parse(savedHidden).forEach(k => state.scHiddenMetrics.add(k));
   } catch {}
+  try {
+    const savedSel = localStorage.getItem('sc-selection');
+    if (savedSel) state.compSelection = JSON.parse(savedSel);
+  } catch {}
   if (localStorage.getItem('sc-view') === 'card') state.scView = 'card';
+  if (localStorage.getItem('sc-order') === 'ranked') state.scOrder = 'ranked';
 
   // Prompt modal
   const promptModal = document.getElementById('prompt-modal');

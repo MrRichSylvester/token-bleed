@@ -91,6 +91,7 @@ app.get('/api/sessions', async (req) => {
   const sessions = getSessions(query.since);
 
   let filtered = sessions;
+  if (query.source) filtered = filtered.filter((s) => s.source === query.source);
   if (query.projectId) filtered = filtered.filter((s) => s.projectId === query.projectId);
   if (query.model) filtered = filtered.filter((s) => s.primaryModel === query.model);
   if (query.sort === 'cost') {
@@ -118,7 +119,7 @@ app.get('/api/sessions/:id/messages', async (req, reply) => {
   const { sessions } = getData();
   const session = sessions.find((s) => s.id === id);
   if (!session) { reply.status(404); return { error: 'Session not found' }; }
-  return parseSessionMessages(id, session.projectId);
+  return parseSessionMessages(id, session.projectId, session.source);
 });
 
 app.get('/api/models', async (req) => {
@@ -215,7 +216,7 @@ app.get('/api/export/sessions.csv', async (req, reply) => {
   const sessions = getSessions(since);
 
   const headers = [
-    'id', 'project', 'date', 'model', 'cost',
+    'id', 'source', 'project', 'date', 'model', 'cost',
     'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_creation_tokens',
     'cache_hit_rate', 'duration_ms', 'messages', 'tool_calls',
   ];
@@ -229,7 +230,7 @@ app.get('/api/export/sessions.csv', async (req, reply) => {
 
   const rows = sessions.map((s) =>
     [
-      s.id, s.projectName, s.startTime.slice(0, 10), s.primaryModel,
+      s.id, s.source, s.projectName, s.startTime.slice(0, 10), s.primaryModel,
       s.cost.toFixed(6), s.usage.inputTokens, s.usage.outputTokens,
       s.usage.cacheReadTokens, s.usage.cacheCreationTokens,
       s.cacheHitRate.toFixed(4), s.duration, s.messageCount, s.toolCallCount,
