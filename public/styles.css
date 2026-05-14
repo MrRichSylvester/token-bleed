@@ -2573,7 +2573,8 @@ td.msg-prompt {
   vertical-align: middle;
 }
 
-.session-check {
+.session-check,
+.prompt-check {
   appearance: none;
   width: 15px;
   height: 15px;
@@ -2587,16 +2588,19 @@ td.msg-prompt {
   flex-shrink: 0;
 }
 
-.session-check:hover {
+.session-check:hover,
+.prompt-check:hover {
   border-color: var(--accent);
 }
 
-.session-check:checked {
+.session-check:checked,
+.prompt-check:checked {
   background: var(--accent);
   border-color: var(--accent);
 }
 
-.session-check:checked::after {
+.session-check:checked::after,
+.prompt-check:checked::after {
   content: '';
   display: block;
   width: 4px;
@@ -2612,6 +2616,32 @@ td.msg-prompt {
 
 .session-row.compare-selected {
   background: rgba(0, 255, 135, 0.04);
+}
+
+.prompt-compare-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.prompt-compare-badges .model-badge {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prompt-compare-prompt {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  cursor: pointer;
+}
+
+.prompt-compare-prompt:hover {
+  color: var(--text-secondary);
+  background: var(--surface-3);
 }
 
 /* ── Compare bar (fixed bottom) ── */

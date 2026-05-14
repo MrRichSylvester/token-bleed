@@ -1,3 +1,5 @@
+import { renderPromptCompare } from './promptCompare.js';
+
 // ── Formatters ────────────────────────────────────────────────
 
 function fmtCost(n) {
@@ -149,6 +151,7 @@ const api = {
   daily: (params = {}) => api.fetch(api.withSince('/api/daily', params)),
   projects: (params = {}) => api.fetch(api.withSince('/api/projects', params)),
   sessions: (params = {}) => api.fetch(api.withSince('/api/sessions', params)),
+  prompts: (params = {}) => api.fetch(api.withSince('/api/prompts', params)),
   models: (params = {}) => api.fetch(api.withSince('/api/models', params)),
   comparison: (m1, m2) => {
     const extra = m1 && m2 ? { model1: m1, model2: m2 } : {};
@@ -238,6 +241,9 @@ const state = {
   sessionsSort: { key: 'startTime', dir: 'desc' },
   projectsFilter: { sources: ['claude', 'codex'] },
   projectsSort: { key: 'lastActivity', dir: 'desc' },
+  promptCompSelection: [], // [{id, label}] max 6
+  pcView: 'table',
+  pcOrder: 'added',
   appSettings: null,
   compModel1: '',
   compModel2: '',
@@ -1187,8 +1193,10 @@ function renderSessionsTable(sessions, opts = {}) {
       : '';
 
     return `<tr class="session-row" data-session-id="${escHtml(s.id)}" data-project-id="${escHtml(s.projectId)}"
+      data-project-name="${escHtml(s.projectName)}"
       data-entrypoint="${escHtml(s.entrypoint || '')}"
       data-source="${escHtml(s.source || 'claude')}"
+      data-start-time="${escHtml(s.startTime || '')}"
       data-git-branch="${escHtml(s.gitBranch || '')}"
       data-version="${escHtml(s.version || '')}"
       data-permission-mode="${escHtml(s.permissionMode || '')}"
@@ -1284,6 +1292,105 @@ function syncAllCheckboxes() {
 }
 
 const COMP_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+function promptCompareLabel(prompt) {
+  const text = (prompt.prompt || '').replace(/\s+/g, ' ').trim();
+  return `${prompt.projectName || 'Prompt'} · ${text.slice(0, 36)}${text.length > 36 ? '…' : ''}`;
+}
+
+function savePromptCompSelection() {
+  localStorage.setItem('pc-selection', JSON.stringify(state.promptCompSelection));
+}
+
+function syncPromptCheckboxes() {
+  document.querySelectorAll('.prompt-check').forEach(cb => {
+    cb.checked = state.promptCompSelection.some(x => x.id === cb.dataset.promptId);
+  });
+}
+
+function renderPromptCompareBar() {
+  let bar = document.getElementById('prompt-compare-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'prompt-compare-bar';
+    document.body.appendChild(bar);
+  }
+
+  if (state.promptCompSelection.length === 0) {
+    bar.className = 'compare-bar compare-bar--hidden';
+    bar.innerHTML = '';
+    return;
+  }
+
+  const n = state.promptCompSelection.length;
+  const canCompare = n >= 2;
+  const atCap = n >= COMP_LETTERS.length;
+  const chips = state.promptCompSelection.map((entry, i) => `
+    <div class="compare-chip compare-chip--prompt">
+      <span class="compare-chip-letter">${COMP_LETTERS[i]}</span>
+      <span class="compare-chip-name">${escHtml(entry.label)}</span>
+      <button class="compare-chip-clear" data-clear-prompt="${i}" title="Remove">×</button>
+    </div>
+  `).join('');
+  const hint = !atCap
+    ? `<span class="compare-bar-hint">${canCompare ? '+ select more prompts' : 'pick one more prompt'}</span>`
+    : '';
+
+  bar.className = 'compare-bar';
+  bar.innerHTML = `
+    <div class="compare-bar-inner">
+      <div class="compare-bar-chips">${chips}${hint}</div>
+      ${canCompare ? `<button class="compare-go-btn" id="prompt-compare-go-btn">Compare Prompts (${n}) →</button>` : ''}
+      <button class="compare-bar-dismiss" id="prompt-compare-dismiss" title="Clear all">✕</button>
+    </div>
+  `;
+
+  bar.querySelectorAll('[data-clear-prompt]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      state.promptCompSelection.splice(parseInt(btn.dataset.clearPrompt, 10), 1);
+      savePromptCompSelection();
+      syncPromptCheckboxes();
+      renderPromptCompareBar();
+    });
+  });
+
+  bar.querySelector('#prompt-compare-go-btn')?.addEventListener('click', () => {
+    bar.className = 'compare-bar compare-bar--hidden';
+    navigate('prompt-compare');
+  });
+
+  bar.querySelector('#prompt-compare-dismiss')?.addEventListener('click', () => {
+    state.promptCompSelection = [];
+    savePromptCompSelection();
+    syncPromptCheckboxes();
+    renderPromptCompareBar();
+  });
+}
+
+function bindPromptSelectableRows(container) {
+  container.querySelectorAll('.prompt-check').forEach(cb => {
+    cb.addEventListener('click', e => e.stopPropagation());
+    cb.addEventListener('change', () => {
+      const id = cb.dataset.promptId;
+      const idx = state.promptCompSelection.findIndex(x => x.id === id);
+      if (cb.checked) {
+        if (state.promptCompSelection.length >= COMP_LETTERS.length) {
+          cb.checked = false;
+          return;
+        }
+        if (idx === -1) {
+          state.promptCompSelection.push({ id, label: cb.dataset.promptLabel || 'Prompt' });
+        }
+      } else if (idx !== -1) {
+        state.promptCompSelection.splice(idx, 1);
+      }
+      savePromptCompSelection();
+      syncPromptCheckboxes();
+      renderPromptCompareBar();
+    });
+  });
+}
 
 function renderCompareBar() {
   let bar = document.getElementById('compare-bar');
@@ -1416,14 +1523,23 @@ async function toggleSession(row, container) {
       wrap.insertAdjacentHTML('beforeend', '<div class="empty-state" style="min-height:40px"><div class="empty-msg">No messages found</div></div>');
       return;
     }
-    wrap.insertAdjacentHTML('beforeend', renderMessagesTable(messages));
+    const sessionContext = {
+      id: sessionId,
+      projectId: row.dataset.projectId || '',
+      projectName: row.dataset.projectName || '',
+      source: row.dataset.source || 'claude',
+      startTime: row.dataset.startTime || '',
+    };
+    wrap.insertAdjacentHTML('beforeend', renderMessagesTable(messages, { selectable: true, session: sessionContext }));
+    bindPromptSelectableRows(wrap);
   } catch (e) {
     loader.remove();
     wrap.insertAdjacentHTML('beforeend', `<div class="empty-state"><div class="empty-msg">Error: ${escHtml(e.message)}</div></div>`);
   }
 }
 
-function renderMessagesTable(messages) {
+function renderMessagesTable(messages, opts = {}) {
+  const selectable = Boolean(opts.selectable && opts.session);
   const rows = messages.map((m, i) => {
     const totalTok = m.inputTokens + m.outputTokens + m.cacheCreationTokens + m.cacheReadTokens;
     const thinkCell = m.hasThinking
@@ -1434,7 +1550,16 @@ function renderMessagesTable(messages) {
     const promptCell = prompt.length > TRUNC
       ? `<span class="msg-prompt-text">${escHtml(prompt.slice(0, TRUNC))}…</span><span class="msg-prompt-expand" data-prompt="${escHtml(prompt)}">show more</span>`
       : `<span class="msg-prompt-text">${escHtml(prompt)}</span>`;
+    const promptId = selectable ? `${opts.session.id}::${m.index}` : '';
+    const promptForLabel = selectable
+      ? { prompt, projectName: opts.session.projectName }
+      : null;
+    const checked = selectable && state.promptCompSelection.some(x => x.id === promptId);
+    const checkCell = selectable
+      ? `<td class="check-cell"><input type="checkbox" class="prompt-check" data-prompt-id="${escHtml(promptId)}" data-prompt-label="${escHtml(promptCompareLabel(promptForLabel))}" ${checked ? 'checked' : ''}></td>`
+      : '';
     return `<tr>
+      ${checkCell}
       <td class="muted" style="font-size:11px;width:24px;text-align:right">${i + 1}</td>
       <td class="muted nowrap" style="font-size:11px">${fmtDateTime(m.timestamp)}</td>
       <td class="msg-prompt">${promptCell}</td>
@@ -1449,6 +1574,7 @@ function renderMessagesTable(messages) {
   return `<table class="messages-table">
     <thead>
       <tr>
+        ${selectable ? '<th class="check-cell"></th>' : ''}
         <th style="width:24px">#</th>
         <th>Time</th>
         <th>Prompt</th>
@@ -2299,6 +2425,11 @@ async function renderView() {
     case 'sessions':        return renderSessions();
     case 'comparison':      return renderComparison();
     case 'session-compare': return renderSessionCompare();
+    case 'prompt-compare':  return renderPromptCompare({
+      state, api, setLoading, showError, escHtml, fmtCost, fmtTokens, fmtPct, fmtDateTime,
+      modelBadgeHtml, agentBadgeHtml, COMP_LETTERS, renderPromptCompareBar, savePromptCompSelection,
+      syncPromptCheckboxes, promptCompareLabel,
+    });
     case 'tips':            return renderTips();
     case 'settings':        return renderSettings();
     default:                return renderOverview();
@@ -3529,6 +3660,7 @@ function init() {
   // Period selector — rendered dynamically
   renderPeriodSelector();
   renderCompareBar();
+  renderPromptCompareBar();
   updateProviderIndicator();
 
   // Nav clicks
@@ -3552,8 +3684,16 @@ function init() {
     const savedSel = localStorage.getItem('sc-selection');
     if (savedSel) state.compSelection = JSON.parse(savedSel);
   } catch {}
+  try {
+    const savedPromptSel = localStorage.getItem('pc-selection');
+    if (savedPromptSel) state.promptCompSelection = JSON.parse(savedPromptSel);
+  } catch {}
   if (localStorage.getItem('sc-view') === 'card') state.scView = 'card';
   if (localStorage.getItem('sc-order') === 'ranked') state.scOrder = 'ranked';
+  if (localStorage.getItem('pc-view') === 'card') state.pcView = 'card';
+  if (localStorage.getItem('pc-order') === 'ranked') state.pcOrder = 'ranked';
+  renderCompareBar();
+  renderPromptCompareBar();
   try {
     const savedOrder = localStorage.getItem('sc-metrics-order');
     if (savedOrder) state.scMetricsOrder = JSON.parse(savedOrder);

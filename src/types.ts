@@ -114,6 +114,17 @@ export interface SessionMessage {
   hasThinking: boolean;
 }
 
+export interface PromptTurn extends SessionMessage {
+  id: string;
+  sessionId: string;
+  projectId: string;
+  projectName: string;
+  source: 'claude' | 'codex';
+  sessionStartTime: string;
+  totalTokens: number;
+  cacheHitRate: number;
+}
+
 export interface AppSettings {
   plan: 'api' | 'pro' | 'max' | 'max5x' | 'max20x';
   customPricing: Record<string, { input: number; output: number; cacheWrite: number; cacheRead: number }>;

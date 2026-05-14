@@ -11,7 +11,7 @@ import { getData, invalidateCache, parseSessionMessages } from './parser.js';
 import { filterByDate, computeProjects, computeStats, computeDaily, computeModelStats } from './aggregator.js';
 import { PRICING, LEGACY_MODEL_KEYS, setCustomPricing } from './pricing.js';
 import { computeTips } from './tips.js';
-import type { AppSettings } from './types.js';
+import type { AppSettings, PromptTurn, Session } from './types.js';
 import {
   readProviders, writeProviders,
   readPid, writePid, clearPid, isProcessRunning,
@@ -65,6 +65,36 @@ function getSessions(since?: string, source?: string) {
   let filtered = filterByDate(sessions, since);
   if (source) filtered = filtered.filter((s) => s.source === source);
   return filtered;
+}
+
+function promptTurnId(sessionId: string, index: number): string {
+  return `${sessionId}::${index}`;
+}
+
+function parsePromptTurnId(id: string): { sessionId: string; index: number } | null {
+  const sep = id.lastIndexOf('::');
+  if (sep === -1) return null;
+  const index = Number(id.slice(sep + 2));
+  if (!Number.isInteger(index) || index < 0) return null;
+  return { sessionId: id.slice(0, sep), index };
+}
+
+function promptTurnsForSession(session: Session): PromptTurn[] {
+  return parseSessionMessages(session.id, session.projectId, session.source).map((message) => {
+    const totalTokens = message.inputTokens + message.outputTokens + message.cacheCreationTokens + message.cacheReadTokens;
+    const cacheDenom = message.inputTokens + message.cacheCreationTokens + message.cacheReadTokens;
+    return {
+      ...message,
+      id: promptTurnId(session.id, message.index),
+      sessionId: session.id,
+      projectId: session.projectId,
+      projectName: session.projectName,
+      source: session.source,
+      sessionStartTime: session.startTime,
+      totalTokens,
+      cacheHitRate: cacheDenom > 0 ? message.cacheReadTokens / cacheDenom : 0,
+    };
+  });
 }
 
 app.get('/api/refresh', async () => {
@@ -155,6 +185,30 @@ app.get('/api/sessions/:id/messages', async (req, reply) => {
   const session = sessions.find((s) => s.id === id);
   if (!session) { reply.status(404); return { error: 'Session not found' }; }
   return parseSessionMessages(id, session.projectId, session.source);
+});
+
+app.get('/api/prompts', async (req) => {
+  const query = req.query as Record<string, string>;
+  const { sessions } = getData();
+  const sessionMap = new Map(sessions.map((s) => [s.id, s]));
+
+  if (query.ids) {
+    const turns: PromptTurn[] = [];
+    for (const id of query.ids.split(',').filter(Boolean)) {
+      const parsed = parsePromptTurnId(id);
+      if (!parsed) continue;
+      const session = sessionMap.get(parsed.sessionId);
+      if (!session) continue;
+      const turn = promptTurnsForSession(session).find((m) => m.index === parsed.index);
+      if (turn) turns.push(turn);
+    }
+    return { prompts: turns };
+  }
+
+  let filtered = getSessions(query.since, query.source);
+  if (query.projectId) filtered = filtered.filter((s) => s.projectId === query.projectId);
+  if (query.sessionId) filtered = filtered.filter((s) => s.id === query.sessionId);
+  return { prompts: filtered.flatMap(promptTurnsForSession) };
 });
 
 app.get('/api/models', async (req) => {
