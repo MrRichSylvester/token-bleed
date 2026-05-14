@@ -131,6 +131,7 @@ export interface AppSettings {
   codexPlan: 'api' | 'go' | 'plus' | 'pro';
   customPricing: Record<string, { input: number; output: number; cacheWrite: number; cacheRead: number }>;
   durationMode: 'active' | 'wallclock';
+  showNoPromptSessions: boolean;
 }
 
 export interface Tip {

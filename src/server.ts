@@ -26,6 +26,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   codexPlan: 'api',
   customPricing: {},
   durationMode: 'active',
+  showNoPromptSessions: false,
 };
 
 function readClaudeSettings(): Record<string, unknown> {
@@ -44,6 +45,7 @@ function readAppSettings(): AppSettings {
       codexPlan: raw.codexPlan ?? DEFAULT_APP_SETTINGS.codexPlan,
       customPricing: raw.customPricing ?? {},
       durationMode: raw.durationMode ?? DEFAULT_APP_SETTINGS.durationMode,
+      showNoPromptSessions: raw.showNoPromptSessions === true,
     };
   } catch {
     return { ...DEFAULT_APP_SETTINGS };
@@ -67,6 +69,10 @@ function getSessions(since?: string, source?: string) {
   let filtered = filterByDate(sessions, since);
   if (source) filtered = filtered.filter((s) => s.source === source);
   return filtered;
+}
+
+function isNoPromptSession(session: Session): boolean {
+  return !session.aiTitle && session.firstPrompt.trim().toLowerCase() === '(no prompt)';
 }
 
 function promptTurnId(sessionId: string, index: number): string {
@@ -125,8 +131,12 @@ app.get('/api/projects', async (req) => {
 app.get('/api/sessions', async (req) => {
   const query = req.query as Record<string, string>;
   const sessions = getSessions(query.since);
+  const includeNoPrompt = query.includeNoPrompt === undefined
+    ? readAppSettings().showNoPromptSessions
+    : query.includeNoPrompt === 'true';
 
   let filtered = sessions;
+  if (!includeNoPrompt) filtered = filtered.filter((s) => !isNoPromptSession(s));
   if (query.source) filtered = filtered.filter((s) => s.source === query.source);
   if (query.projectId) filtered = filtered.filter((s) => s.projectId === query.projectId);
   if (query.model) filtered = filtered.filter((s) => s.primaryModel === query.model);
@@ -252,8 +262,10 @@ app.get('/api/app-settings', async () => {
 
   return {
     plan: appSettings.plan,
+    codexPlan: appSettings.codexPlan,
     customPricing: appSettings.customPricing,
     durationMode: appSettings.durationMode,
+    showNoPromptSessions: appSettings.showNoPromptSessions,
     builtinPricing: PRICING,
     detectedModels: [...detectedModels].sort(),
     legacyModelKeys: [...LEGACY_MODEL_KEYS],
@@ -285,6 +297,13 @@ app.post('/api/app-settings', async (req, reply) => {
       reply.status(400); return { error: 'Invalid durationMode' };
     }
     current.durationMode = body.durationMode as AppSettings['durationMode'];
+  }
+
+  if (body.showNoPromptSessions !== undefined) {
+    if (typeof body.showNoPromptSessions !== 'boolean') {
+      reply.status(400); return { error: 'showNoPromptSessions must be a boolean' };
+    }
+    current.showNoPromptSessions = body.showNoPromptSessions;
   }
 
   if (body.customPricing !== undefined) {

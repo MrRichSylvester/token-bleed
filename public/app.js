@@ -2971,6 +2971,18 @@ async function renderSettings() {
         </div>
       </div>
 
+      <div class="settings-section">
+        <div class="settings-section-title">Session List Visibility</div>
+        <div class="settings-section-desc">
+          Choose whether sessions with no visible first prompt appear in session lists. Usage from those sessions is still included in totals, charts, projects, and model metrics either way.
+        </div>
+        <div class="retention-row">
+          <button class="plan-btn${appSettings.showNoPromptSessions ? '' : ' active'}" id="no-prompt-hide-btn">Hide no-prompt sessions</button>
+          <button class="plan-btn${appSettings.showNoPromptSessions ? ' active' : ''}" id="no-prompt-show-btn">Show no-prompt sessions</button>
+          <span id="no-prompt-save-status" class="settings-save-status"></span>
+        </div>
+      </div>
+
       ${renderProvidersSectionHtml(providerData)}
     `;
 
@@ -3193,6 +3205,27 @@ async function renderSettings() {
         try {
           await api.saveAppSettings({ durationMode: mode });
           state.appSettings.durationMode = mode;
+          status.textContent = 'Saved';
+          setTimeout(() => { status.textContent = ''; }, 2000);
+        } catch {
+          status.textContent = 'Error saving';
+        }
+      });
+    });
+
+    // No-prompt session visibility buttons
+    ['no-prompt-hide-btn', 'no-prompt-show-btn'].forEach(id => {
+      document.getElementById(id)?.addEventListener('click', async () => {
+        const showNoPromptSessions = id === 'no-prompt-show-btn';
+        const status = document.getElementById('no-prompt-save-status');
+        document.getElementById('no-prompt-hide-btn').classList.toggle('active', !showNoPromptSessions);
+        document.getElementById('no-prompt-show-btn').classList.toggle('active', showNoPromptSessions);
+        status.textContent = 'Saving…';
+        try {
+          await api.saveAppSettings({ showNoPromptSessions });
+          state.appSettings.showNoPromptSessions = showNoPromptSessions;
+          state.sessionsPage = 0;
+          state.data.allSessions = null;
           status.textContent = 'Saved';
           setTimeout(() => { status.textContent = ''; }, 2000);
         } catch {
