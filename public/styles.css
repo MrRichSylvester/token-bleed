@@ -235,6 +235,58 @@ html[data-size="large"]  { font-size: 19px; }
   background: var(--accent-dim);
 }
 
+.header-share-btn--open {
+  color: var(--accent);
+  border-color: var(--accent-glow);
+  background: var(--accent-dim);
+}
+
+.share-wrap {
+  position: relative;
+}
+
+.share-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 2000;
+  min-width: 170px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+  padding: 4px;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.share-dropdown:not([hidden]) {
+  display: flex;
+}
+
+.share-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-family: var(--font-sans);
+  color: var(--text-muted);
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 100ms, color 100ms;
+}
+
+.share-dropdown-item:hover {
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+}
+
 .header-byline {
   color: var(--text-muted);
   font-size: 0.85rem;
@@ -2057,6 +2109,14 @@ td.msg-prompt {
 
 .project-sort-title-cell {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.project-sort-agent-label {
+  width: 70px;
+  flex-shrink: 0;
 }
 
 .project-sort-meta {

@@ -1,5 +1,8 @@
 import { renderPromptCompare } from './promptCompare.js';
 
+const promptStore = new Map();
+let promptStoreIdx = 0;
+
 // ── Formatters ────────────────────────────────────────────────
 
 function fmtCost(n) {
@@ -371,12 +374,13 @@ const state = {
   periodMode: 'calendar',
   period: 'all',
   overviewSessionSort: 'cost',
-  overviewFilter: { sources: ['claude', 'codex'] },
+  agentSources: ['claude', 'codex'],
+  overviewFilter: {},
   sessionsPage: 0,
   sessionsLimit: 50,
-  sessionsFilter: { projectId: '', model: '', sources: ['claude', 'codex'] },
+  sessionsFilter: { projectId: '', model: '' },
   sessionsSort: { key: 'startTime', dir: 'desc' },
-  projectsFilter: { sources: ['claude', 'codex'] },
+  projectsFilter: {},
   projectsSort: { key: 'lastActivity', dir: 'desc' },
   promptCompSelection: [], // [{id, label}] max 6
   pcView: 'table',
@@ -803,6 +807,7 @@ function scaleUsageGrid() {
 
 const PROJECT_SORT_OPTIONS = [
   { key: 'name', label: 'Project' },
+  { key: 'source', label: 'Agent' },
   { key: 'topModel', label: 'Model' },
   { key: 'lastActivity', label: 'Last Active' },
   { key: 'totalCost', label: 'Total Cost' },
@@ -812,7 +817,7 @@ const PROJECT_SORT_OPTIONS = [
 ];
 
 function projectSortDefaultDir(key) {
-  return key === 'name' || key === 'topModel' ? 'asc' : 'desc';
+  return key === 'name' || key === 'topModel' || key === 'source' ? 'asc' : 'desc';
 }
 
 function sortProjects(projects) {
@@ -821,7 +826,7 @@ function sortProjects(projects) {
 
   return [...projects].sort((a, b) => {
     let cmp = 0;
-    if (key === 'name' || key === 'topModel') {
+    if (key === 'name' || key === 'topModel' || key === 'source') {
       cmp = (a[key] || '').localeCompare(b[key] || '', undefined, { sensitivity: 'base' });
     } else if (key === 'lastActivity') {
       cmp = new Date(a.lastActivity || 0).getTime() - new Date(b.lastActivity || 0).getTime();
@@ -851,10 +856,11 @@ function renderProjectSortHeader() {
   return `
     <div class="project-list-sort-header" aria-label="Project sort controls">
       <div class="project-sort-title-cell">
+        ${!state.projHiddenStats.has('agent') ? sortButtonHtml('project', 'source', 'Agent', state.projectsSort, 'project-sort-agent-label') : ''}
         ${sortButtonHtml('project', 'name', 'Project', state.projectsSort)}
       </div>
       <div class="project-sort-meta" style="grid-template-columns:${projectMetaGridCols()}">
-        ${sortButtonHtml('project', 'topModel', 'Model', state.projectsSort, 'project-sort-model')}
+        ${!state.projHiddenStats.has('topModel') ? sortButtonHtml('project', 'topModel', 'Model', state.projectsSort, 'project-sort-model') : ''}
         ${showStat('totalCost') ? sortButtonHtml('project', 'totalCost', 'Total Cost', state.projectsSort, 'project-sort-stat') : ''}
         ${showStat('totalTokens') ? sortButtonHtml('project', 'totalTokens', 'Tokens', state.projectsSort, 'project-sort-stat') : ''}
         ${showStat('sessionCount') ? sortButtonHtml('project', 'sessionCount', 'Sessions', state.projectsSort, 'project-sort-stat') : ''}
@@ -911,7 +917,7 @@ function setSessionSort(key) {
 async function renderOverview() {
   setLoading();
   try {
-    const activeSources = state.overviewFilter.sources;
+    const activeSources = state.agentSources;
     const sourceParams = activeSources.length === 1 ? { source: activeSources[0] } : {};
     const sourceStatsPromise = Promise.all(activeSources.map(source =>
       api.stats({ source }).then(sourceStats => [source, sourceStats])
@@ -1072,12 +1078,13 @@ async function renderOverview() {
     content.querySelectorAll('[data-overview-source]').forEach(btn => {
       btn.addEventListener('click', () => {
         const source = btn.dataset.overviewSource;
-        const current = state.overviewFilter.sources;
+        const current = state.agentSources;
         const isActive = current.includes(source);
         if (isActive && current.length === 1) return;
-        state.overviewFilter.sources = isActive
+        state.agentSources = isActive
           ? current.filter(s => s !== source)
           : [...current, source].sort();
+        localStorage.setItem('agent-sources', JSON.stringify(state.agentSources));
         renderOverview();
       });
     });
@@ -1203,13 +1210,13 @@ function renderProjectCard(p) {
       <div class="project-card-header">
         <div class="project-title-block">
           <div class="project-title-row">
-            <div class="project-agent-stack">${agentBadges}</div>
+            ${!state.projHiddenStats.has('agent') ? `<div class="project-agent-stack">${agentBadges}</div>` : ''}
             <div class="project-name">${escHtml(p.name)}</div>
             <div class="project-path">${escHtml(p.path)}</div>
           </div>
         </div>
         <div class="project-meta" style="grid-template-columns:${projectMetaGridCols()}">
-          ${modelBadgeHtml(p.topModel, isLocal)}
+          ${!state.projHiddenStats.has('topModel') ? modelBadgeHtml(p.topModel, isLocal) : ''}
           ${!state.projHiddenStats.has('totalCost') ? `<div class="project-stat"><div class="project-stat-value mono">${fmtCost(p.totalCost)}</div><div class="project-stat-label">Total Cost</div></div>` : ''}
           ${!state.projHiddenStats.has('totalTokens') ? `<div class="project-stat"><div class="project-stat-value mono">${fmtTokens(p.totalTokens)}</div><div class="project-stat-label">Tokens</div></div>` : ''}
           ${!state.projHiddenStats.has('sessionCount') ? `<div class="project-stat"><div class="project-stat-value">${p.sessionCount}</div><div class="project-stat-label">Sessions</div></div>` : ''}
@@ -1482,6 +1489,8 @@ const SESSION_COL_DEFS = [
 ];
 
 const PROJECT_STAT_DEFS = [
+  { key: 'agent', label: 'Agent' },
+  { key: 'topModel', label: 'Model' },
   { key: 'totalCost', label: 'Total Cost' },
   { key: 'totalTokens', label: 'Tokens' },
   { key: 'sessionCount', label: 'Sessions' },
@@ -1491,7 +1500,7 @@ const PROJECT_STAT_DEFS = [
 
 // Column widths in the same order as the grid: model badge, each stat, chevron spacer
 const PROJECT_META_COLS = [
-  { key: null, width: '280px' }, // model badge — always visible
+  { key: 'topModel', width: '280px' },
   { key: 'totalCost', width: '100px' },
   { key: 'totalTokens', width: '88px' },
   { key: 'sessionCount', width: '84px' },
@@ -1761,9 +1770,14 @@ function renderMessagesTable(messages, opts = {}) {
       : `<td class="right muted" style="font-size:11px">—</td>`;
     const TRUNC = 120;
     const prompt = m.prompt || '';
-    const promptCell = prompt.length > TRUNC
-      ? `<span class="msg-prompt-text">${escHtml(prompt.slice(0, TRUNC))}…</span><span class="msg-prompt-expand" data-prompt="${escHtml(prompt)}">show more</span>`
-      : `<span class="msg-prompt-text">${escHtml(prompt)}</span>`;
+    let promptCell;
+    if (prompt.length > TRUNC) {
+      const idx = promptStoreIdx++;
+      promptStore.set(idx, prompt);
+      promptCell = `<span class="msg-prompt-text">${escHtml(prompt.slice(0, TRUNC))}…</span><span class="msg-prompt-expand" data-prompt-idx="${idx}">show more</span>`;
+    } else {
+      promptCell = `<span class="msg-prompt-text">${escHtml(prompt)}</span>`;
+    }
     const promptId = selectable ? `${opts.session.id}::${m.index}` : '';
     const promptForLabel = selectable
       ? { prompt, projectName: opts.session.projectName }
@@ -4382,7 +4396,9 @@ function init() {
   document.addEventListener('click', e => {
     const el = e.target.closest('.msg-prompt-expand');
     if (!el) return;
-    promptModalBody.textContent = el.dataset.prompt;
+    const prompt = promptStore.get(Number(el.dataset.promptIdx));
+    if (prompt == null) return;
+    promptModalBody.textContent = prompt;
     promptModal.hidden = false;
   });
 
@@ -4396,18 +4412,51 @@ function init() {
     document.getElementById('sc-fields-btn')?.classList.remove('sc-fields-btn--open');
   });
 
-  // Share button
-  document.getElementById('header-share-btn').addEventListener('click', async () => {
-    const url = 'https://tokenbleed.dev';
-    const text = 'Token Bleed shows you exactly what you\'re spending on Claude Code and Codex. Free at tokenbleed.dev';
-    if (navigator.share) {
-      try { await navigator.share({ title: 'Token Bleed', text, url }); } catch {}
-    } else {
-      await navigator.clipboard.writeText(url);
-      const btn = document.getElementById('header-share-btn');
-      const orig = btn.innerHTML;
-      btn.textContent = 'Copied!';
-      setTimeout(() => { btn.innerHTML = orig; }, 1800);
+  // Share dropdown
+  const shareWrap = document.getElementById('share-wrap');
+  const shareBtn = document.getElementById('header-share-btn');
+  const shareDropdown = document.getElementById('share-dropdown');
+  const shareUrl = 'https://tokenbleed.dev';
+  const shareText = 'Token Bleed shows you exactly what you\'re spending on Claude Code and Codex. Free.';
+
+  shareBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = !shareDropdown.hidden;
+    shareDropdown.hidden = open;
+    shareBtn.classList.toggle('header-share-btn--open', !open);
+  });
+
+  document.getElementById('share-x').addEventListener('click', (e) => {
+    e.preventDefault();
+    const params = new URLSearchParams({ text: shareText + ' ' + shareUrl });
+    window.open('https://x.com/intent/tweet?' + params, '_blank', 'noopener');
+    shareDropdown.hidden = true;
+    shareBtn.classList.remove('header-share-btn--open');
+  });
+
+  document.getElementById('share-li').addEventListener('click', (e) => {
+    e.preventDefault();
+    const params = new URLSearchParams({ url: shareUrl });
+    window.open('https://www.linkedin.com/sharing/share-offsite/?' + params, '_blank', 'noopener');
+    shareDropdown.hidden = true;
+    shareBtn.classList.remove('header-share-btn--open');
+  });
+
+  document.getElementById('share-copy').addEventListener('click', async () => {
+    await navigator.clipboard.writeText(shareUrl);
+    const item = document.getElementById('share-copy');
+    item.textContent = 'Copied!';
+    setTimeout(() => {
+      item.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg> Copy link';
+    }, 1800);
+    shareDropdown.hidden = true;
+    shareBtn.classList.remove('header-share-btn--open');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!shareWrap.contains(e.target)) {
+      shareDropdown.hidden = true;
+      shareBtn.classList.remove('header-share-btn--open');
     }
   });
 
