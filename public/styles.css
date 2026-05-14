@@ -89,6 +89,14 @@ html[data-size="large"]  { font-size: 17px; }
   gap: 10px;
 }
 
+.data-freshness {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
 .header-logo-row {
   display: flex;
   align-items: center;

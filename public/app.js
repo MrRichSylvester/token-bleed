@@ -262,6 +262,7 @@ const state = {
   scMetricsOrder: null,   // null = default; array of keys when user has reordered
   scPresent: false,
   scRevealed: new Set(),  // set of session IDs revealed in present mode
+  dataFetchedAt: null,
   data: {
     stats: null,
     daily: null,
@@ -765,6 +766,7 @@ async function renderOverview() {
     state.data.daily = daily;
     state.data.models = models;
     state.data.projects = projects;
+    stampDataFetch();
 
     // Usage by model — all models, session count as universal bar metric
     const modelRows = models.slice(0, 8).map(m => ({
@@ -950,6 +952,7 @@ async function renderProjects() {
     const projects = await api.projects(projectParams);
     const sortedProjects = sortProjects(projects);
     state.data.projects = sortedProjects;
+    stampDataFetch();
 
     const content = document.getElementById('content');
     content.innerHTML = `
@@ -1079,6 +1082,7 @@ async function renderSessions() {
     state.data.sessionTotal = total;
     state.data.projects = projects;
     state.data.models = models;
+    stampDataFetch();
 
     const totalPages = Math.ceil(total / state.sessionsLimit);
     const curPage = state.sessionsPage;
@@ -3069,6 +3073,24 @@ async function renderSettings() {
 async function updateProviderIndicator() {
   const el = document.querySelector('#header .header-left');
   if (el) el.innerHTML = '';
+}
+
+// ── Data freshness stamp ───────────────────────────────────────
+
+function stampDataFetch() {
+  state.dataFetchedAt = new Date();
+  updateDataFreshnessDisplay();
+}
+
+function updateDataFreshnessDisplay() {
+  const el = document.querySelector('#header .header-left');
+  if (!el || !state.dataFetchedAt) return;
+  const d = state.dataFetchedAt;
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const today = new Date();
+  const isToday = d.toDateString() === today.toDateString();
+  const dateStr = isToday ? 'today' : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  el.innerHTML = `<span class="data-freshness">as of ${dateStr} ${time}</span>`;
 }
 
 // ── Provider settings section HTML ─────────────────────────────
