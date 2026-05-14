@@ -1272,6 +1272,7 @@ function renderCompareBar() {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       state.compSelection.splice(parseInt(btn.dataset.clear), 1);
+      saveCompSelection();
       syncAllCheckboxes();
       renderCompareBar();
     });
@@ -2188,6 +2189,8 @@ function renderSessionComparisonCards() {
       </div>
     ` : ''}
   `;
+
+  bindSessionCompareInlineControls(wrap);
 
   if (state.scPresent) {
     wrap.querySelectorAll('.sc-card--present').forEach(card => {
