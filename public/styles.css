@@ -427,72 +427,6 @@ html[data-size="large"]  { font-size: 17px; }
   margin-bottom: 0;
 }
 
-.project-header-controls {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.project-sort-control {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  background: var(--surface);
-  border: 1px solid var(--border-2);
-  border-radius: var(--radius-sm);
-  padding: 3px;
-}
-
-.project-sort-label {
-  padding: 0 7px 0 8px;
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
-.project-sort-select {
-  height: 26px;
-  min-width: 122px;
-  background: var(--surface-2);
-  border: 0;
-  border-radius: 4px;
-  color: var(--text-secondary);
-  font-size: 0.82rem;
-  font-family: var(--font-sans);
-  padding: 0 26px 0 9px;
-  cursor: pointer;
-  outline: none;
-}
-
-.project-sort-select:focus {
-  color: var(--text-primary);
-  box-shadow: 0 0 0 2px var(--accent-dim);
-}
-
-.project-sort-dir {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  background: none;
-  border: 0;
-  border-radius: 4px;
-  color: var(--accent);
-  cursor: pointer;
-  font-size: 1rem;
-  font-family: var(--font-mono);
-  line-height: 1;
-  transition: background 120ms, color 120ms;
-}
-
-.project-sort-dir:hover {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
-
 /* ── Overview top row ── */
 .overview-top {
   display: grid;
@@ -751,6 +685,15 @@ thead th {
 }
 
 thead th.right { text-align: right; }
+
+thead .sort-header-btn {
+  margin: -4px -6px;
+}
+
+.table-sort-btn--right {
+  justify-content: flex-end;
+  margin-left: auto;
+}
 
 tbody tr {
   border-top: 1px solid var(--border);
@@ -2034,6 +1977,74 @@ td.msg-prompt {
 /* ── Project cards ── */
 .project-list { display: flex; flex-direction: column; gap: 8px; }
 
+.project-list-sort-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 0 22px 8px;
+  margin-top: -10px;
+  color: var(--text-muted);
+}
+
+.project-sort-title-cell {
+  min-width: 0;
+}
+
+.project-sort-meta {
+  display: grid;
+  grid-template-columns: 280px 88px 78px 64px 86px 96px 22px;
+  column-gap: 24px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sort-header-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  padding: 3px 5px;
+  text-transform: uppercase;
+  transition: background 120ms, border-color 120ms, color 120ms;
+  white-space: nowrap;
+}
+
+.sort-header-btn:hover,
+.sort-header-btn--active {
+  color: var(--accent);
+  background: rgba(0,255,135,0.045);
+  border-color: rgba(0,255,135,0.18);
+}
+
+.sort-header-icon {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+.project-sort-meta .sort-header-btn {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.project-sort-model { justify-content: flex-start !important; }
+.project-sort-chevron-spacer {
+  width: 22px;
+  flex-shrink: 0;
+}
+
 .project-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -2064,9 +2075,9 @@ td.msg-prompt {
   font-size: 1.54rem;
   color: var(--text-muted);
   transition: transform 200ms ease;
-  margin-left: 12px;
   user-select: none;
   line-height: 1;
+  justify-self: center;
 }
 
 .project-card.expanded .project-chevron {
@@ -2132,10 +2143,18 @@ td.msg-prompt {
 }
 
 .project-meta {
-  display: flex;
-  gap: 24px;
+  display: grid;
+  grid-template-columns: 280px 88px 78px 64px 86px 96px 22px;
+  column-gap: 24px;
   align-items: center;
   flex-shrink: 0;
+}
+
+.project-meta > .model-badge {
+  justify-self: start;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .project-agent-stack {
@@ -2153,6 +2172,7 @@ td.msg-prompt {
   flex-direction: column;
   align-items: flex-end;
   gap: 2px;
+  min-width: 0;
 }
 
 .project-stat-value {

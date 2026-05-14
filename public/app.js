@@ -235,6 +235,7 @@ const state = {
   sessionsPage: 0,
   sessionsLimit: 50,
   sessionsFilter: { projectId: '', model: '', sources: ['claude', 'codex'] },
+  sessionsSort: { key: 'startTime', dir: 'desc' },
   projectsFilter: { sources: ['claude', 'codex'] },
   projectsSort: { key: 'lastActivity', dir: 'desc' },
   appSettings: null,
@@ -630,16 +631,17 @@ function scaleUsageGrid() {
 }
 
 const PROJECT_SORT_OPTIONS = [
+  { key: 'name', label: 'Project' },
+  { key: 'topModel', label: 'Model' },
   { key: 'lastActivity', label: 'Last Active' },
   { key: 'totalCost', label: 'Total Cost' },
   { key: 'totalTokens', label: 'Tokens' },
   { key: 'sessionCount', label: 'Sessions' },
   { key: 'cacheHitRate', label: 'Cache Hit' },
-  { key: 'name', label: 'Project Name' },
 ];
 
 function projectSortDefaultDir(key) {
-  return key === 'name' ? 'asc' : 'desc';
+  return key === 'name' || key === 'topModel' ? 'asc' : 'desc';
 }
 
 function sortProjects(projects) {
@@ -648,8 +650,8 @@ function sortProjects(projects) {
 
   return [...projects].sort((a, b) => {
     let cmp = 0;
-    if (key === 'name') {
-      cmp = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+    if (key === 'name' || key === 'topModel') {
+      cmp = (a[key] || '').localeCompare(b[key] || '', undefined, { sensitivity: 'base' });
     } else if (key === 'lastActivity') {
       cmp = new Date(a.lastActivity || 0).getTime() - new Date(b.lastActivity || 0).getTime();
     } else {
@@ -661,6 +663,75 @@ function sortProjects(projects) {
     }
     return cmp * mult;
   });
+}
+
+function sortButtonHtml(scope, key, label, sort, extraClass = '') {
+  const active = sort.key === key;
+  const icon = active ? (sort.dir === 'asc' ? '↑' : '↓') : '';
+  return `
+    <button class="sort-header-btn${active ? ' sort-header-btn--active' : ''}${extraClass ? ` ${extraClass}` : ''}" data-${scope}-sort="${key}">
+      <span>${label}</span>${icon ? `<span class="sort-header-icon">${icon}</span>` : ''}
+    </button>
+  `;
+}
+
+function renderProjectSortHeader() {
+  return `
+    <div class="project-list-sort-header" aria-label="Project sort controls">
+      <div class="project-sort-title-cell">
+        ${sortButtonHtml('project', 'name', 'Project', state.projectsSort)}
+      </div>
+      <div class="project-sort-meta">
+        ${sortButtonHtml('project', 'topModel', 'Model', state.projectsSort, 'project-sort-model')}
+        ${sortButtonHtml('project', 'totalCost', 'Total Cost', state.projectsSort, 'project-sort-stat')}
+        ${sortButtonHtml('project', 'totalTokens', 'Tokens', state.projectsSort, 'project-sort-stat')}
+        ${sortButtonHtml('project', 'sessionCount', 'Sessions', state.projectsSort, 'project-sort-stat')}
+        ${sortButtonHtml('project', 'cacheHitRate', 'Cache Hit', state.projectsSort, 'project-sort-stat')}
+        ${sortButtonHtml('project', 'lastActivity', 'Last Active', state.projectsSort, 'project-sort-date')}
+        <span class="project-sort-chevron-spacer"></span>
+      </div>
+    </div>
+  `;
+}
+
+function setProjectSort(key) {
+  state.projectsSort = {
+    key,
+    dir: state.projectsSort.key === key
+      ? (state.projectsSort.dir === 'asc' ? 'desc' : 'asc')
+      : projectSortDefaultDir(key),
+  };
+  localStorage.setItem('projects-sort', JSON.stringify(state.projectsSort));
+  renderProjects();
+}
+
+const SESSION_SORT_OPTIONS = [
+  { key: 'startTime', label: 'Started' },
+  { key: 'projectName', label: 'Project' },
+  { key: 'prompt', label: 'Prompt' },
+  { key: 'source', label: 'Agent' },
+  { key: 'primaryModel', label: 'Model' },
+  { key: 'totalTokens', label: 'Tokens' },
+  { key: 'cost', label: 'Cost' },
+  { key: 'cacheHitRate', label: 'Cache%' },
+  { key: 'messageCount', label: 'Msgs' },
+  { key: 'duration', label: 'Duration' },
+];
+
+function sessionSortDefaultDir(key) {
+  return ['projectName', 'prompt', 'source', 'primaryModel'].includes(key) ? 'asc' : 'desc';
+}
+
+function setSessionSort(key) {
+  state.sessionsSort = {
+    key,
+    dir: state.sessionsSort.key === key
+      ? (state.sessionsSort.dir === 'asc' ? 'desc' : 'asc')
+      : sessionSortDefaultDir(key),
+  };
+  state.sessionsPage = 0;
+  localStorage.setItem('sessions-sort', JSON.stringify(state.sessionsSort));
+  renderSessions();
 }
 
 // ── Overview ───────────────────────────────────────────────────
@@ -866,47 +937,23 @@ async function renderProjects() {
     const projects = await api.projects(projectParams);
     const sortedProjects = sortProjects(projects);
     state.data.projects = sortedProjects;
-    const sortOptions = PROJECT_SORT_OPTIONS.map(opt => `
-      <option value="${opt.key}" ${state.projectsSort.key === opt.key ? 'selected' : ''}>${opt.label}</option>
-    `).join('');
-    const sortDirLabel = state.projectsSort.dir === 'asc' ? 'Ascending' : 'Descending';
-    const sortDirIcon = state.projectsSort.dir === 'asc' ? '↑' : '↓';
 
     const content = document.getElementById('content');
     content.innerHTML = `
       <h1 class="page-title">Projects</h1>
       <div class="page-subtitle-row">
         <p class="page-subtitle">${periodLabel()} · ${sortedProjects.length} project${sortedProjects.length !== 1 ? 's' : ''}</p>
-        <div class="project-header-controls">
-          <div class="project-sort-control" aria-label="Project sorting">
-            <span class="project-sort-label">Sort</span>
-            <select id="project-sort-select" class="project-sort-select" aria-label="Sort projects by">
-              ${sortOptions}
-            </select>
-            <button id="project-sort-dir" class="project-sort-dir" title="${sortDirLabel}" aria-label="${sortDirLabel}">
-              ${sortDirIcon}
-            </button>
-          </div>
-          <div class="sc-view-toggle agent-source-toggle" aria-label="Project agent filter">
-            <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-project-source="claude">Claude Code</button>
-            <button class="sc-view-btn agent-source-btn${activeSources.includes('codex') ? ' sc-view-btn--on' : ''}" data-project-source="codex">Codex</button>
-          </div>
+        <div class="sc-view-toggle agent-source-toggle" aria-label="Project agent filter">
+          <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-project-source="claude">Claude Code</button>
+          <button class="sc-view-btn agent-source-btn${activeSources.includes('codex') ? ' sc-view-btn--on' : ''}" data-project-source="codex">Codex</button>
         </div>
       </div>
+      ${renderProjectSortHeader()}
       <div class="project-list">${sortedProjects.map(renderProjectCard).join('')}</div>
     `;
 
-    document.getElementById('project-sort-select')?.addEventListener('change', e => {
-      const key = e.target.value;
-      state.projectsSort = { key, dir: projectSortDefaultDir(key) };
-      localStorage.setItem('projects-sort', JSON.stringify(state.projectsSort));
-      renderProjects();
-    });
-
-    document.getElementById('project-sort-dir')?.addEventListener('click', () => {
-      state.projectsSort.dir = state.projectsSort.dir === 'asc' ? 'desc' : 'asc';
-      localStorage.setItem('projects-sort', JSON.stringify(state.projectsSort));
-      renderProjects();
+    content.querySelectorAll('[data-project-sort]').forEach(btn => {
+      btn.addEventListener('click', () => setProjectSort(btn.dataset.projectSort));
     });
 
     content.querySelectorAll('[data-project-source]').forEach(btn => {
@@ -1015,6 +1062,8 @@ async function renderSessions() {
       api.sessions({
         limit: state.sessionsLimit,
         offset: state.sessionsPage * state.sessionsLimit,
+        sort: state.sessionsSort.key,
+        dir: state.sessionsSort.dir,
         ...sessionSourceParams,
         ...(state.sessionsFilter.projectId ? { projectId: state.sessionsFilter.projectId } : {}),
         ...(state.sessionsFilter.model ? { model: state.sessionsFilter.model } : {}),
@@ -1062,7 +1111,7 @@ async function renderSessions() {
       </div>
 
       <div class="table-wrap" id="sessions-table-wrap">
-        ${renderSessionsTable(sessions, { selectable: true })}
+        ${renderSessionsTable(sessions, { selectable: true, sortable: true })}
         ${totalPages > 1 ? renderPagination(curPage, totalPages) : ''}
       </div>
     `;
@@ -1070,6 +1119,10 @@ async function renderSessions() {
     const tableWrap = document.getElementById('sessions-table-wrap');
     bindSessionExpansion(tableWrap);
     bindSelectableRows(tableWrap, sessions);
+
+    content.querySelectorAll('[data-session-sort]').forEach(btn => {
+      btn.addEventListener('click', () => setSessionSort(btn.dataset.sessionSort));
+    });
 
     content.querySelectorAll('[data-session-source]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1163,23 +1216,26 @@ function renderSessionsTable(sessions, opts = {}) {
     </tr>`;
   }).join('');
 
-  const projectCol = opts.compact ? '' : '<th>Project</th>';
+  const sortHead = (key, label, cls = '') => opts.sortable
+    ? `<th${cls ? ` class="${cls}"` : ''}>${sortButtonHtml('session', key, label, state.sessionsSort, cls.includes('right') ? 'table-sort-btn--right' : '')}</th>`
+    : `<th${cls ? ` class="${cls}"` : ''}>${label}</th>`;
+  const projectCol = opts.compact ? '' : sortHead('projectName', 'Project');
   const checkHead = opts.selectable ? '<th class="check-cell"></th>' : '';
 
   return `<table>
     <thead>
       <tr>
         ${checkHead}
-        <th>Started</th>
+        ${sortHead('startTime', 'Started')}
         ${projectCol}
-        <th>Prompt</th>
-        <th>Agent</th>
-        <th>Model</th>
-        <th class="right">Tokens</th>
-        <th class="right">Cost</th>
-        <th class="right">Cache%</th>
-        <th class="right">Msgs</th>
-        <th class="right">Duration</th>
+        ${sortHead('prompt', 'Prompt')}
+        ${sortHead('source', 'Agent')}
+        ${sortHead('primaryModel', 'Model')}
+        ${sortHead('totalTokens', 'Tokens', 'right')}
+        ${sortHead('cost', 'Cost', 'right')}
+        ${sortHead('cacheHitRate', 'Cache%', 'right')}
+        ${sortHead('messageCount', 'Msgs', 'right')}
+        ${sortHead('duration', 'Duration', 'right')}
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -3507,6 +3563,13 @@ function init() {
     const validProjectSort = PROJECT_SORT_OPTIONS.some(opt => opt.key === savedProjectSort?.key);
     if (validProjectSort && ['asc', 'desc'].includes(savedProjectSort.dir)) {
       state.projectsSort = savedProjectSort;
+    }
+  } catch {}
+  try {
+    const savedSessionSort = JSON.parse(localStorage.getItem('sessions-sort') || 'null');
+    const validSessionSort = SESSION_SORT_OPTIONS.some(opt => opt.key === savedSessionSort?.key);
+    if (validSessionSort && ['asc', 'desc'].includes(savedSessionSort.dir)) {
+      state.sessionsSort = savedSessionSort;
     }
   } catch {}
 

@@ -24,7 +24,7 @@ const APP_SETTINGS_PATH = path.join(os.homedir(), '.burn-rate-settings.json');
 const DEFAULT_APP_SETTINGS: AppSettings = {
   plan: 'api',
   customPricing: {},
-  durationMode: 'wallclock',
+  durationMode: 'active',
 };
 
 function readClaudeSettings(): Record<string, unknown> {
@@ -98,10 +98,41 @@ app.get('/api/sessions', async (req) => {
   if (query.source) filtered = filtered.filter((s) => s.source === query.source);
   if (query.projectId) filtered = filtered.filter((s) => s.projectId === query.projectId);
   if (query.model) filtered = filtered.filter((s) => s.primaryModel === query.model);
-  if (query.sort === 'cost') {
-    filtered = [...filtered].sort((a, b) =>
-      (b.cost - a.cost) || new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
-    );
+
+  const sort = query.sort ?? 'startTime';
+  const dir = query.dir === 'asc' ? 1 : -1;
+  const sortable = new Set([
+    'startTime', 'projectName', 'prompt', 'source', 'primaryModel',
+    'totalTokens', 'cost', 'cacheHitRate', 'messageCount', 'duration',
+  ]);
+  if (sortable.has(sort)) {
+    const totalTokens = (s: typeof sessions[number]) =>
+      s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens;
+    const value = (s: typeof sessions[number]): string | number => {
+      switch (sort) {
+        case 'projectName': return s.projectName;
+        case 'prompt': return s.aiTitle || s.firstPrompt;
+        case 'source': return s.source;
+        case 'primaryModel': return s.primaryModel;
+        case 'totalTokens': return totalTokens(s);
+        case 'cost': return s.cost;
+        case 'cacheHitRate': return s.cacheHitRate;
+        case 'messageCount': return s.messageCount;
+        case 'duration': return s.duration;
+        case 'startTime':
+        default: return new Date(s.startTime).getTime();
+      }
+    };
+
+    filtered = [...filtered].sort((a, b) => {
+      const av = value(a);
+      const bv = value(b);
+      let cmp = typeof av === 'string' || typeof bv === 'string'
+        ? String(av).localeCompare(String(bv), undefined, { sensitivity: 'base' })
+        : Number(av) - Number(bv);
+      if (cmp === 0) cmp = new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+      return cmp * dir;
+    });
   }
 
   const limit = Math.min(parseInt(query.limit ?? '100', 10), 500);

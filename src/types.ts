@@ -117,7 +117,7 @@ export interface SessionMessage {
 export interface AppSettings {
   plan: 'api' | 'pro' | 'max' | 'max5x' | 'max20x';
   customPricing: Record<string, { input: number; output: number; cacheWrite: number; cacheRead: number }>;
-  durationMode: 'wallclock' | 'active';
+  durationMode: 'active' | 'wallclock';
 }
 
 export interface Tip {
