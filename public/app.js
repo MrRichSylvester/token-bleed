@@ -3696,6 +3696,7 @@ function showAboutModal() {
         <p class="about-hero-tagline">
           Every time Claude Code or Codex writes a line of code, it burns tokens.
           Those tokens cost money, but neither tool gives you much visibility into where it's all going.
+          Until now.
         </p>
       </div>
 
@@ -3735,7 +3736,7 @@ function showAboutModal() {
         </div>
 
         <div class="onboarding-footer about-footer">
-          <span class="onboarding-hint">Use ⚙ in the header to adjust log retention settings.</span>
+          <span class="onboarding-hint">Adjust log retention in Settings on the side nav.</span>
           <button class="onboarding-dismiss" id="about-dismiss">Got it</button>
         </div>
       </div>
