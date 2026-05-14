@@ -222,6 +222,20 @@ const PERIOD_MODES = {
   },
 };
 
+const CLAUDE_PLAN_MONTHLY = {
+  api: 0,
+  pro: 20,
+  max5x: 100,
+  max20x: 200,
+};
+
+const CODEX_PLAN_MONTHLY = {
+  api: 0,
+  go: 8,
+  plus: 20,
+  pro: 100,
+};
+
 function periodToSince(mode, period) {
   if (period === 'all') return undefined;
   const now = new Date();
@@ -248,6 +262,49 @@ function periodToSince(mode, period) {
   }
 
   return undefined;
+}
+
+function selectedPeriodDays(daily = []) {
+  if (state.periodMode === 'rolling') {
+    const days = { '1d': 1, '7d': 7, '30d': 30, '90d': 90 }[state.period];
+    if (days) return days;
+  }
+
+  if (state.periodMode === 'calendar') {
+    const now = new Date();
+    if (state.period === 'today') return 1;
+    if (state.period === 'week') return ((now.getDay() + 6) % 7) + 1;
+    if (state.period === 'month') return now.getDate();
+  }
+
+  if (state.period === 'all' && daily.length > 0) {
+    const first = new Date(`${daily[0].date}T00:00:00`);
+    const now = new Date();
+    return Math.max(1, Math.ceil((now - first) / 86_400_000));
+  }
+
+  return Math.max(1, daily.length || 1);
+}
+
+function selectedPlanMonthlyCost(appSettings, activeSources) {
+  if (!appSettings) return 0;
+  let monthly = 0;
+  if (activeSources.includes('claude')) monthly += CLAUDE_PLAN_MONTHLY[appSettings.plan] ?? 0;
+  if (activeSources.includes('codex')) monthly += CODEX_PLAN_MONTHLY[appSettings.codexPlan] ?? 0;
+  return monthly;
+}
+
+function selectedPlanSavingsText(totalCost, daily, appSettings, activeSources) {
+  const monthly = selectedPlanMonthlyCost(appSettings, activeSources);
+  if (monthly <= 0) return 'API pricing selected';
+
+  const planCost = (monthly / 30) * selectedPeriodDays(daily);
+  const savings = totalCost - planCost;
+  if (savings < 0) {
+    return `<span class="metric-sub-over">-${fmtCost(Math.abs(savings))}</span> over-provisioned vs API on <a class="metric-sub-link" href="#settings">selected plan</a>`;
+  }
+  if (savings === 0) return `Break-even vs API on <a class="metric-sub-link" href="#settings">selected plan</a>`;
+  return `<span class="metric-sub-savings">${fmtCost(savings)} saved</span> vs API on <a class="metric-sub-link" href="#settings">selected plan</a>`;
 }
 
 // ── State ──────────────────────────────────────────────────────
@@ -780,18 +837,21 @@ async function renderOverview() {
   try {
     const activeSources = state.overviewFilter.sources;
     const sourceParams = activeSources.length === 1 ? { source: activeSources[0] } : {};
-    const [stats, daily, models, projects, dailyAll] = await Promise.all([
+    const [stats, daily, models, projects, dailyAll, appSettings] = await Promise.all([
       api.stats(sourceParams),
       api.daily(sourceParams),
       api.models(sourceParams),
       api.projects(sourceParams),
       api.fetch(`/api/daily${sourceParams.source ? `?source=${encodeURIComponent(sourceParams.source)}` : ''}`),
+      api.appSettings(),
     ]);
+    state.appSettings = appSettings;
     state.data.stats = stats;
     state.data.daily = daily;
     state.data.models = models;
     state.data.projects = projects;
     stampDataFetch();
+    const planSavings = selectedPlanSavingsText(stats.totalCost, daily, appSettings, activeSources);
 
     // Usage by model — all models, session count as universal bar metric
     const modelRows = models.slice(0, 8).map(m => ({
@@ -826,10 +886,10 @@ async function renderOverview() {
 
       <div class="overview-top">
         <div class="metric-card accent-left">
-          <span class="metric-help" data-tooltip="Sum of all token costs in the selected period. Calculated from input, output, cache write, and cache read tokens using Anthropic&#39;s published per-million-token rates.">?</span>
-          <div class="metric-label">Total Cost</div>
+          <span class="metric-help" data-tooltip="Estimated API-rate equivalent for the selected period. Calculated from input, output, cache write, and cache read tokens using configured model pricing; subscription plans may bill differently.">?</span>
+          <div class="metric-label">Est. API Costs</div>
           <div class="metric-value mono">${fmtCost(stats.totalCost)}</div>
-          <div class="metric-sub">${daily.length > 0 ? fmtCost(stats.totalCost / daily.length) + '/day avg' : '—'}</div>
+          <div class="metric-sub">${planSavings}</div>
         </div>
         <div class="metric-card accent-left">
           <span class="metric-help" data-tooltip="Total cost divided by sessions that used a paid model. Sessions using local or custom models (which report $0) are excluded from the denominator.">?</span>
