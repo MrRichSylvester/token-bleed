@@ -194,7 +194,7 @@ function buildPcFieldsPanel(panel, deps, allMetrics, rerender) {
 }
 
 function renderPromptComparePage(deps) {
-  const { state, escHtml } = deps;
+  const { state, escHtml, selected } = deps;
   const allMetrics = metricDefs(deps);
   const hiddenCount = state.pcHiddenMetrics.size;
   const totalCount  = allMetrics.length;
@@ -233,7 +233,7 @@ function renderPromptComparePage(deps) {
       </div>
 
       ${state.pcView === 'card' ? `
-        <button class="sc-present-btn${state.pcPresent ? ' sc-present-btn--on' : ''}" id="pc-present-toggle">
+        <button class="sc-present-btn${state.pcPresent ? ' sc-present-btn--on' : ''}" id="pc-present-toggle" ${!selected.length ? 'disabled' : ''}>
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg>
           ${state.pcPresent ? 'Exit Present' : 'Present'}
         </button>

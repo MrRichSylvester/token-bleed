@@ -182,16 +182,16 @@ const PERIOD_MODES = {
     label: 'Cal',
     periods: [
       { key: 'today', label: 'Today' },
-      { key: 'week',  label: 'This Week' },
+      { key: 'week', label: 'This Week' },
       { key: 'month', label: 'This Month' },
-      { key: 'all',   label: 'All Time' },
+      { key: 'all', label: 'All Time' },
     ],
   },
   rolling: {
     label: 'Rolling',
     periods: [
-      { key: '1d',  label: '1 Day' },
-      { key: '7d',  label: '7 Days' },
+      { key: '1d', label: '1 Day' },
+      { key: '7d', label: '7 Days' },
       { key: '30d', label: '30 Days' },
       { key: '90d', label: '90 Days' },
       { key: 'all', label: 'All Time' },
@@ -248,6 +248,8 @@ const state = {
   pcMetricsOrder: null,    // null = default; array of keys when user has reordered
   pcPresent: false,
   pcRevealed: new Set(),   // set of prompt IDs revealed in present mode
+  sessHiddenCols: new Set(),
+  projHiddenStats: new Set(),
   appSettings: null,
   compModel1: '',
   compModel2: '',
@@ -361,16 +363,16 @@ function renderHorizBars(rows, { fmtVal = (v) => v, color = 'border' } = {}) {
   const maxVal = Math.max(...rows.map(r => r.value), 0.001);
   const isLight = document.documentElement.getAttribute('data-theme') === 'light';
   const colorMap = isLight ? {
-    green:  ['rgba(0,168,94,0.13)',    '#00a85e'],
-    blue:   ['rgba(47,111,212,0.13)',  '#2f6fd4'],
-    violet: ['rgba(124,58,237,0.13)',  '#7c3aed'],
-    amber:  ['rgba(180,83,9,0.13)',    '#b45309'],
-    border: ['rgba(0,0,0,0.06)',       '#8899aa'],
+    green: ['rgba(0,168,94,0.13)', '#00a85e'],
+    blue: ['rgba(47,111,212,0.13)', '#2f6fd4'],
+    violet: ['rgba(124,58,237,0.13)', '#7c3aed'],
+    amber: ['rgba(180,83,9,0.13)', '#b45309'],
+    border: ['rgba(0,0,0,0.06)', '#8899aa'],
   } : {
-    green:  ['rgba(0,255,135,0.12)',   '#00FF87'],
-    blue:   ['rgba(91,141,239,0.12)',  '#5B8DEF'],
+    green: ['rgba(0,255,135,0.12)', '#00FF87'],
+    blue: ['rgba(91,141,239,0.12)', '#5B8DEF'],
     violet: ['rgba(185,133,244,0.12)', '#B985F4'],
-    amber:  ['rgba(255,181,71,0.12)',  '#FFB547'],
+    amber: ['rgba(255,181,71,0.12)', '#FFB547'],
     border: ['rgba(255,255,255,0.04)', '#262F45'],
   };
   return rows.map(r => {
@@ -413,18 +415,18 @@ function renderProjectTokenComparison(projects, limit = 6) {
 
   return `<div class="project-token-wrap">
     ${rows.map(p => {
-      const primaryTotal = p.input + p.output;
-      const inputPct = primaryTotal > 0 ? (p.input / primaryTotal) * 100 : 0;
-      const outputPct = primaryTotal > 0 ? (p.output / primaryTotal) * 100 : 0;
-      const dominant = outputPct >= inputPct
-        ? { label: 'Output', pct: outputPct, className: 'output' }
-        : { label: 'Input', pct: inputPct, className: 'input' };
-      const secondary = outputPct >= inputPct
-        ? { label: 'Input', pct: inputPct }
-        : { label: 'Output', pct: outputPct };
-      const tip = `${p.name}: input ${fmtTokens(p.input)} (${fmtPct(inputPct / 100)}) · output ${fmtTokens(p.output)} (${fmtPct(outputPct / 100)}) · cache read ${fmtTokens(p.cacheRead)} · cache write ${fmtTokens(p.cacheWrite)}`;
+    const primaryTotal = p.input + p.output;
+    const inputPct = primaryTotal > 0 ? (p.input / primaryTotal) * 100 : 0;
+    const outputPct = primaryTotal > 0 ? (p.output / primaryTotal) * 100 : 0;
+    const dominant = outputPct >= inputPct
+      ? { label: 'Output', pct: outputPct, className: 'output' }
+      : { label: 'Input', pct: inputPct, className: 'input' };
+    const secondary = outputPct >= inputPct
+      ? { label: 'Input', pct: inputPct }
+      : { label: 'Output', pct: outputPct };
+    const tip = `${p.name}: input ${fmtTokens(p.input)} (${fmtPct(inputPct / 100)}) · output ${fmtTokens(p.output)} (${fmtPct(outputPct / 100)}) · cache read ${fmtTokens(p.cacheRead)} · cache write ${fmtTokens(p.cacheWrite)}`;
 
-      return `<div class="project-token-row" data-tip="${escHtml(tip)}">
+    return `<div class="project-token-row" data-tip="${escHtml(tip)}">
         <div class="project-token-label">
           <div class="project-token-name">${escHtml(p.name)}</div>
           <div class="project-token-date">${fmtDate(p.lastActivity)}</div>
@@ -446,7 +448,7 @@ function renderProjectTokenComparison(projects, limit = 6) {
           <em>${fmtPct(secondary.pct / 100)} ${secondary.label}</em>
         </div>
       </div>`;
-    }).join('')}
+  }).join('')}
   </div>`;
 }
 
@@ -511,7 +513,7 @@ function initDraggableCards(container) {
         const card = grid.querySelector(`[data-id="${id}"]`);
         if (card) grid.appendChild(card);
       });
-    } catch {}
+    } catch { }
   }
 }
 
@@ -539,7 +541,7 @@ function renderUsageGrid(dailyAll) {
   alignedStart.setDate(gridStart.getDate() - gridStart.getDay());
 
   const WEEKS = Math.ceil((Math.floor((today - alignedStart) / 86400000) + 1) / 7);
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   function getLevel(cost) {
     if (cost === 0) return 0;
@@ -686,18 +688,19 @@ function sortButtonHtml(scope, key, label, sort, extraClass = '') {
 }
 
 function renderProjectSortHeader() {
+  const showStat = key => !state.projHiddenStats.has(key);
   return `
     <div class="project-list-sort-header" aria-label="Project sort controls">
       <div class="project-sort-title-cell">
         ${sortButtonHtml('project', 'name', 'Project', state.projectsSort)}
       </div>
-      <div class="project-sort-meta">
+      <div class="project-sort-meta" style="grid-template-columns:${projectMetaGridCols()}">
         ${sortButtonHtml('project', 'topModel', 'Model', state.projectsSort, 'project-sort-model')}
-        ${sortButtonHtml('project', 'totalCost', 'Total Cost', state.projectsSort, 'project-sort-stat')}
-        ${sortButtonHtml('project', 'totalTokens', 'Tokens', state.projectsSort, 'project-sort-stat')}
-        ${sortButtonHtml('project', 'sessionCount', 'Sessions', state.projectsSort, 'project-sort-stat')}
-        ${sortButtonHtml('project', 'cacheHitRate', 'Cache Hit', state.projectsSort, 'project-sort-stat')}
-        ${sortButtonHtml('project', 'lastActivity', 'Last Active', state.projectsSort, 'project-sort-date')}
+        ${showStat('totalCost') ? sortButtonHtml('project', 'totalCost', 'Total Cost', state.projectsSort, 'project-sort-stat') : ''}
+        ${showStat('totalTokens') ? sortButtonHtml('project', 'totalTokens', 'Tokens', state.projectsSort, 'project-sort-stat') : ''}
+        ${showStat('sessionCount') ? sortButtonHtml('project', 'sessionCount', 'Sessions', state.projectsSort, 'project-sort-stat') : ''}
+        ${showStat('cacheHitRate') ? sortButtonHtml('project', 'cacheHitRate', 'Cache Hit', state.projectsSort, 'project-sort-stat') : ''}
+        ${showStat('lastActivity') ? sortButtonHtml('project', 'lastActivity', 'Last Active', state.projectsSort, 'project-sort-date') : ''}
         <span class="project-sort-chevron-spacer"></span>
       </div>
     </div>
@@ -867,9 +870,9 @@ async function renderOverview() {
         <div class="chart-wrap">
           <div class="chart-title">Thinking Sessions</div>
           <div class="hbar-wrap">${renderHorizBars([
-            { label: 'With thinking',    value: stats.thinkingSessionCount,                          color: 'violet', sub: fmtPct(stats.thinkingSessionCount / (stats.totalSessions || 1)) },
-            { label: 'Without thinking', value: stats.totalSessions - stats.thinkingSessionCount,    color: 'border', sub: fmtPct((stats.totalSessions - stats.thinkingSessionCount) / (stats.totalSessions || 1)) },
-          ].filter(r => r.value > 0), { fmtVal: n => `${n} sessions` })}</div>
+      { label: 'With thinking', value: stats.thinkingSessionCount, color: 'violet', sub: fmtPct(stats.thinkingSessionCount / (stats.totalSessions || 1)) },
+      { label: 'Without thinking', value: stats.totalSessions - stats.thinkingSessionCount, color: 'border', sub: fmtPct((stats.totalSessions - stats.thinkingSessionCount) / (stats.totalSessions || 1)) },
+    ].filter(r => r.value > 0), { fmtVal: n => `${n} sessions` })}</div>
         </div>
       </div>` : ''}
 
@@ -953,9 +956,12 @@ async function renderProjects() {
       <h1 class="page-title">Projects</h1>
       <div class="page-subtitle-row">
         <p class="page-subtitle">${periodLabel()} · ${sortedProjects.length} project${sortedProjects.length !== 1 ? 's' : ''}</p>
-        <div class="sc-view-toggle agent-source-toggle" aria-label="Project agent filter">
-          <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-project-source="claude">Claude Code</button>
-          <button class="sc-view-btn agent-source-btn${activeSources.includes('codex') ? ' sc-view-btn--on' : ''}" data-project-source="codex">Codex</button>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${fieldsButtonHtml('proj-fields-btn', state.projHiddenStats, PROJECT_STAT_DEFS.length)}
+          <div class="sc-view-toggle agent-source-toggle" aria-label="Project agent filter">
+            <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-project-source="claude">Claude Code</button>
+            <button class="sc-view-btn agent-source-btn${activeSources.includes('codex') ? ' sc-view-btn--on' : ''}" data-project-source="codex">Codex</button>
+          </div>
         </div>
       </div>
       ${renderProjectSortHeader()}
@@ -978,6 +984,8 @@ async function renderProjects() {
         renderProjects();
       });
     });
+
+    wireFieldsBtn('proj-fields-btn', PROJECT_STAT_DEFS, state.projHiddenStats, 'proj-hidden-stats', () => renderProjects());
 
     content.querySelectorAll('.project-card[data-project]').forEach(el => {
       el.querySelector('.project-card-header').addEventListener('click', () => {
@@ -1031,28 +1039,13 @@ function renderProjectCard(p) {
             <div class="project-path">${escHtml(p.path)}</div>
           </div>
         </div>
-        <div class="project-meta">
+        <div class="project-meta" style="grid-template-columns:${projectMetaGridCols()}">
           ${modelBadgeHtml(p.topModel, isLocal)}
-          <div class="project-stat">
-            <div class="project-stat-value mono">${fmtCost(p.totalCost)}</div>
-            <div class="project-stat-label">Total Cost</div>
-          </div>
-          <div class="project-stat">
-            <div class="project-stat-value mono">${fmtTokens(p.totalTokens)}</div>
-            <div class="project-stat-label">Tokens</div>
-          </div>
-          <div class="project-stat">
-            <div class="project-stat-value">${p.sessionCount}</div>
-            <div class="project-stat-label">Sessions</div>
-          </div>
-          <div class="project-stat">
-            <div class="project-stat-value">${fmtPct(p.cacheHitRate)}</div>
-            <div class="project-stat-label">Cache Hit</div>
-          </div>
-          <div class="project-stat">
-            <div class="project-stat-value secondary" style="font-size:11px">${fmtDate(p.lastActivity)}</div>
-            <div class="project-stat-label">Last Active</div>
-          </div>
+          ${!state.projHiddenStats.has('totalCost') ? `<div class="project-stat"><div class="project-stat-value mono">${fmtCost(p.totalCost)}</div><div class="project-stat-label">Total Cost</div></div>` : ''}
+          ${!state.projHiddenStats.has('totalTokens') ? `<div class="project-stat"><div class="project-stat-value mono">${fmtTokens(p.totalTokens)}</div><div class="project-stat-label">Tokens</div></div>` : ''}
+          ${!state.projHiddenStats.has('sessionCount') ? `<div class="project-stat"><div class="project-stat-value">${p.sessionCount}</div><div class="project-stat-label">Sessions</div></div>` : ''}
+          ${!state.projHiddenStats.has('cacheHitRate') ? `<div class="project-stat"><div class="project-stat-value">${fmtPct(p.cacheHitRate)}</div><div class="project-stat-label">Cache Hit</div></div>` : ''}
+          ${!state.projHiddenStats.has('lastActivity') ? `<div class="project-stat"><div class="project-stat-value secondary" style="font-size:11px">${fmtDate(p.lastActivity)}</div><div class="project-stat-label">Last Active</div></div>` : ''}
           <div class="project-chevron">›</div>
         </div>
       </div>
@@ -1114,9 +1107,12 @@ async function renderSessions() {
         </select>
         <a class="export-csv-btn" href="${api.withSince('/api/export/sessions.csv')}" download>↓ CSV</a>
         <span class="filter-count sessions-filter-count">${total.toLocaleString()} session${total !== 1 ? 's' : ''}</span>
-        <div class="sc-view-toggle agent-source-toggle sessions-agent-toggle" aria-label="Session agent filter">
-          <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-session-source="claude">Claude Code</button>
-          <button class="sc-view-btn agent-source-btn${activeSources.includes('codex') ? ' sc-view-btn--on' : ''}" data-session-source="codex">Codex</button>
+        <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+          ${fieldsButtonHtml('sess-fields-btn', state.sessHiddenCols, SESSION_COL_DEFS.length)}
+          <div class="sc-view-toggle agent-source-toggle sessions-agent-toggle" aria-label="Session agent filter">
+            <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-session-source="claude">Claude Code</button>
+            <button class="sc-view-btn agent-source-btn${activeSources.includes('codex') ? ' sc-view-btn--on' : ''}" data-session-source="codex">Codex</button>
+          </div>
         </div>
       </div>
 
@@ -1129,6 +1125,7 @@ async function renderSessions() {
     const tableWrap = document.getElementById('sessions-table-wrap');
     bindSessionExpansion(tableWrap);
     bindSelectableRows(tableWrap, sessions);
+    wireFieldsBtn('sess-fields-btn', SESSION_COL_DEFS, state.sessHiddenCols, 'sess-hidden-cols', () => renderSessions());
 
     content.querySelectorAll('[data-session-sort]').forEach(btn => {
       btn.addEventListener('click', () => setSessionSort(btn.dataset.sessionSort));
@@ -1177,7 +1174,14 @@ function renderSessionsTable(sessions, opts = {}) {
   }
 
   const checkCol = opts.selectable ? 1 : 0;
-  const colCount = (opts.compact ? 9 : 10) + checkCol;
+  // Apply column visibility only on the full (non-compact) sessions page
+  const applyFields = !opts.compact;
+  const show = key => !applyFields || !state.sessHiddenCols.has(key);
+  const visibleToggleCols = applyFields
+    ? SESSION_COL_DEFS.filter(c => !state.sessHiddenCols.has(c.key)).length
+    : SESSION_COL_DEFS.length;
+  const fixedCols = opts.compact ? 2 : 3; // started + prompt [+ project]
+  const colCount = fixedCols + checkCol + visibleToggleCols;
 
   const rows = sessions.map(s => {
     const local = isLocalSession(s);
@@ -1211,13 +1215,13 @@ function renderSessionsTable(sessions, opts = {}) {
       <td class="muted nowrap" style="font-size:12px">${fmtDateTime(s.startTime)}</td>
       ${opts.compact ? '' : `<td class="secondary" style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(s.projectName)}</td>`}
       <td class="prompt">${thinkingBadge}${subagentBadge}<span title="${escHtml(s.firstPrompt)}">${escHtml(displayTitle)}</span></td>
-      <td>${agentBadgeHtml(s.source || 'claude', { short: opts.compact })}</td>
-      <td>${modelBadgeHtml(s.primaryModel, local)}</td>
-      <td class="right mono" style="font-size:12px">${fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens)}</td>
-      <td class="right">${costCell}</td>
-      <td class="right muted" style="font-size:12px">${fmtPct(s.cacheHitRate)}</td>
-      <td class="right muted" style="font-size:12px">${s.messageCount}</td>
-      <td class="right muted" style="font-size:12px">${fmtDuration(sessionDuration(s))}</td>
+      ${show('agent') ? `<td>${agentBadgeHtml(s.source || 'claude', { short: opts.compact })}</td>` : ''}
+      ${show('model') ? `<td>${modelBadgeHtml(s.primaryModel, local)}</td>` : ''}
+      ${show('totalTokens') ? `<td class="right mono" style="font-size:12px">${fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens)}</td>` : ''}
+      ${show('cost') ? `<td class="right">${costCell}</td>` : ''}
+      ${show('cacheHitRate') ? `<td class="right muted" style="font-size:12px">${fmtPct(s.cacheHitRate)}</td>` : ''}
+      ${show('messageCount') ? `<td class="right muted" style="font-size:12px">${s.messageCount}</td>` : ''}
+      ${show('duration') ? `<td class="right muted" style="font-size:12px">${fmtDuration(sessionDuration(s))}</td>` : ''}
     </tr>
     <tr class="session-detail-row" data-for="${escHtml(s.id)}">
       <td colspan="${colCount}" class="session-detail-cell">
@@ -1241,13 +1245,13 @@ function renderSessionsTable(sessions, opts = {}) {
         ${sortHead('startTime', 'Started')}
         ${projectCol}
         ${sortHead('prompt', 'Prompt')}
-        ${sortHead('source', 'Agent')}
-        ${sortHead('primaryModel', 'Model')}
-        ${sortHead('totalTokens', 'Tokens', 'right')}
-        ${sortHead('cost', 'Cost', 'right')}
-        ${sortHead('cacheHitRate', 'Cache%', 'right')}
-        ${sortHead('messageCount', 'Msgs', 'right')}
-        ${sortHead('duration', 'Duration', 'right')}
+        ${show('agent') ? sortHead('source', 'Agent') : ''}
+        ${show('model') ? sortHead('primaryModel', 'Model') : ''}
+        ${show('totalTokens') ? sortHead('totalTokens', 'Tokens', 'right') : ''}
+        ${show('cost') ? sortHead('cost', 'Cost', 'right') : ''}
+        ${show('cacheHitRate') ? sortHead('cacheHitRate', 'Cache%', 'right') : ''}
+        ${show('messageCount') ? sortHead('messageCount', 'Msgs', 'right') : ''}
+        ${show('duration') ? sortHead('duration', 'Duration', 'right') : ''}
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -1296,6 +1300,42 @@ function syncAllCheckboxes() {
 }
 
 const COMP_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+const SESSION_COL_DEFS = [
+  { key: 'agent', label: 'Agent' },
+  { key: 'model', label: 'Model' },
+  { key: 'totalTokens', label: 'Tokens' },
+  { key: 'cost', label: 'Cost' },
+  { key: 'cacheHitRate', label: 'Cache%' },
+  { key: 'messageCount', label: 'Msgs' },
+  { key: 'duration', label: 'Duration' },
+];
+
+const PROJECT_STAT_DEFS = [
+  { key: 'totalCost', label: 'Total Cost' },
+  { key: 'totalTokens', label: 'Tokens' },
+  { key: 'sessionCount', label: 'Sessions' },
+  { key: 'cacheHitRate', label: 'Cache Hit' },
+  { key: 'lastActivity', label: 'Last Active' },
+];
+
+// Column widths in the same order as the grid: model badge, each stat, chevron spacer
+const PROJECT_META_COLS = [
+  { key: null, width: '280px' }, // model badge — always visible
+  { key: 'totalCost', width: '100px' },
+  { key: 'totalTokens', width: '88px' },
+  { key: 'sessionCount', width: '84px' },
+  { key: 'cacheHitRate', width: '96px' },
+  { key: 'lastActivity', width: '104px' },
+  { key: null, width: '22px' }, // chevron spacer — always visible
+];
+
+function projectMetaGridCols() {
+  return PROJECT_META_COLS
+    .filter(c => c.key === null || !state.projHiddenStats.has(c.key))
+    .map(c => c.width)
+    .join(' ');
+}
 
 function promptCompareLabel(prompt) {
   const text = (prompt.prompt || '').replace(/\s+/g, ' ').trim();
@@ -1788,16 +1828,16 @@ const LOCAL_TOKEN_TIP = 'Local models send the full conversation context each tu
 // ── Session Comparison ─────────────────────────────────────────
 
 const SESSION_COMPARE_METRICS = [
-  { key: 'cost',          label: 'Cost'           },
-  { key: 'totalTokens',   label: 'Total Tokens'   },
-  { key: 'inputTokens',   label: 'Input Tokens'   },
-  { key: 'outputTokens',  label: 'Output Tokens'  },
-  { key: 'cacheRead',     label: 'Cache Read'     },
-  { key: 'cacheWrite',    label: 'Cache Write'    },
-  { key: 'cacheHitRate',  label: 'Cache Hit Rate' },
-  { key: 'duration',      label: 'Duration'       },
-  { key: 'messages',      label: 'Messages'       },
-  { key: 'toolCalls',     label: 'Tool Calls'     },
+  { key: 'cost', label: 'Cost' },
+  { key: 'totalTokens', label: 'Total Tokens' },
+  { key: 'inputTokens', label: 'Input Tokens' },
+  { key: 'outputTokens', label: 'Output Tokens' },
+  { key: 'cacheRead', label: 'Cache Read' },
+  { key: 'cacheWrite', label: 'Cache Write' },
+  { key: 'cacheHitRate', label: 'Cache Hit Rate' },
+  { key: 'duration', label: 'Duration' },
+  { key: 'messages', label: 'Messages' },
+  { key: 'toolCalls', label: 'Tool Calls' },
   { key: 'thinkingTurns', label: 'Thinking Turns' },
 ];
 
@@ -1907,8 +1947,8 @@ function bindSessionCompareInlineControls(container) {
 
 function renderSessionComparePage() {
   const hiddenCount = state.scHiddenMetrics.size;
-  const totalCount  = SESSION_COMPARE_METRICS.length;
-  const fieldCount  = hiddenCount > 0 ? ` <span class="sc-fields-count">${totalCount - hiddenCount}/${totalCount}</span>` : '';
+  const totalCount = SESSION_COMPARE_METRICS.length;
+  const fieldCount = hiddenCount > 0 ? ` <span class="sc-fields-count">${totalCount - hiddenCount}/${totalCount}</span>` : '';
 
   const content = document.getElementById('content');
   content.innerHTML = `
@@ -1942,24 +1982,24 @@ function renderSessionComparePage() {
         </button>
       </div>
 
-      ${(() => {
-        const allSessions = state.data?.allSessions ?? [];
-        const selectedIds = new Set(state.compSelection.map(x => x.id));
-        const opts = allSessions
-          .filter(s => !selectedIds.has(s.id))
-          .map(s => `<option value="${escHtml(s.id)}">${escHtml(sessionDropdownLabel(s))}</option>`)
-          .join('');
-        return opts && state.compSelection.length < COMP_LETTERS.length
-          ? `<select class="sc-toolbar-add-select" id="sc-toolbar-add-select" aria-label="Add session to compare"><option value="">+ Add session</option>${opts}</select>`
-          : '';
-      })()}
-
       ${state.scView === 'card' ? `
-        <button class="sc-present-btn${state.scPresent ? ' sc-present-btn--on' : ''}" id="sc-present-toggle">
+        <button class="sc-present-btn${state.scPresent ? ' sc-present-btn--on' : ''}" id="sc-present-toggle" ${state.compSelection.length === 0 ? 'disabled' : ''}>
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg>
           ${state.scPresent ? 'Exit Present' : 'Present'}
         </button>
       ` : ''}
+
+      ${(() => {
+      const allSessions = state.data?.allSessions ?? [];
+      const selectedIds = new Set(state.compSelection.map(x => x.id));
+      const opts = allSessions
+        .filter(s => !selectedIds.has(s.id))
+        .map(s => `<option value="${escHtml(s.id)}">${escHtml(sessionDropdownLabel(s))}</option>`)
+        .join('');
+      return opts && state.compSelection.length < COMP_LETTERS.length
+        ? `<select class="sc-toolbar-add-select" id="sc-toolbar-add-select" aria-label="Add session to compare"><option value="">+ Add session</option>${opts}</select>`
+        : '';
+    })()}
     </div>
 
     <div id="session-comparison-result"></div>
@@ -2022,8 +2062,8 @@ function renderSessionComparePage() {
 
 function rankSessions(sessions) {
   const hidden = state.scHiddenMetrics;
-  const useCost     = !hidden.has('cost');
-  const useTokens   = !hidden.has('totalTokens');
+  const useCost = !hidden.has('cost');
+  const useTokens = !hidden.has('totalTokens');
   const useDuration = !hidden.has('duration');
   if (!useCost && !useTokens && !useDuration) return sessions; // nothing scoreable
 
@@ -2031,8 +2071,8 @@ function rankSessions(sessions) {
 
   const dims = sessions.map(s => ({
     s,
-    cost:     useCost     ? (isLocal(s) ? null : s.cost) : null,
-    tokens:   useTokens   ? s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens : null,
+    cost: useCost ? (isLocal(s) ? null : s.cost) : null,
+    tokens: useTokens ? s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens : null,
     duration: useDuration ? s.duration : null,
   }));
 
@@ -2052,7 +2092,7 @@ function rankSessions(sessions) {
 
 function positionFieldsPanel(btn, panel) {
   const r = btn.getBoundingClientRect();
-  panel.style.top  = `${r.bottom + 6}px`;
+  panel.style.top = `${r.bottom + 6}px`;
   panel.style.left = `${r.left}px`;
 }
 
@@ -2061,18 +2101,18 @@ function buildFieldsPanel(panel) {
   panel.innerHTML = `
     <div class="sc-fields-list">
       ${ordered.map(m => {
-        const on = !state.scHiddenMetrics.has(m.key);
-        return `
+    const on = !state.scHiddenMetrics.has(m.key);
+    return `
           <div class="sc-fields-item${on ? '' : ' sc-fields-item--off'}" draggable="true" data-key="${escHtml(m.key)}">
             <span class="sc-fields-drag">⠿</span>
             <span class="sc-fields-name">${escHtml(m.label)}</span>
             <button class="sc-fields-toggle${on ? ' sc-fields-toggle--on' : ''}" data-toggle="${escHtml(m.key)}">
               ${on
-                ? '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 7C2 7 4 3 7 3C10 3 12 7 12 7C12 7 10 11 7 11C4 11 2 7 2 7Z" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="1.8" fill="currentColor"/></svg>'
-                : '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 2L12 12M3.5 4.5C2.7 5.3 2 6.2 2 7C2 7 4 11 7 11C8.1 11 9.1 10.5 9.9 9.8M5.1 2.2C5.7 2.1 6.4 2 7 2C10 2 12 7 12 7C11.6 7.7 11.1 8.4 10.5 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'}
+        ? '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 7C2 7 4 3 7 3C10 3 12 7 12 7C12 7 10 11 7 11C4 11 2 7 2 7Z" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="1.8" fill="currentColor"/></svg>'
+        : '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 2L12 12M3.5 4.5C2.7 5.3 2 6.2 2 7C2 7 4 11 7 11C8.1 11 9.1 10.5 9.9 9.8M5.1 2.2C5.7 2.1 6.4 2 7 2C10 2 12 7 12 7C11.6 7.7 11.1 8.4 10.5 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'}
             </button>
           </div>`;
-      }).join('')}
+  }).join('')}
     </div>
     <div class="sc-fields-footer">
       <button class="sc-fields-reset" id="sc-fields-reset">Reset defaults</button>
@@ -2161,6 +2201,112 @@ function buildFieldsPanel(panel) {
   });
 }
 
+// ── Generic toggle-only fields panel (for sessions / projects) ──
+
+const EYE_ON = '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 7C2 7 4 3 7 3C10 3 12 7 12 7C12 7 10 11 7 11C4 11 2 7 2 7Z" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="1.8" fill="currentColor"/></svg>';
+const EYE_OFF = '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 2L12 12M3.5 4.5C2.7 5.3 2 6.2 2 7C2 7 4 11 7 11C8.1 11 9.1 10.5 9.9 9.8M5.1 2.2C5.7 2.1 6.4 2 7 2C10 2 12 7 12 7C11.6 7.7 11.1 8.4 10.5 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+
+function buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, onchange) {
+  panel.innerHTML = `
+    <div class="sc-fields-list">
+      ${defs.map(d => {
+    const on = !hiddenSet.has(d.key);
+    return `
+          <div class="sc-fields-item${on ? '' : ' sc-fields-item--off'}" data-key="${escHtml(d.key)}">
+            <span class="sc-fields-name">${escHtml(d.label)}</span>
+            <button class="sc-fields-toggle${on ? ' sc-fields-toggle--on' : ''}" data-toggle="${escHtml(d.key)}">
+              ${on ? EYE_ON : EYE_OFF}
+            </button>
+          </div>`;
+  }).join('')}
+    </div>
+    <div class="sc-fields-footer">
+      <button class="sc-fields-reset" id="${escHtml(btnId)}-reset">Reset defaults</button>
+    </div>
+  `;
+
+  panel.querySelectorAll('[data-toggle]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const key = btn.dataset.toggle;
+      if (hiddenSet.has(key)) hiddenSet.delete(key);
+      else hiddenSet.add(key);
+      localStorage.setItem(storageKey, JSON.stringify([...hiddenSet]));
+      updateFieldsBadge(btnId, hiddenSet.size, defs.length);
+      buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, onchange);
+      onchange();
+    });
+  });
+
+  document.getElementById(`${btnId}-reset`)?.addEventListener('click', e => {
+    e.stopPropagation();
+    hiddenSet.clear();
+    localStorage.removeItem(storageKey);
+    updateFieldsBadge(btnId, 0, defs.length);
+    buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, onchange);
+    onchange();
+  });
+}
+
+function updateFieldsBadge(btnId, hiddenCount, totalCount) {
+  const fb = document.getElementById(btnId);
+  if (!fb) return;
+  fb.querySelector('.sc-fields-count')?.remove();
+  if (hiddenCount > 0) {
+    const badge = document.createElement('span');
+    badge.className = 'sc-fields-count';
+    badge.textContent = `${totalCount - hiddenCount}/${totalCount}`;
+    fb.querySelector('.sc-dropdown-chevron').before(badge);
+    fb.classList.add('sc-fields-btn--filtered');
+  } else {
+    fb.classList.remove('sc-fields-btn--filtered');
+  }
+}
+
+function wireFieldsBtn(btnId, defs, hiddenSet, storageKey, onchange) {
+  const fieldsBtn = document.getElementById(btnId);
+  if (!fieldsBtn) return;
+  fieldsBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const panelId = `${btnId}-panel`;
+    const existing = document.getElementById(panelId);
+    if (existing) {
+      existing.remove();
+      fieldsBtn.classList.remove('sc-fields-btn--open');
+      return;
+    }
+    const panel = document.createElement('div');
+    panel.id = panelId;
+    panel.className = 'sc-dropdown-panel';
+    document.body.appendChild(panel);
+    buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, onchange);
+    const r = fieldsBtn.getBoundingClientRect();
+    panel.style.top = `${r.bottom + 6}px`;
+    panel.style.left = `${r.left}px`;
+    fieldsBtn.classList.add('sc-fields-btn--open');
+    function close(ev) {
+      const p = document.getElementById(panelId);
+      if (!p) { document.removeEventListener('click', close); return; }
+      if (!p.contains(ev.target) && ev.target !== fieldsBtn) {
+        p.remove();
+        fieldsBtn.classList.remove('sc-fields-btn--open');
+        document.removeEventListener('click', close);
+      }
+    }
+    document.addEventListener('click', close);
+  });
+}
+
+function fieldsButtonHtml(btnId, hiddenSet, totalCount) {
+  const hc = hiddenSet.size;
+  const badge = hc > 0 ? ` <span class="sc-fields-count">${totalCount - hc}/${totalCount}</span>` : '';
+  return `
+    <button class="sc-view-btn sc-fields-btn${hc > 0 ? ' sc-fields-btn--filtered' : ''}" id="${escHtml(btnId)}">
+      <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M1 3h12M3 7h8M5 11h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Fields${badge} <span class="sc-dropdown-chevron">▾</span>
+    </button>`;
+}
+
 function renderSessionComparisonResult() {
   if (state.scView === 'card') renderSessionComparisonCards();
   else renderSessionComparisonTable();
@@ -2189,17 +2335,17 @@ function renderSessionComparisonTable() {
   const localTooltip = LOCAL_TOKEN_TIP;
 
   const allMetrics = [
-    { key: 'cost',          label: 'Cost',           val: s => s.cost,                                                                                             fmt: s => { const local = isLocal(s); return local ? '<span class="amber">local</span>' : fmtCost(s.cost); }, lowerBetter: true,  skipLocal: true },
-    { key: 'totalTokens',   label: 'Total Tokens',   val: s => s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens, fmt: s => fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens), lowerBetter: true  },
-    { key: 'inputTokens',   label: 'Input Tokens',   val: s => s.usage.inputTokens,           fmt: s => isLocal(s) ? `${fmtTokens(s.usage.inputTokens)} <span class="sc-metric-info" data-tip="${escHtml(localTooltip)}">?</span>` : fmtTokens(s.usage.inputTokens), lowerBetter: true  },
-    { key: 'outputTokens',  label: 'Output Tokens',  val: s => s.usage.outputTokens,          fmt: s => fmtTokens(s.usage.outputTokens),          lowerBetter: true  },
-    { key: 'cacheRead',     label: 'Cache Read',     val: s => s.usage.cacheReadTokens,       fmt: s => fmtTokens(s.usage.cacheReadTokens),       lowerBetter: false },
-    { key: 'cacheWrite',    label: 'Cache Write',    val: s => s.usage.cacheCreationTokens,   fmt: s => fmtTokens(s.usage.cacheCreationTokens),   lowerBetter: true  },
-    { key: 'cacheHitRate',  label: 'Cache Hit Rate', val: s => s.cacheHitRate,                fmt: s => fmtPct(s.cacheHitRate),                   lowerBetter: false },
-    { key: 'duration',      label: 'Duration',       val: s => sessionDuration(s),            fmt: s => fmtDuration(sessionDuration(s)),           lowerBetter: true  },
-    { key: 'messages',      label: 'Messages',       val: s => s.messageCount,                fmt: s => s.messageCount.toString(),                lowerBetter: null  },
-    { key: 'toolCalls',     label: 'Tool Calls',     val: s => s.toolCallCount,               fmt: s => s.toolCallCount.toString(),               lowerBetter: null  },
-    { key: 'thinkingTurns', label: 'Thinking Turns', val: s => s.thinkingBlocks || 0,         fmt: s => (s.thinkingBlocks || 0).toString(),       lowerBetter: null  },
+    { key: 'cost', label: 'Cost', val: s => s.cost, fmt: s => { const local = isLocal(s); return local ? '<span class="amber">local</span>' : fmtCost(s.cost); }, lowerBetter: true, skipLocal: true },
+    { key: 'totalTokens', label: 'Total Tokens', val: s => s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens, fmt: s => fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens), lowerBetter: true },
+    { key: 'inputTokens', label: 'Input Tokens', val: s => s.usage.inputTokens, fmt: s => isLocal(s) ? `${fmtTokens(s.usage.inputTokens)} <span class="sc-metric-info" data-tip="${escHtml(localTooltip)}">?</span>` : fmtTokens(s.usage.inputTokens), lowerBetter: true },
+    { key: 'outputTokens', label: 'Output Tokens', val: s => s.usage.outputTokens, fmt: s => fmtTokens(s.usage.outputTokens), lowerBetter: true },
+    { key: 'cacheRead', label: 'Cache Read', val: s => s.usage.cacheReadTokens, fmt: s => fmtTokens(s.usage.cacheReadTokens), lowerBetter: false },
+    { key: 'cacheWrite', label: 'Cache Write', val: s => s.usage.cacheCreationTokens, fmt: s => fmtTokens(s.usage.cacheCreationTokens), lowerBetter: true },
+    { key: 'cacheHitRate', label: 'Cache Hit Rate', val: s => s.cacheHitRate, fmt: s => fmtPct(s.cacheHitRate), lowerBetter: false },
+    { key: 'duration', label: 'Duration', val: s => sessionDuration(s), fmt: s => fmtDuration(sessionDuration(s)), lowerBetter: true },
+    { key: 'messages', label: 'Messages', val: s => s.messageCount, fmt: s => s.messageCount.toString(), lowerBetter: null },
+    { key: 'toolCalls', label: 'Tool Calls', val: s => s.toolCallCount, fmt: s => s.toolCallCount.toString(), lowerBetter: null },
+    { key: 'thinkingTurns', label: 'Thinking Turns', val: s => s.thinkingBlocks || 0, fmt: s => (s.thinkingBlocks || 0).toString(), lowerBetter: null },
   ];
   const metrics = getOrderedMetrics()
     .map(om => allMetrics.find(m => m.key === om.key))
@@ -2227,7 +2373,7 @@ function renderSessionComparisonTable() {
       const scoreable = vals.filter(x => !(m.skipLocal && x.local) && x.v > 0);
       if (scoreable.length >= 2) {
         const vs = scoreable.map(x => x.v);
-        bestV  = m.lowerBetter ? Math.min(...vs) : Math.max(...vs);
+        bestV = m.lowerBetter ? Math.min(...vs) : Math.max(...vs);
         worstV = m.lowerBetter ? Math.max(...vs) : Math.min(...vs);
       }
     }
@@ -2289,17 +2435,17 @@ function renderSessionComparisonCards() {
   }
 
   const allMetrics = [
-    { key: 'cost',          label: 'Cost',           val: s => s.cost,                                                                                             fmt: s => isLocal(s) ? 'local' : fmtCost(s.cost),                    lowerBetter: true,  skipLocal: true },
-    { key: 'totalTokens',   label: 'Total Tokens',   val: s => s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens, fmt: s => fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens), lowerBetter: true  },
-    { key: 'inputTokens',   label: 'Input Tokens',   val: s => s.usage.inputTokens,           fmt: s => fmtTokens(s.usage.inputTokens),   lowerBetter: true  },
-    { key: 'outputTokens',  label: 'Output Tokens',  val: s => s.usage.outputTokens,          fmt: s => fmtTokens(s.usage.outputTokens),  lowerBetter: true  },
-    { key: 'cacheRead',     label: 'Cache Read',     val: s => s.usage.cacheReadTokens,       fmt: s => fmtTokens(s.usage.cacheReadTokens),       lowerBetter: false },
-    { key: 'cacheWrite',    label: 'Cache Write',    val: s => s.usage.cacheCreationTokens,   fmt: s => fmtTokens(s.usage.cacheCreationTokens),   lowerBetter: true  },
-    { key: 'cacheHitRate',  label: 'Cache Hit Rate', val: s => s.cacheHitRate,                fmt: s => fmtPct(s.cacheHitRate),                   lowerBetter: false },
-    { key: 'duration',      label: 'Duration',       val: s => sessionDuration(s),            fmt: s => fmtDuration(sessionDuration(s)),           lowerBetter: true  },
-    { key: 'messages',      label: 'Messages',       val: s => s.messageCount,                fmt: s => s.messageCount.toString(),                lowerBetter: null  },
-    { key: 'toolCalls',     label: 'Tool Calls',     val: s => s.toolCallCount,               fmt: s => s.toolCallCount.toString(),               lowerBetter: null  },
-    { key: 'thinkingTurns', label: 'Thinking Turns', val: s => s.thinkingBlocks || 0,         fmt: s => (s.thinkingBlocks || 0).toString(),       lowerBetter: null  },
+    { key: 'cost', label: 'Cost', val: s => s.cost, fmt: s => isLocal(s) ? 'local' : fmtCost(s.cost), lowerBetter: true, skipLocal: true },
+    { key: 'totalTokens', label: 'Total Tokens', val: s => s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens, fmt: s => fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens), lowerBetter: true },
+    { key: 'inputTokens', label: 'Input Tokens', val: s => s.usage.inputTokens, fmt: s => fmtTokens(s.usage.inputTokens), lowerBetter: true },
+    { key: 'outputTokens', label: 'Output Tokens', val: s => s.usage.outputTokens, fmt: s => fmtTokens(s.usage.outputTokens), lowerBetter: true },
+    { key: 'cacheRead', label: 'Cache Read', val: s => s.usage.cacheReadTokens, fmt: s => fmtTokens(s.usage.cacheReadTokens), lowerBetter: false },
+    { key: 'cacheWrite', label: 'Cache Write', val: s => s.usage.cacheCreationTokens, fmt: s => fmtTokens(s.usage.cacheCreationTokens), lowerBetter: true },
+    { key: 'cacheHitRate', label: 'Cache Hit Rate', val: s => s.cacheHitRate, fmt: s => fmtPct(s.cacheHitRate), lowerBetter: false },
+    { key: 'duration', label: 'Duration', val: s => sessionDuration(s), fmt: s => fmtDuration(sessionDuration(s)), lowerBetter: true },
+    { key: 'messages', label: 'Messages', val: s => s.messageCount, fmt: s => s.messageCount.toString(), lowerBetter: null },
+    { key: 'toolCalls', label: 'Tool Calls', val: s => s.toolCallCount, fmt: s => s.toolCallCount.toString(), lowerBetter: null },
+    { key: 'thinkingTurns', label: 'Thinking Turns', val: s => s.thinkingBlocks || 0, fmt: s => (s.thinkingBlocks || 0).toString(), lowerBetter: null },
   ];
   const metrics = getOrderedMetrics()
     .map(om => allMetrics.find(m => m.key === om.key))
@@ -2312,7 +2458,7 @@ function renderSessionComparisonCards() {
     const scoreable = selected.filter(s => !(m.skipLocal && isLocal(s)) && m.val(s) > 0);
     if (scoreable.length < 2) return;
     const vs = scoreable.map(s => m.val(s));
-    const bestV  = m.lowerBetter ? Math.min(...vs) : Math.max(...vs);
+    const bestV = m.lowerBetter ? Math.min(...vs) : Math.max(...vs);
     const worstV = m.lowerBetter ? Math.max(...vs) : Math.min(...vs);
     metricScores.set(m.key, { bestV, worstV });
   });
@@ -2424,19 +2570,19 @@ async function renderView() {
   document.getElementById('sc-fields-btn')?.classList.remove('sc-fields-btn--open');
   updateNav();
   switch (state.view) {
-    case 'overview':        return renderOverview();
-    case 'projects':        return renderProjects();
-    case 'sessions':        return renderSessions();
-    case 'comparison':      return renderComparison();
+    case 'overview': return renderOverview();
+    case 'projects': return renderProjects();
+    case 'sessions': return renderSessions();
+    case 'comparison': return renderComparison();
     case 'session-compare': return renderSessionCompare();
-    case 'prompt-compare':  return renderPromptCompare({
+    case 'prompt-compare': return renderPromptCompare({
       state, api, setLoading, showError, escHtml, fmtCost, fmtTokens, fmtPct, fmtDateTime, fmtDuration,
       modelBadgeHtml, agentBadgeHtml, COMP_LETTERS, renderPromptCompareBar, savePromptCompSelection,
       syncPromptCheckboxes, promptCompareLabel,
     });
-    case 'tips':            return renderTips();
-    case 'settings':        return renderSettings();
-    default:                return renderOverview();
+    case 'tips': return renderTips();
+    case 'settings': return renderSettings();
+    default: return renderOverview();
   }
 }
 
@@ -2539,10 +2685,10 @@ async function renderTips() {
 // ── Settings ────────────────────────────────────────────────────
 
 const PLAN_OPTIONS = [
-  { key: 'api',    label: 'API',      sub: 'Pay per token' },
-  { key: 'pro',    label: 'Pro',      sub: '$20/mo' },
-  { key: 'max5x',  label: 'Max 5x',   sub: '$100/mo' },
-  { key: 'max20x', label: 'Max 20x',  sub: '$200/mo' },
+  { key: 'api', label: 'API', sub: 'Pay per token' },
+  { key: 'pro', label: 'Pro', sub: '$20/mo' },
+  { key: 'max5x', label: 'Max 5x', sub: '$100/mo' },
+  { key: 'max20x', label: 'Max 20x', sub: '$200/mo' },
 ];
 
 async function renderSettings() {
@@ -2561,13 +2707,13 @@ async function renderSettings() {
 
     // Current models + any unknown/custom-only models in the main table
     const currentBuiltinKeys = Object.keys(builtinPricing).filter(k => !legacySet.has(k)).sort();
-    const legacyBuiltinKeys  = Object.keys(builtinPricing).filter(k =>  legacySet.has(k)).sort();
+    const legacyBuiltinKeys = Object.keys(builtinPricing).filter(k => legacySet.has(k)).sort();
     const extraModels = [...new Set([
       ...unknownModels,
       ...Object.keys(customPricing).filter(m => !builtinPricing[m]),
     ])].sort();
     const currentModelSet = new Set([...currentBuiltinKeys, ...extraModels]);
-    const legacyModelSet  = new Set(legacyBuiltinKeys);
+    const legacyModelSet = new Set(legacyBuiltinKeys);
 
     function pricingRow(model) {
       const cp = customPricing[model];
@@ -2594,9 +2740,9 @@ async function renderSettings() {
             value="${vals.cacheRead ?? ''}"></td>
           <td>
             ${isBuiltin
-              ? `<button class="pricing-reset-btn" data-model="${escHtml(model)}" title="Reset to built-in price" ${atBuiltin ? 'disabled' : ''}>↺</button>`
-              : `<button class="pricing-clear-btn" data-model="${escHtml(model)}" title="Remove custom pricing">✕</button>`
-            }
+          ? `<button class="pricing-reset-btn" data-model="${escHtml(model)}" title="Reset to built-in price" ${atBuiltin ? 'disabled' : ''}>↺</button>`
+          : `<button class="pricing-clear-btn" data-model="${escHtml(model)}" title="Remove custom pricing">✕</button>`
+        }
           </td>
         </tr>`;
     }
@@ -2666,9 +2812,9 @@ async function renderSettings() {
       <div class="settings-section">
         <div class="settings-section-title">Log Retention</div>
         <div class="settings-section-desc">
-          Token Bleed reads local Claude Code session logs.
-          Those logs are currently kept for <strong>${cleanupDays} days</strong>.
-          After that Claude Code deletes them and they disappear from this dashboard too.
+          Token Bleed reads local session logs from Claude Code and Codex.
+          Claude Code logs are currently kept for <strong>${cleanupDays} days</strong> — after that Claude Code deletes them and they disappear from this dashboard too.
+          Codex manages its own log retention separately.
           90 days is a good default.
         </div>
         <div class="retention-row">
@@ -3262,7 +3408,7 @@ function initKeyedProviderFlow({ provider, keyLabel, keyPlaceholder, keyValidate
         if (b) { b.textContent = 'Copied!'; setTimeout(() => { b.textContent = 'Copy to clipboard'; }, 2000); }
       } catch { /* denied */ }
     });
-    document.getElementById(`${provider}-open-settings`)?.addEventListener('click', () => api.openFile().catch(() => {}));
+    document.getElementById(`${provider}-open-settings`)?.addEventListener('click', () => api.openFile().catch(() => { }));
     document.getElementById(`${provider}-mark-done`)?.addEventListener('click', async () => {
       try {
         await api.providerMarkConfigured(provider);
@@ -3418,7 +3564,7 @@ function initOllamaFlow() {
             if (b) { b.textContent = 'Copied!'; setTimeout(() => { b.textContent = 'Copy to clipboard'; }, 2000); }
           } catch { /* denied */ }
         });
-        document.getElementById('ollama-open-settings')?.addEventListener('click', () => api.openFile().catch(() => {}));
+        document.getElementById('ollama-open-settings')?.addEventListener('click', () => api.openFile().catch(() => { }));
         updateProviderRowStatus('ollama', 'connected');
         setTimeout(() => {
           document.getElementById('provider-flow-ollama')?.classList.remove('open');
@@ -3526,8 +3672,8 @@ function showAboutModal() {
       <div class="about-hero">
         <div class="about-hero-title">Token <span class="about-logo-bleed">Bleed</span> <span class="about-version">open source · MIT</span></div>
         <p class="about-hero-tagline">
-          Every time Claude Code writes a line of code, it burns tokens.
-          Those tokens cost money, but Claude gives you almost no way to see where it's all going.
+          Every time Claude Code or Codex writes a line of code, it burns tokens.
+          Those tokens cost money, but neither tool gives you much visibility into where it's all going.
         </p>
       </div>
 
@@ -3536,7 +3682,7 @@ function showAboutModal() {
           <div class="about-feature">
             <div class="about-feature-icon">◈</div>
             <div class="about-feature-title">What burned</div>
-            <div class="about-feature-text">Session logs turned into real dollar costs. Per prompt. Per session. Per project.</div>
+            <div class="about-feature-text">Claude Code and Codex session logs turned into real dollar costs. Per prompt. Per session. Per project.</div>
           </div>
           <div class="about-feature">
             <div class="about-feature-icon">⟷</div>
@@ -3595,7 +3741,7 @@ function showOnboardingIfNeeded() {
 
 function initTheme() {
   const theme = localStorage.getItem('br-theme') === 'light' ? 'light' : 'dark';
-  const size  = ['small', 'medium', 'large'].includes(localStorage.getItem('br-size'))
+  const size = ['small', 'medium', 'large'].includes(localStorage.getItem('br-size'))
     ? localStorage.getItem('br-size')
     : 'small';
   applyTheme(theme);
@@ -3620,7 +3766,7 @@ function applySize(size) {
 }
 
 function initAppearancePanel() {
-  const btn   = document.getElementById('appr-btn');
+  const btn = document.getElementById('appr-btn');
   const panel = document.getElementById('appr-panel');
 
   btn.addEventListener('click', e => {
@@ -3683,15 +3829,15 @@ function init() {
   try {
     const savedHidden = localStorage.getItem('sc-hidden-metrics');
     if (savedHidden) JSON.parse(savedHidden).forEach(k => state.scHiddenMetrics.add(k));
-  } catch {}
+  } catch { }
   try {
     const savedSel = localStorage.getItem('sc-selection');
     if (savedSel) state.compSelection = JSON.parse(savedSel);
-  } catch {}
+  } catch { }
   try {
     const savedPromptSel = localStorage.getItem('pc-selection');
     if (savedPromptSel) state.promptCompSelection = JSON.parse(savedPromptSel);
-  } catch {}
+  } catch { }
   if (localStorage.getItem('sc-view') === 'card') state.scView = 'card';
   if (localStorage.getItem('sc-order') === 'ranked') state.scOrder = 'ranked';
   if (localStorage.getItem('pc-view') === 'card') state.pcView = 'card';
@@ -3699,31 +3845,39 @@ function init() {
   try {
     const savedPcHidden = localStorage.getItem('pc-hidden-metrics');
     if (savedPcHidden) JSON.parse(savedPcHidden).forEach(k => state.pcHiddenMetrics.add(k));
-  } catch {}
+  } catch { }
   try {
     const savedPcOrder = localStorage.getItem('pc-metrics-order');
     if (savedPcOrder) state.pcMetricsOrder = JSON.parse(savedPcOrder);
-  } catch {}
+  } catch { }
+  try {
+    const savedSessHidden = localStorage.getItem('sess-hidden-cols');
+    if (savedSessHidden) JSON.parse(savedSessHidden).forEach(k => state.sessHiddenCols.add(k));
+  } catch { }
+  try {
+    const savedProjHidden = localStorage.getItem('proj-hidden-stats');
+    if (savedProjHidden) JSON.parse(savedProjHidden).forEach(k => state.projHiddenStats.add(k));
+  } catch { }
   renderCompareBar();
   renderPromptCompareBar();
   try {
     const savedOrder = localStorage.getItem('sc-metrics-order');
     if (savedOrder) state.scMetricsOrder = JSON.parse(savedOrder);
-  } catch {}
+  } catch { }
   try {
     const savedProjectSort = JSON.parse(localStorage.getItem('projects-sort') || 'null');
     const validProjectSort = PROJECT_SORT_OPTIONS.some(opt => opt.key === savedProjectSort?.key);
     if (validProjectSort && ['asc', 'desc'].includes(savedProjectSort.dir)) {
       state.projectsSort = savedProjectSort;
     }
-  } catch {}
+  } catch { }
   try {
     const savedSessionSort = JSON.parse(localStorage.getItem('sessions-sort') || 'null');
     const validSessionSort = SESSION_SORT_OPTIONS.some(opt => opt.key === savedSessionSort?.key);
     if (validSessionSort && ['asc', 'desc'].includes(savedSessionSort.dir)) {
       state.sessionsSort = savedSessionSort;
     }
-  } catch {}
+  } catch { }
 
   // Prompt modal
   const promptModal = document.getElementById('prompt-modal');
@@ -3767,7 +3921,7 @@ function init() {
 
   state.view = getView();
   renderView();
-  api.appSettings().then(s => { state.appSettings = s; }).catch(() => {});
+  api.appSettings().then(s => { state.appSettings = s; }).catch(() => { });
 }
 
 init();
@@ -3777,12 +3931,12 @@ init();
   const word = document.querySelector('.sidebar-token-bleed .bleed-word');
   if (!word) return;
   const drips = [
-    { x: '18%', w: '2px', dur: '4.8s', delay: '0.3s',  len: '20px' },
-    { x: '32%', w: '3px', dur: '3.2s', delay: '1.6s',  len: '28px' },
-    { x: '48%', w: '2px', dur: '5.1s', delay: '0s',    len: '22px' },
-    { x: '62%', w: '3px', dur: '3.7s', delay: '2.4s',  len: '30px' },
-    { x: '75%', w: '2px', dur: '4.3s', delay: '0.9s',  len: '18px' },
-    { x: '88%', w: '2px', dur: '5.6s', delay: '3.1s',  len: '24px' },
+    { x: '18%', w: '2px', dur: '4.8s', delay: '0.3s', len: '20px' },
+    { x: '32%', w: '3px', dur: '3.2s', delay: '1.6s', len: '28px' },
+    { x: '48%', w: '2px', dur: '5.1s', delay: '0s', len: '22px' },
+    { x: '62%', w: '3px', dur: '3.7s', delay: '2.4s', len: '30px' },
+    { x: '75%', w: '2px', dur: '4.3s', delay: '0.9s', len: '18px' },
+    { x: '88%', w: '2px', dur: '5.6s', delay: '3.1s', len: '24px' },
   ];
   drips.forEach(d => {
     const el = document.createElement('span');

@@ -2787,6 +2787,8 @@ td.msg-prompt {
 .sc-fields-btn {
   border: 1px solid var(--border-2) !important;
   background: var(--surface) !important;
+  padding-top: 7px !important;
+  padding-bottom: 7px !important;
 }
 
 .sc-fields-btn--filtered,
@@ -3266,6 +3268,12 @@ td.msg-prompt {
   color: var(--violet);
   border-color: rgba(185,133,244,0.4);
   background: var(--violet-dim);
+}
+
+.sc-present-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .sc-toolbar-add-select {
