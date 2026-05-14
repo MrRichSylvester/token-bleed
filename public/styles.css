@@ -515,7 +515,6 @@ html[data-size="large"]  { font-size: 19px; }
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(2, 118px);
   gap: 20px;
-  margin-bottom: 20px;
 }
 
 .overview-top > .metric-card:not(.overview-activity) {
@@ -565,8 +564,15 @@ html[data-size="large"]  { font-size: 19px; }
 }
 
 .overview-panels {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.overview-panel[data-panel-id="metrics"],
+.overview-panel[data-panel-id="sessions"] {
+  grid-column: 1 / -1;
 }
 
 .overview-panel {
@@ -2448,6 +2454,9 @@ td.msg-prompt {
 @media (max-width: 960px) {
   .overview-top { grid-template-columns: repeat(2, 1fr); grid-template-rows: auto; }
   .overview-activity { grid-column: auto; grid-row: auto; }
+  .overview-panels { grid-template-columns: minmax(0, 1fr); }
+  .overview-panel[data-panel-id="metrics"],
+  .overview-panel[data-panel-id="sessions"] { grid-column: auto; }
   .chart-row-2 { grid-template-columns: 1fr; }
   .token-stats-row { flex-wrap: wrap; }
   .token-stat { flex: 0 0 50%; border-bottom: 1px solid var(--border); }

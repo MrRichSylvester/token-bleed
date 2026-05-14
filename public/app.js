@@ -370,16 +370,18 @@ function selectedPlanSavingsText(totalCost, daily, appSettings, activeSources, s
 // ── State ──────────────────────────────────────────────────────
 
 const OVERVIEW_CARD_DEFS_BASE = [
-  { key: 'metric-cost',     label: 'Est. API Costs' },
-  { key: 'metric-avg-cost', label: 'Avg Cost / Session' },
-  { key: 'metric-sessions', label: 'Sessions' },
-  { key: 'metric-activity', label: 'Activity Grid' },
-  { key: 'metric-prompts',  label: 'Total Prompts' },
-  { key: 'metric-tokens',   label: 'Total Tokens' },
-  { key: 'metric-cache',    label: 'Cache Hit Rate' },
-  { key: 'charts-1',        label: 'Daily Cost & Sessions' },
-  { key: 'charts-2',        label: 'Model & Project Charts' },
-  { key: 'sessions',        label: 'Recent Sessions' },
+  { key: 'metric-cost',        label: 'Est. API Costs' },
+  { key: 'metric-avg-cost',    label: 'Avg Cost / Session' },
+  { key: 'metric-sessions',    label: 'Sessions' },
+  { key: 'metric-activity',    label: 'Activity Grid' },
+  { key: 'metric-prompts',     label: 'Total Prompts' },
+  { key: 'metric-tokens',      label: 'Total Tokens' },
+  { key: 'metric-cache',       label: 'Cache Hit Rate' },
+  { key: 'chart-cost',         label: 'Daily Cost' },
+  { key: 'chart-sessions',     label: 'Daily Sessions' },
+  { key: 'chart-models',       label: 'Usage by Model' },
+  { key: 'chart-projects',     label: 'Project Comparison' },
+  { key: 'sessions',           label: 'Recent Sessions' },
 ];
 
 const DRAG_DOTS = `<svg width="12" height="14" viewBox="0 0 12 14" fill="none"><circle cx="3" cy="2" r="1.3" fill="currentColor"/><circle cx="9" cy="2" r="1.3" fill="currentColor"/><circle cx="3" cy="6" r="1.3" fill="currentColor"/><circle cx="9" cy="6" r="1.3" fill="currentColor"/><circle cx="3" cy="10" r="1.3" fill="currentColor"/><circle cx="9" cy="10" r="1.3" fill="currentColor"/></svg>`;
@@ -993,7 +995,7 @@ async function renderOverview() {
     const hasEntryCharts = entrypointRows.length > 1;
     const cardDefs = [
       ...OVERVIEW_CARD_DEFS_BASE,
-      ...(hasEntryCharts ? [{ key: 'charts-3', label: 'Entrypoints & Thinking' }] : []),
+      ...(hasEntryCharts ? [{ key: 'chart-entrypoints', label: 'Entrypoints' }, { key: 'chart-thinking', label: 'Thinking Sessions' }] : []),
     ];
 
     const panelHtml = id => `<div class="overview-panel-drag" title="Drag to reorder">${DRAG_DOTS}</div>`;
@@ -1059,49 +1061,55 @@ async function renderOverview() {
           </div>
         </div>
 
-        <div class="overview-panel" data-panel-id="charts-1">
-          ${panelHtml('charts-1')}
-          <div class="chart-row-2">
-            <div class="chart-wrap">
-              <div class="chart-title">Daily Cost</div>
-              <div class="chart-svg-wrap">${renderBarChart(daily, { valueKey: 'cost', fmt: fmtCost, color: 'green' })}</div>
-            </div>
-            <div class="chart-wrap">
-              <div class="chart-title">Daily Sessions</div>
-              <div class="chart-svg-wrap">${renderBarChart(daily, { valueKey: 'sessions', fmt: n => `${n} sessions`, color: 'blue' })}</div>
-            </div>
+        <div class="overview-panel" data-panel-id="chart-cost">
+          ${panelHtml('chart-cost')}
+          <div class="chart-wrap">
+            <div class="chart-title">Daily Cost</div>
+            <div class="chart-svg-wrap">${renderBarChart(daily, { valueKey: 'cost', fmt: fmtCost, color: 'green' })}</div>
           </div>
         </div>
 
-        <div class="overview-panel" data-panel-id="charts-2">
-          ${panelHtml('charts-2')}
-          <div class="chart-row-2">
-            <div class="chart-wrap">
-              <div class="chart-title">Usage by Model</div>
-              <div class="hbar-wrap">${renderHorizBars(modelRows, { fmtVal: n => `${n}` })}</div>
-            </div>
-            <div class="chart-wrap">
-              <div class="chart-title">Last 6 Projects: Input vs Output</div>
-              ${renderProjectTokenComparison(projects, 6)}
-            </div>
+        <div class="overview-panel" data-panel-id="chart-sessions">
+          ${panelHtml('chart-sessions')}
+          <div class="chart-wrap">
+            <div class="chart-title">Daily Sessions</div>
+            <div class="chart-svg-wrap">${renderBarChart(daily, { valueKey: 'sessions', fmt: n => `${n} sessions`, color: 'blue' })}</div>
+          </div>
+        </div>
+
+        <div class="overview-panel" data-panel-id="chart-models">
+          ${panelHtml('chart-models')}
+          <div class="chart-wrap">
+            <div class="chart-title">Usage by Model</div>
+            <div class="hbar-wrap">${renderHorizBars(modelRows, { fmtVal: n => `${n}` })}</div>
+          </div>
+        </div>
+
+        <div class="overview-panel" data-panel-id="chart-projects">
+          ${panelHtml('chart-projects')}
+          <div class="chart-wrap">
+            <div class="chart-title">Last 6 Projects: Input vs Output</div>
+            ${renderProjectTokenComparison(projects, 6)}
           </div>
         </div>
 
         ${hasEntryCharts ? `
-        <div class="overview-panel" data-panel-id="charts-3">
-          ${panelHtml('charts-3')}
-          <div class="chart-row-2">
-            <div class="chart-wrap">
-              <div class="chart-title">Sessions by Entrypoint</div>
-              <div class="hbar-wrap">${renderHorizBars(entrypointRows, { fmtVal: n => `${n} sessions` })}</div>
-            </div>
-            <div class="chart-wrap">
-              <div class="chart-title">Thinking Sessions</div>
-              <div class="hbar-wrap">${renderHorizBars([
+        <div class="overview-panel" data-panel-id="chart-entrypoints">
+          ${panelHtml('chart-entrypoints')}
+          <div class="chart-wrap">
+            <div class="chart-title">Sessions by Entrypoint</div>
+            <div class="hbar-wrap">${renderHorizBars(entrypointRows, { fmtVal: n => `${n} sessions` })}</div>
+          </div>
+        </div>
+
+        <div class="overview-panel" data-panel-id="chart-thinking">
+          ${panelHtml('chart-thinking')}
+          <div class="chart-wrap">
+            <div class="chart-title">Thinking Sessions</div>
+            <div class="hbar-wrap">${renderHorizBars([
       { label: 'With thinking', value: stats.thinkingSessionCount, color: 'violet', sub: fmtPct(stats.thinkingSessionCount / (stats.totalSessions || 1)) },
       { label: 'Without thinking', value: stats.totalSessions - stats.thinkingSessionCount, color: 'border', sub: fmtPct((stats.totalSessions - stats.thinkingSessionCount) / (stats.totalSessions || 1)) },
     ].filter(r => r.value > 0), { fmtVal: n => `${n} sessions` })}</div>
-            </div>
           </div>
         </div>` : ''}
 
