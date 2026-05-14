@@ -254,9 +254,8 @@ function renderPromptComparePage(deps) {
     btn.addEventListener('click', () => {
       state.pcView = btn.dataset.pcView;
       localStorage.setItem('pc-view', state.pcView);
-      if (state.pcView === 'table') {
-        state.pcPresent = false;
-        state.pcRevealed.clear();
+      if (state.pcView === 'table' && state.pcPresent) {
+        exitPcPresentMode(deps);
       }
       renderPromptComparePage(deps);
     });
@@ -272,9 +271,11 @@ function renderPromptComparePage(deps) {
   });
 
   document.getElementById('pc-present-toggle')?.addEventListener('click', () => {
-    state.pcPresent = !state.pcPresent;
-    state.pcRevealed.clear();
-    renderPromptComparePage(deps);
+    if (state.pcPresent) {
+      exitPcPresentMode(deps);
+    } else {
+      enterPcPresentMode(deps);
+    }
   });
 
   const fieldsBtn = document.getElementById('pc-fields-btn');
@@ -311,8 +312,6 @@ function renderPromptComparePage(deps) {
 }
 
 function bindResultListeners(wrap, deps) {
-  const { state } = deps;
-
   wrap.querySelectorAll('[data-remove-prompt]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
@@ -327,33 +326,6 @@ function bindResultListeners(wrap, deps) {
     });
   });
 
-  if (state.pcPresent) {
-    const cards = wrap.querySelectorAll('.sc-card--present');
-    cards.forEach(card => {
-      card.addEventListener('click', () => {
-        const id = card.dataset.presentId;
-        if (state.pcRevealed.has(id)) return;
-        state.pcRevealed.add(id);
-        const veil = card.querySelector('.sc-card-veil');
-        if (veil) {
-          card.classList.add('sc-card--revealed');
-          veil.classList.add('sc-card-veil--out');
-          veil.addEventListener('transitionend', () => {
-            veil.remove();
-            if (state.pcRevealed.size >= cards.length) {
-              setTimeout(() => {
-                state.pcPresent = false;
-                state.pcRevealed.clear();
-                wrap.querySelectorAll('.sc-card--present').forEach(c => c.classList.remove('sc-card--present', 'sc-card--revealed'));
-                const btn = document.getElementById('pc-present-toggle');
-                if (btn) { btn.classList.remove('sc-present-btn--on'); btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg> Present`; }
-              }, 600);
-            }
-          }, { once: true });
-        }
-      });
-    });
-  }
 }
 
 function renderPromptCompareResult(deps) {
@@ -366,10 +338,6 @@ function renderPromptCompareResult(deps) {
   const ordered = state.pcOrder === 'ranked' && selected.length >= 2
     ? rankPrompts([...selected], metrics)
     : [...selected];
-
-  if (state.pcPresent) {
-    return renderPromptCards(deps, ordered, metrics);
-  }
 
   return state.pcView === 'card'
     ? renderPromptCards(deps, ordered, metrics)
@@ -432,10 +400,6 @@ function renderPromptCards(deps, items, metrics) {
   const scores = metricScores(items, metrics);
   const cards = items.map((p, i) => {
     const label = state.pcOrder === 'ranked' ? String(i + 1) : COMP_LETTERS[i];
-    const revealed = state.pcRevealed.has(p.id);
-    const presentCls = state.pcPresent
-      ? (revealed ? ' sc-card--present sc-card--revealed' : ' sc-card--present')
-      : '';
     const tiles = metrics.map(m => {
       const score = scores.get(m.key);
       const v = m.val(p);
@@ -446,8 +410,7 @@ function renderPromptCards(deps, items, metrics) {
     }).join('');
 
     return `
-      <div class="sc-card${presentCls}" data-present-id="${escHtml(p.id)}">
-        ${state.pcPresent && !revealed ? `<div class="sc-card-veil"><svg class="sc-veil-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>` : ''}
+      <div class="sc-card" data-present-id="${escHtml(p.id)}">
         <div class="sc-card-inner">
           <div class="sc-card-hero">
             <div class="sc-card-hero-letter">${label}</div>
@@ -480,4 +443,122 @@ function legend(bestClass, worstClass) {
       <span class="sc-legend-item"><span class="${worstClass} sc-legend-swatch"></span> Worst</span>
     </div>
   `;
+}
+
+function enterPcPresentMode(deps) {
+  const { state } = deps;
+  const cardGrid = document.querySelector('#prompt-comparison-result .sc-cards-grid');
+  if (!cardGrid) return;
+  const cards = [...cardGrid.querySelectorAll('.sc-card:not(.sc-add-card)')];
+  if (!cards.length) return;
+
+  document.getElementById('pc-spotlight-overlay')?.remove();
+  state.pcPresent = true;
+  state.pcPresentIdx = 0;
+  state.pcRevealed.clear();
+
+  const btn = document.getElementById('pc-present-toggle');
+  if (btn) {
+    btn.classList.add('sc-present-btn--on');
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg> Exit Present`;
+  }
+
+  const orderedCards = state.pcOrder === 'ranked' ? [...cards].reverse() : [...cards];
+  const total = orderedCards.length;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'pc-spotlight-overlay';
+  overlay.className = 'sc-spotlight-overlay';
+
+  const stage = document.createElement('div');
+  stage.className = 'sc-spotlight-stage';
+
+  orderedCards.forEach((card, i) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'sc-spotlight-card';
+    wrapper.dataset.scardIdx = i;
+    const clone = card.cloneNode(true);
+    clone.querySelector('.sc-card-remove')?.remove();
+    clone.querySelector('.sc-card-veil')?.remove();
+    wrapper.appendChild(clone);
+    stage.appendChild(wrapper);
+  });
+
+  const isRanked = state.pcOrder === 'ranked';
+  overlay.insertAdjacentHTML('afterbegin', `
+    <div class="sc-spotlight-header">
+      <div class="sc-spotlight-rank-label" id="pc-spotlight-rank">${isRanked ? 'Worst' : ''}</div>
+      <span class="sc-spotlight-counter" id="pc-spotlight-counter">1 / ${total}</span>
+      <button class="sc-spotlight-exit-btn" id="pc-spotlight-exit">
+        <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        Exit
+      </button>
+    </div>
+  `);
+  overlay.appendChild(stage);
+  overlay.insertAdjacentHTML('beforeend', `<div class="sc-spotlight-hint" id="pc-spotlight-hint">Click to advance</div>`);
+
+  document.body.appendChild(overlay);
+  pcUpdateSpotlightPositions(stage, 0, total);
+
+  document.getElementById('pc-spotlight-exit').addEventListener('click', e => {
+    e.stopPropagation();
+    exitPcPresentMode(deps);
+  });
+
+  overlay.addEventListener('click', e => {
+    if (e.target.closest('#pc-spotlight-exit')) return;
+    const nextIdx = state.pcPresentIdx + 1;
+    if (nextIdx >= total) { exitPcPresentMode(deps); return; }
+    state.pcPresentIdx = nextIdx;
+    pcUpdateSpotlightPositions(stage, nextIdx, total);
+    const counter = document.getElementById('pc-spotlight-counter');
+    if (counter) counter.textContent = `${nextIdx + 1} / ${total}`;
+    const rankLabel = document.getElementById('pc-spotlight-rank');
+    if (rankLabel) rankLabel.textContent = isRanked ? (nextIdx + 1 >= total ? 'Best' : '') : '';
+    const hint = document.getElementById('pc-spotlight-hint');
+    if (hint) hint.textContent = nextIdx + 1 >= total ? 'Click to finish' : 'Click to advance';
+  });
+
+  overlay.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { exitPcPresentMode(deps); return; }
+    if (e.key === ' ' || e.key === 'ArrowRight' || e.key === 'Enter') overlay.click();
+  });
+  overlay.tabIndex = 0;
+  overlay.focus();
+}
+
+function pcUpdateSpotlightPositions(stage, activeIdx, total) {
+  stage.querySelectorAll('.sc-spotlight-card').forEach((card, i) => {
+    if (i < activeIdx) {
+      const k = activeIdx - i;
+      const x = 52 + (k - 1) * 13;
+      const scale = Math.max(0.7 - (k - 1) * 0.09, 0.3);
+      const opacity = Math.max(0.5 - (k - 1) * 0.13, 0.1);
+      card.style.transform = `translateX(${x}%) scale(${scale})`;
+      card.style.opacity = opacity;
+      card.style.zIndex = total - k;
+    } else if (i === activeIdx) {
+      card.style.transform = 'translateX(0) scale(1)';
+      card.style.opacity = '1';
+      card.style.zIndex = total + 1;
+    } else {
+      card.style.transform = 'translateX(-18%) scale(0.85)';
+      card.style.opacity = '0';
+      card.style.zIndex = 0;
+    }
+  });
+}
+
+function exitPcPresentMode(deps) {
+  const { state } = deps;
+  document.getElementById('pc-spotlight-overlay')?.remove();
+  state.pcPresent = false;
+  state.pcPresentIdx = 0;
+  state.pcRevealed.clear();
+  const btn = document.getElementById('pc-present-toggle');
+  if (btn) {
+    btn.classList.remove('sc-present-btn--on');
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg> Present`;
+  }
 }

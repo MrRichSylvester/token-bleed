@@ -247,7 +247,8 @@ const state = {
   pcHiddenMetrics: new Set(),
   pcMetricsOrder: null,    // null = default; array of keys when user has reordered
   pcPresent: false,
-  pcRevealed: new Set(),   // set of prompt IDs revealed in present mode
+  pcPresentIdx: 0,
+  pcRevealed: new Set(),
   sessHiddenCols: new Set(),
   projHiddenStats: new Set(),
   appSettings: null,
@@ -261,7 +262,8 @@ const state = {
   scOrder: 'added',        // 'added' | 'ranked'
   scMetricsOrder: null,   // null = default; array of keys when user has reordered
   scPresent: false,
-  scRevealed: new Set(),  // set of session IDs revealed in present mode
+  scPresentIdx: 0,
+  scRevealed: new Set(),
   dataFetchedAt: null,
   data: {
     stats: null,
@@ -2015,9 +2017,8 @@ function renderSessionComparePage() {
     btn.addEventListener('click', () => {
       state.scView = btn.dataset.view;
       localStorage.setItem('sc-view', state.scView);
-      if (state.scView === 'table') {
-        state.scPresent = false;
-        state.scRevealed.clear();
+      if (state.scView === 'table' && state.scPresent) {
+        exitScPresentMode();
       }
       renderSessionComparePage();
     });
@@ -2038,9 +2039,11 @@ function renderSessionComparePage() {
   });
 
   document.getElementById('sc-present-toggle')?.addEventListener('click', () => {
-    state.scPresent = !state.scPresent;
-    state.scRevealed.clear();
-    renderSessionComparePage();
+    if (state.scPresent) {
+      exitScPresentMode();
+    } else {
+      enterScPresentMode();
+    }
   });
 
   const fieldsBtn = document.getElementById('sc-fields-btn');
@@ -2471,8 +2474,6 @@ function renderSessionComparisonCards() {
 
   const cards = selected.map((s, i) => {
     const local = isLocal(s);
-    const revealed = state.scRevealed.has(s.id);
-    const presentCls = state.scPresent ? (revealed ? ' sc-card--present sc-card--revealed' : ' sc-card--present') : '';
     const label = state.scOrder === 'ranked' ? String(i + 1) : COMP_LETTERS[i];
 
     const tiles = metrics.map(m => {
@@ -2491,7 +2492,7 @@ function renderSessionComparisonCards() {
     }).join('');
 
     return `
-      <div class="sc-card${presentCls}" data-present-id="${escHtml(s.id)}">
+      <div class="sc-card" data-present-id="${escHtml(s.id)}">
         <div class="sc-card-inner">
           <div class="sc-card-hero">
             <div class="sc-card-hero-letter">${label}</div>
@@ -2507,7 +2508,6 @@ function renderSessionComparisonCards() {
           </div>
           <div class="sc-card-tiles">${tiles}</div>
         </div>
-        ${state.scPresent && !revealed ? `<div class="sc-card-veil"><svg class="sc-veil-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>` : ''}
       </div>`;
   }).join('');
 
@@ -2524,32 +2524,123 @@ function renderSessionComparisonCards() {
   `;
 
   bindSessionCompareInlineControls(wrap);
+}
 
-  if (state.scPresent) {
-    wrap.querySelectorAll('.sc-card--present').forEach(card => {
-      card.addEventListener('click', () => {
-        const id = card.dataset.presentId;
-        if (state.scRevealed.has(id)) return;
-        state.scRevealed.add(id);
-        const veil = card.querySelector('.sc-card-veil');
-        if (veil) {
-          card.classList.add('sc-card--revealed');
-          veil.classList.add('sc-card-veil--out');
-          veil.addEventListener('transitionend', () => {
-            veil.remove();
-            if (state.scRevealed.size >= selected.length) {
-              setTimeout(() => {
-                state.scPresent = false;
-                state.scRevealed.clear();
-                wrap.querySelectorAll('.sc-card--present').forEach(c => c.classList.remove('sc-card--present', 'sc-card--revealed'));
-                const btn = document.getElementById('sc-present-toggle');
-                if (btn) { btn.classList.remove('sc-present-btn--on'); btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg> Present`; }
-              }, 600);
-            }
-          }, { once: true });
-        }
-      });
-    });
+function enterScPresentMode() {
+  const cardGrid = document.querySelector('#session-comparison-result .sc-cards-grid');
+  if (!cardGrid) return;
+  const cards = [...cardGrid.querySelectorAll('.sc-card:not(.sc-add-card)')];
+  if (!cards.length) return;
+
+  document.getElementById('sc-spotlight-overlay')?.remove();
+  state.scPresent = true;
+  state.scPresentIdx = 0;
+  state.scRevealed.clear();
+
+  const btn = document.getElementById('sc-present-toggle');
+  if (btn) {
+    btn.classList.add('sc-present-btn--on');
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg> Exit Present`;
+  }
+
+  const orderedCards = state.scOrder === 'ranked' ? [...cards].reverse() : [...cards];
+  const total = orderedCards.length;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'sc-spotlight-overlay';
+  overlay.className = 'sc-spotlight-overlay';
+
+  const stage = document.createElement('div');
+  stage.className = 'sc-spotlight-stage';
+
+  orderedCards.forEach((card, i) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'sc-spotlight-card';
+    wrapper.dataset.scardIdx = i;
+    const clone = card.cloneNode(true);
+    clone.querySelector('.sc-card-remove')?.remove();
+    clone.querySelector('.sc-card-veil')?.remove();
+    wrapper.appendChild(clone);
+    stage.appendChild(wrapper);
+  });
+
+  const isRanked = state.scOrder === 'ranked';
+  overlay.insertAdjacentHTML('afterbegin', `
+    <div class="sc-spotlight-header">
+      <div class="sc-spotlight-rank-label" id="sc-spotlight-rank">${isRanked ? 'Worst' : ''}</div>
+      <span class="sc-spotlight-counter" id="sc-spotlight-counter">1 / ${total}</span>
+      <button class="sc-spotlight-exit-btn" id="sc-spotlight-exit">
+        <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        Exit
+      </button>
+    </div>
+  `);
+  overlay.appendChild(stage);
+  overlay.insertAdjacentHTML('beforeend', `<div class="sc-spotlight-hint" id="sc-spotlight-hint">Click to advance</div>`);
+
+  document.body.appendChild(overlay);
+  updateSpotlightPositions(stage, 0, total);
+
+  document.getElementById('sc-spotlight-exit').addEventListener('click', e => {
+    e.stopPropagation();
+    exitScPresentMode();
+  });
+
+  overlay.addEventListener('click', e => {
+    if (e.target.closest('#sc-spotlight-exit')) return;
+    const nextIdx = state.scPresentIdx + 1;
+    if (nextIdx >= total) { exitScPresentMode(); return; }
+    state.scPresentIdx = nextIdx;
+    updateSpotlightPositions(stage, nextIdx, total);
+    const counter = document.getElementById('sc-spotlight-counter');
+    if (counter) counter.textContent = `${nextIdx + 1} / ${total}`;
+    const rankLabel = document.getElementById('sc-spotlight-rank');
+    if (rankLabel) rankLabel.textContent = isRanked ? (nextIdx + 1 >= total ? 'Best' : '') : '';
+    const hint = document.getElementById('sc-spotlight-hint');
+    if (hint) hint.textContent = nextIdx + 1 >= total ? 'Click to finish' : 'Click to advance';
+  });
+
+  overlay.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { exitScPresentMode(); return; }
+    if (e.key === ' ' || e.key === 'ArrowRight' || e.key === 'Enter') {
+      overlay.click();
+    }
+  });
+  overlay.tabIndex = 0;
+  overlay.focus();
+}
+
+function updateSpotlightPositions(stage, activeIdx, total) {
+  stage.querySelectorAll('.sc-spotlight-card').forEach((card, i) => {
+    if (i < activeIdx) {
+      const k = activeIdx - i;
+      const x = 52 + (k - 1) * 13;
+      const scale = Math.max(0.7 - (k - 1) * 0.09, 0.3);
+      const opacity = Math.max(0.5 - (k - 1) * 0.13, 0.1);
+      card.style.transform = `translateX(${x}%) scale(${scale})`;
+      card.style.opacity = opacity;
+      card.style.zIndex = total - k;
+    } else if (i === activeIdx) {
+      card.style.transform = 'translateX(0) scale(1)';
+      card.style.opacity = '1';
+      card.style.zIndex = total + 1;
+    } else {
+      card.style.transform = 'translateX(-18%) scale(0.85)';
+      card.style.opacity = '0';
+      card.style.zIndex = 0;
+    }
+  });
+}
+
+function exitScPresentMode() {
+  document.getElementById('sc-spotlight-overlay')?.remove();
+  state.scPresent = false;
+  state.scPresentIdx = 0;
+  state.scRevealed.clear();
+  const btn = document.getElementById('sc-present-toggle');
+  if (btn) {
+    btn.classList.remove('sc-present-btn--on');
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg> Present`;
   }
 }
 
