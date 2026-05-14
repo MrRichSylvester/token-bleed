@@ -468,6 +468,9 @@ html[data-size="large"]  { font-size: 19px; }
 
 .overview-top > .metric-card:not(.overview-activity) {
   min-height: 118px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .overview-activity {
@@ -567,8 +570,8 @@ html[data-size="large"]  { font-size: 19px; }
 
 .metric-value.mono {
   font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 1.54rem;
+  font-weight: 600;
+  font-size: 1.68rem;
 }
 
 .metric-sub {
