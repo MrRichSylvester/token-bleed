@@ -23,6 +23,7 @@ const APP_SETTINGS_PATH = path.join(os.homedir(), '.burn-rate-settings.json');
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
   plan: 'api',
+  codexPlan: 'api',
   customPricing: {},
   durationMode: 'active',
 };
@@ -40,6 +41,7 @@ function readAppSettings(): AppSettings {
     const raw = JSON.parse(fs.readFileSync(APP_SETTINGS_PATH, 'utf-8'));
     return {
       plan: raw.plan ?? DEFAULT_APP_SETTINGS.plan,
+      codexPlan: raw.codexPlan ?? DEFAULT_APP_SETTINGS.codexPlan,
       customPricing: raw.customPricing ?? {},
       durationMode: raw.durationMode ?? DEFAULT_APP_SETTINGS.durationMode,
     };
@@ -268,6 +270,14 @@ app.post('/api/app-settings', async (req, reply) => {
       reply.status(400); return { error: 'Invalid plan' };
     }
     current.plan = body.plan as AppSettings['plan'];
+  }
+
+  const validCodexPlans = ['api', 'go', 'plus', 'pro'];
+  if (body.codexPlan !== undefined) {
+    if (!validCodexPlans.includes(body.codexPlan as string)) {
+      reply.status(400); return { error: 'Invalid codexPlan' };
+    }
+    current.codexPlan = body.codexPlan as AppSettings['codexPlan'];
   }
 
   if (body.durationMode !== undefined) {

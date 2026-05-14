@@ -128,6 +128,7 @@ export interface PromptTurn extends SessionMessage {
 
 export interface AppSettings {
   plan: 'api' | 'pro' | 'max' | 'max5x' | 'max20x';
+  codexPlan: 'api' | 'go' | 'plus' | 'pro';
   customPricing: Record<string, { input: number; output: number; cacheWrite: number; cacheRead: number }>;
   durationMode: 'active' | 'wallclock';
 }

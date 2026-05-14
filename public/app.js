@@ -2799,13 +2799,20 @@ const PLAN_OPTIONS = [
   { key: 'max20x', label: 'Max 20x', sub: '$200/mo' },
 ];
 
+const CODEX_PLAN_OPTIONS = [
+  { key: 'api', label: 'API', sub: 'Pay per token' },
+  { key: 'go', label: 'Go', sub: '$8/mo' },
+  { key: 'plus', label: 'Plus', sub: '$20/mo' },
+  { key: 'pro', label: 'Pro', sub: '$100/mo' },
+];
+
 async function renderSettings() {
   setLoading();
   try {
     const [appSettings, meta, providerData] = await Promise.all([api.appSettings(), api.meta(), api.providers()]);
     state.appSettings = appSettings;
 
-    const { plan, customPricing, builtinPricing, detectedModels, legacyModelKeys = [] } = appSettings;
+    const { plan, codexPlan, customPricing, builtinPricing, detectedModels, legacyModelKeys = [] } = appSettings;
     const legacySet = new Set(legacyModelKeys);
     const cleanupDays = meta.cleanupPeriodDays ?? 30;
 
@@ -2860,7 +2867,7 @@ async function renderSettings() {
       <h1 class="page-title">Settings</h1>
 
       <div class="settings-section">
-        <div class="settings-section-title">Plan</div>
+        <div class="settings-section-title">Claude Plan</div>
         <div class="settings-section-desc">
           Select the plan you are on. Token Bleed always calculates costs at API rates regardless of your plan.
           On Pro and Max plans this shows the equivalent market value of your usage, so you can see whether the subscription is paying off.
@@ -2873,6 +2880,21 @@ async function renderSettings() {
             </button>`).join('')}
         </div>
         <div id="plan-save-status" class="settings-save-status"></div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Codex Plan</div>
+        <div class="settings-section-desc">
+          Select your OpenAI subscription plan. Token Bleed always calculates Codex costs at API rates regardless of your plan.
+        </div>
+        <div class="plan-selector">
+          ${CODEX_PLAN_OPTIONS.map(p => `
+            <button class="plan-btn ${codexPlan === p.key ? 'active' : ''}" data-codex-plan="${p.key}">
+              <span class="plan-btn-label">${p.label}</span>
+              <span class="plan-btn-sub">${p.sub}</span>
+            </button>`).join('')}
+        </div>
+        <div id="codex-plan-save-status" class="settings-save-status"></div>
       </div>
 
       <div class="settings-section">
@@ -2952,16 +2974,34 @@ async function renderSettings() {
       ${renderProvidersSectionHtml(providerData)}
     `;
 
-    // Plan selector
+    // Claude plan selector
     content.querySelectorAll('.plan-btn[data-plan]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const planStatus = document.getElementById('plan-save-status');
-        content.querySelectorAll('.plan-btn').forEach(b => b.classList.remove('active'));
+        content.querySelectorAll('.plan-btn[data-plan]').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         planStatus.textContent = 'Saving…';
         try {
           await api.saveAppSettings({ plan: btn.dataset.plan });
           state.appSettings.plan = btn.dataset.plan;
+          planStatus.textContent = 'Saved';
+          setTimeout(() => { planStatus.textContent = ''; }, 2000);
+        } catch {
+          planStatus.textContent = 'Error saving';
+        }
+      });
+    });
+
+    // Codex plan selector
+    content.querySelectorAll('.plan-btn[data-codex-plan]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const planStatus = document.getElementById('codex-plan-save-status');
+        content.querySelectorAll('.plan-btn[data-codex-plan]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        planStatus.textContent = 'Saving…';
+        try {
+          await api.saveAppSettings({ codexPlan: btn.dataset.codexPlan });
+          state.appSettings.codexPlan = btn.dataset.codexPlan;
           planStatus.textContent = 'Saved';
           setTimeout(() => { planStatus.textContent = ''; }, 2000);
         } catch {
