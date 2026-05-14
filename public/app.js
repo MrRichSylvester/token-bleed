@@ -20,6 +20,10 @@ function fmtPct(n) {
   return `${(n * 100).toFixed(1)}%`;
 }
 
+function sessionDuration(s) {
+  return state.appSettings?.durationMode === 'active' ? (s.activeDuration ?? s.duration) : s.duration;
+}
+
 function fmtDuration(ms) {
   if (ms < 1000) return '<1s';
   const s = Math.floor(ms / 1000);
@@ -232,6 +236,7 @@ const state = {
   sessionsLimit: 50,
   sessionsFilter: { projectId: '', model: '', sources: ['claude', 'codex'] },
   projectsFilter: { sources: ['claude', 'codex'] },
+  projectsSort: { key: 'lastActivity', dir: 'desc' },
   appSettings: null,
   compModel1: '',
   compModel2: '',
@@ -624,6 +629,40 @@ function scaleUsageGrid() {
   wrap.style.setProperty('--cell-size', Math.max(10, Math.min(cellFromH, cellFromW)) + 'px');
 }
 
+const PROJECT_SORT_OPTIONS = [
+  { key: 'lastActivity', label: 'Last Active' },
+  { key: 'totalCost', label: 'Total Cost' },
+  { key: 'totalTokens', label: 'Tokens' },
+  { key: 'sessionCount', label: 'Sessions' },
+  { key: 'cacheHitRate', label: 'Cache Hit' },
+  { key: 'name', label: 'Project Name' },
+];
+
+function projectSortDefaultDir(key) {
+  return key === 'name' ? 'asc' : 'desc';
+}
+
+function sortProjects(projects) {
+  const { key, dir } = state.projectsSort;
+  const mult = dir === 'asc' ? 1 : -1;
+
+  return [...projects].sort((a, b) => {
+    let cmp = 0;
+    if (key === 'name') {
+      cmp = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+    } else if (key === 'lastActivity') {
+      cmp = new Date(a.lastActivity || 0).getTime() - new Date(b.lastActivity || 0).getTime();
+    } else {
+      cmp = (a[key] || 0) - (b[key] || 0);
+    }
+
+    if (cmp === 0) {
+      cmp = new Date(a.lastActivity || 0).getTime() - new Date(b.lastActivity || 0).getTime();
+    }
+    return cmp * mult;
+  });
+}
+
 // ── Overview ───────────────────────────────────────────────────
 
 async function renderOverview() {
@@ -825,20 +864,50 @@ async function renderProjects() {
     const activeSources = state.projectsFilter.sources;
     const projectParams = activeSources.length === 1 ? { source: activeSources[0] } : {};
     const projects = await api.projects(projectParams);
-    state.data.projects = projects;
+    const sortedProjects = sortProjects(projects);
+    state.data.projects = sortedProjects;
+    const sortOptions = PROJECT_SORT_OPTIONS.map(opt => `
+      <option value="${opt.key}" ${state.projectsSort.key === opt.key ? 'selected' : ''}>${opt.label}</option>
+    `).join('');
+    const sortDirLabel = state.projectsSort.dir === 'asc' ? 'Ascending' : 'Descending';
+    const sortDirIcon = state.projectsSort.dir === 'asc' ? '↑' : '↓';
 
     const content = document.getElementById('content');
     content.innerHTML = `
       <h1 class="page-title">Projects</h1>
       <div class="page-subtitle-row">
-        <p class="page-subtitle">${periodLabel()} · ${projects.length} project${projects.length !== 1 ? 's' : ''}</p>
-        <div class="sc-view-toggle agent-source-toggle" aria-label="Project agent filter">
-          <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-project-source="claude">Claude Code</button>
-          <button class="sc-view-btn agent-source-btn${activeSources.includes('codex') ? ' sc-view-btn--on' : ''}" data-project-source="codex">Codex</button>
+        <p class="page-subtitle">${periodLabel()} · ${sortedProjects.length} project${sortedProjects.length !== 1 ? 's' : ''}</p>
+        <div class="project-header-controls">
+          <div class="project-sort-control" aria-label="Project sorting">
+            <span class="project-sort-label">Sort</span>
+            <select id="project-sort-select" class="project-sort-select" aria-label="Sort projects by">
+              ${sortOptions}
+            </select>
+            <button id="project-sort-dir" class="project-sort-dir" title="${sortDirLabel}" aria-label="${sortDirLabel}">
+              ${sortDirIcon}
+            </button>
+          </div>
+          <div class="sc-view-toggle agent-source-toggle" aria-label="Project agent filter">
+            <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-project-source="claude">Claude Code</button>
+            <button class="sc-view-btn agent-source-btn${activeSources.includes('codex') ? ' sc-view-btn--on' : ''}" data-project-source="codex">Codex</button>
+          </div>
         </div>
       </div>
-      <div class="project-list">${projects.map(renderProjectCard).join('')}</div>
+      <div class="project-list">${sortedProjects.map(renderProjectCard).join('')}</div>
     `;
+
+    document.getElementById('project-sort-select')?.addEventListener('change', e => {
+      const key = e.target.value;
+      state.projectsSort = { key, dir: projectSortDefaultDir(key) };
+      localStorage.setItem('projects-sort', JSON.stringify(state.projectsSort));
+      renderProjects();
+    });
+
+    document.getElementById('project-sort-dir')?.addEventListener('click', () => {
+      state.projectsSort.dir = state.projectsSort.dir === 'asc' ? 'desc' : 'asc';
+      localStorage.setItem('projects-sort', JSON.stringify(state.projectsSort));
+      renderProjects();
+    });
 
     content.querySelectorAll('[data-project-source]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1083,7 +1152,7 @@ function renderSessionsTable(sessions, opts = {}) {
       <td class="right">${costCell}</td>
       <td class="right muted" style="font-size:12px">${fmtPct(s.cacheHitRate)}</td>
       <td class="right muted" style="font-size:12px">${s.messageCount}</td>
-      <td class="right muted" style="font-size:12px">${fmtDuration(s.duration)}</td>
+      <td class="right muted" style="font-size:12px">${fmtDuration(sessionDuration(s))}</td>
     </tr>
     <tr class="session-detail-row" data-for="${escHtml(s.id)}">
       <td colspan="${colCount}" class="session-detail-cell">
@@ -1939,7 +2008,7 @@ function renderSessionComparisonTable() {
     { key: 'cacheRead',     label: 'Cache Read',     val: s => s.usage.cacheReadTokens,       fmt: s => fmtTokens(s.usage.cacheReadTokens),       lowerBetter: false },
     { key: 'cacheWrite',    label: 'Cache Write',    val: s => s.usage.cacheCreationTokens,   fmt: s => fmtTokens(s.usage.cacheCreationTokens),   lowerBetter: true  },
     { key: 'cacheHitRate',  label: 'Cache Hit Rate', val: s => s.cacheHitRate,                fmt: s => fmtPct(s.cacheHitRate),                   lowerBetter: false },
-    { key: 'duration',      label: 'Duration',       val: s => s.duration,                    fmt: s => fmtDuration(s.duration),                  lowerBetter: true  },
+    { key: 'duration',      label: 'Duration',       val: s => sessionDuration(s),            fmt: s => fmtDuration(sessionDuration(s)),           lowerBetter: true  },
     { key: 'messages',      label: 'Messages',       val: s => s.messageCount,                fmt: s => s.messageCount.toString(),                lowerBetter: null  },
     { key: 'toolCalls',     label: 'Tool Calls',     val: s => s.toolCallCount,               fmt: s => s.toolCallCount.toString(),               lowerBetter: null  },
     { key: 'thinkingTurns', label: 'Thinking Turns', val: s => s.thinkingBlocks || 0,         fmt: s => (s.thinkingBlocks || 0).toString(),       lowerBetter: null  },
@@ -2039,7 +2108,7 @@ function renderSessionComparisonCards() {
     { key: 'cacheRead',     label: 'Cache Read',     val: s => s.usage.cacheReadTokens,       fmt: s => fmtTokens(s.usage.cacheReadTokens),       lowerBetter: false },
     { key: 'cacheWrite',    label: 'Cache Write',    val: s => s.usage.cacheCreationTokens,   fmt: s => fmtTokens(s.usage.cacheCreationTokens),   lowerBetter: true  },
     { key: 'cacheHitRate',  label: 'Cache Hit Rate', val: s => s.cacheHitRate,                fmt: s => fmtPct(s.cacheHitRate),                   lowerBetter: false },
-    { key: 'duration',      label: 'Duration',       val: s => s.duration,                    fmt: s => fmtDuration(s.duration),                  lowerBetter: true  },
+    { key: 'duration',      label: 'Duration',       val: s => sessionDuration(s),            fmt: s => fmtDuration(sessionDuration(s)),           lowerBetter: true  },
     { key: 'messages',      label: 'Messages',       val: s => s.messageCount,                fmt: s => s.messageCount.toString(),                lowerBetter: null  },
     { key: 'toolCalls',     label: 'Tool Calls',     val: s => s.toolCallCount,               fmt: s => s.toolCallCount.toString(),               lowerBetter: null  },
     { key: 'thinkingTurns', label: 'Thinking Turns', val: s => s.thinkingBlocks || 0,         fmt: s => (s.thinkingBlocks || 0).toString(),       lowerBetter: null  },
@@ -2419,6 +2488,18 @@ async function renderSettings() {
         </div>
       </div>
 
+      <div class="settings-section">
+        <div class="settings-section-title">Session Duration</div>
+        <div class="settings-section-desc">
+          Choose how session duration is calculated. <strong>Wall clock</strong> is the total time from first to last log entry, including idle time between your messages. <strong>Active AI time</strong> sums only the time the model was actually running — from when you sent each message to when the response completed.
+        </div>
+        <div class="retention-row">
+          <button class="plan-btn${appSettings.durationMode !== 'active' ? ' active' : ''}" id="duration-wallclock-btn">Wall clock</button>
+          <button class="plan-btn${appSettings.durationMode === 'active' ? ' active' : ''}" id="duration-active-btn">Active AI time</button>
+          <span id="duration-save-status" class="settings-save-status"></span>
+        </div>
+      </div>
+
       ${renderProvidersSectionHtml(providerData)}
     `;
 
@@ -2610,6 +2691,25 @@ async function renderSettings() {
       } finally {
         btn.disabled = false;
       }
+    });
+
+    // Duration mode buttons
+    ['duration-wallclock-btn', 'duration-active-btn'].forEach(id => {
+      document.getElementById(id)?.addEventListener('click', async () => {
+        const mode = id === 'duration-active-btn' ? 'active' : 'wallclock';
+        const status = document.getElementById('duration-save-status');
+        document.getElementById('duration-wallclock-btn').classList.toggle('active', mode === 'wallclock');
+        document.getElementById('duration-active-btn').classList.toggle('active', mode === 'active');
+        status.textContent = 'Saving…';
+        try {
+          await api.saveAppSettings({ durationMode: mode });
+          state.appSettings.durationMode = mode;
+          status.textContent = 'Saved';
+          setTimeout(() => { status.textContent = ''; }, 2000);
+        } catch {
+          status.textContent = 'Error saving';
+        }
+      });
     });
 
     // Provider setup buttons
@@ -3397,6 +3497,13 @@ function init() {
   try {
     const savedOrder = localStorage.getItem('sc-metrics-order');
     if (savedOrder) state.scMetricsOrder = JSON.parse(savedOrder);
+  } catch {}
+  try {
+    const savedProjectSort = JSON.parse(localStorage.getItem('projects-sort') || 'null');
+    const validProjectSort = PROJECT_SORT_OPTIONS.some(opt => opt.key === savedProjectSort?.key);
+    if (validProjectSort && ['asc', 'desc'].includes(savedProjectSort.dir)) {
+      state.projectsSort = savedProjectSort;
+    }
   } catch {}
 
   // Prompt modal

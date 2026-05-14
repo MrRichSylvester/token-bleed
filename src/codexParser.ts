@@ -222,6 +222,7 @@ function parseCodexSessionFile(filePath: string, titles: Map<string, string>): S
     startTime,
     endTime,
     duration: endTime ? new Date(endTime).getTime() - new Date(startTime).getTime() : 0,
+    activeDuration: 0,
     models,
     primaryModel: model,
     usage,

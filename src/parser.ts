@@ -54,6 +54,8 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
   let messageCount = 0;
   let toolCallCount = 0;
   let thinkingBlocks = 0;
+  let activeDuration = 0;
+  let pendingUserTs = '';
   let cwd = '';
   let entrypoint = '';
   let gitBranch = '';
@@ -90,6 +92,7 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
     if (entry.type === 'user') {
       if (entry.isSidechain) continue;
       messageCount++;
+      if (entry.timestamp) pendingUserTs = entry.timestamp;
       if (!firstPrompt && entry.message?.content) {
         const text = extractText(entry.message.content)
           .replace(/<[^>]+>/g, ' ')
@@ -104,6 +107,11 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
     if (entry.type === 'assistant' && entry.message?.usage) {
       const msgId = entry.message.id;
       if (entry.message.model) models.add(entry.message.model);
+      if (pendingUserTs && entry.timestamp) {
+        const turnMs = new Date(entry.timestamp).getTime() - new Date(pendingUserTs).getTime();
+        if (turnMs > 0) activeDuration += turnMs;
+        pendingUserTs = '';
+      }
 
       if (msgId) {
         // Accumulate content chars across all blocks for this message (used to estimate output
@@ -174,6 +182,7 @@ function parseSessionFile(sessionId: string, projectId: string, filePath: string
     startTime,
     endTime,
     duration,
+    activeDuration,
     models: [...models],
     primaryModel,
     usage,

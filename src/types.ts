@@ -16,6 +16,7 @@ export interface Session {
   startTime: string;
   endTime: string;
   duration: number;
+  activeDuration: number;
   models: string[];
   primaryModel: string;
   usage: TokenUsage;
@@ -116,6 +117,7 @@ export interface SessionMessage {
 export interface AppSettings {
   plan: 'api' | 'pro' | 'max' | 'max5x' | 'max20x';
   customPricing: Record<string, { input: number; output: number; cacheWrite: number; cacheRead: number }>;
+  durationMode: 'wallclock' | 'active';
 }
 
 export interface Tip {

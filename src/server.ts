@@ -24,6 +24,7 @@ const APP_SETTINGS_PATH = path.join(os.homedir(), '.burn-rate-settings.json');
 const DEFAULT_APP_SETTINGS: AppSettings = {
   plan: 'api',
   customPricing: {},
+  durationMode: 'wallclock',
 };
 
 function readClaudeSettings(): Record<string, unknown> {
@@ -40,6 +41,7 @@ function readAppSettings(): AppSettings {
     return {
       plan: raw.plan ?? DEFAULT_APP_SETTINGS.plan,
       customPricing: raw.customPricing ?? {},
+      durationMode: raw.durationMode ?? DEFAULT_APP_SETTINGS.durationMode,
     };
   } catch {
     return { ...DEFAULT_APP_SETTINGS };
@@ -164,6 +166,7 @@ app.get('/api/app-settings', async () => {
   return {
     plan: appSettings.plan,
     customPricing: appSettings.customPricing,
+    durationMode: appSettings.durationMode,
     builtinPricing: PRICING,
     detectedModels: [...detectedModels].sort(),
     legacyModelKeys: [...LEGACY_MODEL_KEYS],
@@ -180,6 +183,13 @@ app.post('/api/app-settings', async (req, reply) => {
       reply.status(400); return { error: 'Invalid plan' };
     }
     current.plan = body.plan as AppSettings['plan'];
+  }
+
+  if (body.durationMode !== undefined) {
+    if (body.durationMode !== 'wallclock' && body.durationMode !== 'active') {
+      reply.status(400); return { error: 'Invalid durationMode' };
+    }
+    current.durationMode = body.durationMode as AppSettings['durationMode'];
   }
 
   if (body.customPricing !== undefined) {
