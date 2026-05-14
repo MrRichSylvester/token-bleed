@@ -236,6 +236,9 @@ const CODEX_PLAN_MONTHLY = {
   pro: 100,
 };
 
+const CLAUDE_RECOMMENDED_PLAN = { label: 'Claude Pro', monthly: 20 };
+const CODEX_RECOMMENDED_PLAN = { label: 'Codex Go', monthly: 8 };
+
 function periodToSince(mode, period) {
   if (period === 'all') return undefined;
   const now = new Date();
@@ -294,9 +297,41 @@ function selectedPlanMonthlyCost(appSettings, activeSources) {
   return monthly;
 }
 
+function recommendedPlanForSources(activeSources) {
+  const plans = [];
+  if (activeSources.includes('claude')) plans.push(CLAUDE_RECOMMENDED_PLAN);
+  if (activeSources.includes('codex')) plans.push(CODEX_RECOMMENDED_PLAN);
+  if (plans.length === 0) return null;
+
+  return {
+    label: plans.map(p => p.label).join(' + '),
+    monthly: plans.reduce((sum, p) => sum + p.monthly, 0),
+    isBundle: plans.length > 1,
+  };
+}
+
+function apiPlanRecommendationText(totalCost, daily, activeSources) {
+  const recommendation = recommendedPlanForSources(activeSources);
+  if (!recommendation) return 'API pricing selected';
+
+  const planCost = (recommendation.monthly / 30) * selectedPeriodDays(daily);
+  const savings = totalCost - planCost;
+  const planWord = recommendation.isBundle ? 'plans' : 'plan';
+  const planLabel = `${recommendation.label} ${planWord}`;
+  const planLink = `<a class="metric-sub-link" href="#settings">${planLabel}</a>`;
+
+  if (savings > 0) {
+    return `<span class="metric-sub-savings">Save ${fmtCost(savings)}</span> with ${planLink}`;
+  }
+  if (savings < 0) {
+    return `API is cheaper than ${planLink} for this period`;
+  }
+  return `Break-even with ${planLink}`;
+}
+
 function selectedPlanSavingsText(totalCost, daily, appSettings, activeSources) {
   const monthly = selectedPlanMonthlyCost(appSettings, activeSources);
-  if (monthly <= 0) return 'API pricing selected';
+  if (monthly <= 0) return apiPlanRecommendationText(totalCost, daily, activeSources);
 
   const planCost = (monthly / 30) * selectedPeriodDays(daily);
   const savings = totalCost - planCost;
