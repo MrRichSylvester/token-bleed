@@ -59,7 +59,7 @@ Total spend, daily trends, average session cost, and per-message breakdowns. Fil
 
 ### When you shipped
 
-Your Claude Code sessions rendered as a contribution-style heatmap. See your build cadence at a glance, not just what you spent.
+Your Claude Code and Codex sessions rendered as a contribution-style heatmap. See your build cadence at a glance, not just what you spent.
 
 ![Activity Heatmap](images/activity.png)
 
@@ -109,7 +109,9 @@ Data refreshes from disk every 5 minutes or on demand via the Refresh button.
 
 ## Models supported
 
-Built-in pricing for all current Claude models. Prefix matching handles future versioned IDs automatically.
+Built-in pricing for Claude and Codex models. Prefix matching handles future versioned IDs automatically.
+
+### Claude (Claude Code)
 
 | Model             | Input | Output | Cache Write | Cache Read |
 | ----------------- | ----- | ------ | ----------- | ---------- |
@@ -121,9 +123,17 @@ Built-in pricing for all current Claude models. Prefix matching handles future v
 | claude-3-opus     | $15   | $75    | $18.75      | $1.50      |
 | claude-3-haiku    | $0.25 | $1.25  | $0.30       | $0.03      |
 
+### OpenAI (Codex)
+
+| Model       | Input  | Output | Cache Read |
+| ----------- | ------ | ------ | ---------- |
+| gpt-5.5     | $5     | $30    | $0.50      |
+| gpt-5.4     | $2.50  | $15    | $0.25      |
+| gpt-5.4-mini| $0.75  | $4.50  | $0.075     |
+
 ### Custom Models & Pricing
 
-You can **add your own pricing for any custom model** in the Settings tab. This allows you to track costs for OpenAI models, Gemini, or custom local models with the same precision as built-in Claude models.
+You can **add your own pricing for any custom model** in the Settings tab. This allows you to track costs for Gemini, local models, or any other provider with the same precision as built-in models.
 
 By default, local and custom models show usage data but report $0 cost until their pricing is configured.
 
@@ -131,7 +141,7 @@ By default, local and custom models show usage data but report $0 cost until the
 
 ## Local model quirks
 
-Token Bleed works with any model Claude Code connects to, including local models via Ollama or similar.
+Token Bleed works with any model Claude Code or Codex connects to, including local models via Ollama or similar.
 
 One thing to know: local model servers do not implement prompt caching, so they report the full conversation context as `input_tokens` on every turn instead of incremental deltas. This means input token totals for local model sessions will be significantly higher than equivalent Claude sessions and are not directly comparable. Session Compare and Model Compare flag this when a local model is present.
 
