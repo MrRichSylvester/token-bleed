@@ -369,11 +369,28 @@ function selectedPlanSavingsText(totalCost, daily, appSettings, activeSources, s
 
 // ── State ──────────────────────────────────────────────────────
 
+const OVERVIEW_CARD_DEFS_BASE = [
+  { key: 'metric-cost',     label: 'Est. API Costs' },
+  { key: 'metric-avg-cost', label: 'Avg Cost / Session' },
+  { key: 'metric-sessions', label: 'Sessions' },
+  { key: 'metric-activity', label: 'Activity Grid' },
+  { key: 'metric-prompts',  label: 'Total Prompts' },
+  { key: 'metric-tokens',   label: 'Total Tokens' },
+  { key: 'metric-cache',    label: 'Cache Hit Rate' },
+  { key: 'charts-1',        label: 'Daily Cost & Sessions' },
+  { key: 'charts-2',        label: 'Model & Project Charts' },
+  { key: 'sessions',        label: 'Recent Sessions' },
+];
+
+const DRAG_DOTS = `<svg width="12" height="14" viewBox="0 0 12 14" fill="none"><circle cx="3" cy="2" r="1.3" fill="currentColor"/><circle cx="9" cy="2" r="1.3" fill="currentColor"/><circle cx="3" cy="6" r="1.3" fill="currentColor"/><circle cx="9" cy="6" r="1.3" fill="currentColor"/><circle cx="3" cy="10" r="1.3" fill="currentColor"/><circle cx="9" cy="10" r="1.3" fill="currentColor"/></svg>`;
+
 const state = {
   view: 'overview',
   periodMode: 'calendar',
   period: 'all',
   overviewSessionSort: 'cost',
+  overviewHiddenCards: new Set(),
+  overviewPanelOrder: null,
   agentSources: ['claude', 'codex'],
   overviewFilter: {},
   sessionsPage: 0,
@@ -602,62 +619,75 @@ function animateProjectTokenBars(container) {
   });
 }
 
-// ── Metric card drag-and-drop ──────────────────────────────────
+// ── Overview panel drag-and-drop ──────────────────────────────
 
-function initDraggableCards(container) {
-  const grid = container.querySelector('.metric-grid');
-  if (!grid) return;
+function applyOverviewVisibility(container) {
+  const hidden = state.overviewHiddenCards;
+  container.querySelectorAll('[data-card-id]').forEach(el => {
+    el.classList.toggle('overview-card--hidden', hidden.has(el.dataset.cardId));
+  });
+  container.querySelectorAll('.overview-panel[data-panel-id]').forEach(el => {
+    el.classList.toggle('overview-card--hidden', hidden.has(el.dataset.panelId));
+  });
+}
+
+function initOverviewPanelDrag(container) {
+  const wrap = container.querySelector('.overview-panels');
+  if (!wrap) return;
 
   let dragSrc = null;
 
-  grid.querySelectorAll('.metric-card[data-id]').forEach(card => {
-    card.draggable = true;
+  wrap.querySelectorAll('.overview-panel').forEach(panel => {
+    const handle = panel.querySelector('.overview-panel-drag');
+    if (!handle) return;
 
-    card.addEventListener('dragstart', e => {
-      dragSrc = card;
-      card.classList.add('dragging');
+    handle.addEventListener('mousedown', () => { panel.draggable = true; });
+    handle.addEventListener('mouseleave', () => { if (!dragSrc) panel.draggable = false; });
+
+    panel.addEventListener('dragstart', e => {
+      dragSrc = panel;
+      panel.classList.add('overview-panel--dragging');
       e.dataTransfer.effectAllowed = 'move';
     });
 
-    card.addEventListener('dragend', () => {
+    panel.addEventListener('dragend', () => {
       dragSrc = null;
-      grid.querySelectorAll('.metric-card').forEach(c => {
-        c.classList.remove('dragging', 'drag-over');
+      wrap.querySelectorAll('.overview-panel').forEach(p => {
+        p.classList.remove('overview-panel--dragging', 'overview-panel--drag-over');
+        p.draggable = false;
       });
-      const order = [...grid.querySelectorAll('.metric-card[data-id]')].map(c => c.dataset.id);
-      localStorage.setItem('metric-card-order', JSON.stringify(order));
+      const order = [...wrap.querySelectorAll('.overview-panel')].map(p => p.dataset.panelId);
+      state.overviewPanelOrder = order;
+      localStorage.setItem('overview-panel-order', JSON.stringify(order));
     });
 
-    card.addEventListener('dragover', e => {
+    panel.addEventListener('dragover', e => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      if (dragSrc && card !== dragSrc) {
-        grid.querySelectorAll('.metric-card').forEach(c => c.classList.remove('drag-over'));
-        card.classList.add('drag-over');
+      if (dragSrc && panel !== dragSrc) {
+        wrap.querySelectorAll('.overview-panel').forEach(p => p.classList.remove('overview-panel--drag-over'));
+        panel.classList.add('overview-panel--drag-over');
       }
     });
 
-    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+    panel.addEventListener('dragleave', () => panel.classList.remove('overview-panel--drag-over'));
 
-    card.addEventListener('drop', e => {
+    panel.addEventListener('drop', e => {
       e.preventDefault();
-      if (!dragSrc || dragSrc === card) return;
-      const cards = [...grid.querySelectorAll('.metric-card')];
-      const srcIdx = cards.indexOf(dragSrc);
-      const tgtIdx = cards.indexOf(card);
-      grid.insertBefore(dragSrc, srcIdx < tgtIdx ? card.nextSibling : card);
+      if (!dragSrc || dragSrc === panel) return;
+      const panels = [...wrap.querySelectorAll('.overview-panel')];
+      const srcIdx = panels.indexOf(dragSrc);
+      const tgtIdx = panels.indexOf(panel);
+      wrap.insertBefore(dragSrc, srcIdx < tgtIdx ? panel.nextSibling : panel);
     });
   });
 
-  // Restore saved order
-  const saved = localStorage.getItem('metric-card-order');
-  if (saved) {
-    try {
-      JSON.parse(saved).forEach(id => {
-        const card = grid.querySelector(`[data-id="${id}"]`);
-        if (card) grid.appendChild(card);
-      });
-    } catch { }
+  // Restore saved panel order
+  if (state.overviewPanelOrder) {
+    state.overviewPanelOrder.forEach(id => {
+      const panel = wrap.querySelector(`.overview-panel[data-panel-id="${id}"]`);
+      if (panel) wrap.appendChild(panel);
+    });
   }
 }
 
@@ -960,111 +990,145 @@ async function renderOverview() {
         color: epColorMap[ep] || 'amber',
       }));
 
+    const hasEntryCharts = entrypointRows.length > 1;
+    const cardDefs = [
+      ...OVERVIEW_CARD_DEFS_BASE,
+      ...(hasEntryCharts ? [{ key: 'charts-3', label: 'Entrypoints & Thinking' }] : []),
+    ];
+
+    const panelHtml = id => `<div class="overview-panel-drag" title="Drag to reorder">${DRAG_DOTS}</div>`;
+
     const content = document.getElementById('content');
     content.innerHTML = `
       <h1 class="page-title">Overview</h1>
       <div class="page-subtitle-row">
         <p class="page-subtitle">${periodLabel()} · ${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</p>
-        <div class="sc-view-toggle agent-source-toggle" aria-label="Overview agent filter">
-          <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-overview-source="claude">Claude Code</button>
-          <button class="sc-view-btn agent-source-btn${activeSources.includes('codex') ? ' sc-view-btn--on' : ''}" data-overview-source="codex">Codex</button>
+        <div class="overview-controls">
+          ${fieldsButtonHtml('overview-cards-btn', state.overviewHiddenCards, cardDefs.length, 'Cards')}
+          <div class="sc-view-toggle agent-source-toggle" aria-label="Overview agent filter">
+            <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-overview-source="claude">Claude Code</button>
+            <button class="sc-view-btn agent-source-btn${activeSources.includes('codex') ? ' sc-view-btn--on' : ''}" data-overview-source="codex">Codex</button>
+          </div>
         </div>
       </div>
 
-      <div class="overview-top">
-        <div class="metric-card accent-left">
-          <span class="metric-help" data-tooltip="Estimated API-rate equivalent for the selected period. Calculated from input, output, cache write, and cache read tokens using configured model pricing; subscription plans may bill differently.">?</span>
-          <div class="metric-label">Est. API Costs</div>
-          <div class="metric-value mono">${fmtCost(stats.totalCost)}</div>
-          <div class="metric-sub">${planSavings}</div>
-        </div>
-        <div class="metric-card accent-left">
-          <span class="metric-help" data-tooltip="Total cost divided by sessions that used a paid model. Sessions using local or custom models (which report $0) are excluded from the denominator.">?</span>
-          <div class="metric-label">Avg Cost / Session</div>
-          <div class="metric-value mono">${stats.totalSessions > 0 ? fmtCost(stats.totalCost / stats.totalSessions) : '—'}</div>
-          <div class="metric-sub">per paid session</div>
-        </div>
-        <div class="metric-card">
-          <span class="metric-help" data-tooltip="Number of Claude Code and Codex sessions in the selected period. Each session is one local conversation log.">?</span>
-          <div class="metric-label">Sessions</div>
-          <div class="metric-value mono">${stats.totalSessions.toLocaleString()}</div>
-          <div class="metric-sub">${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</div>
-        </div>
-        <div class="metric-card overview-activity">
-          ${renderUsageGrid(dailyAll)}
-        </div>
-        <div class="metric-card">
-          <span class="metric-help" data-tooltip="Number of user messages sent across all sessions in the selected period. Each time you send a prompt to an agent counts as one.">?</span>
-          <div class="metric-label">Total Prompts</div>
-          <div class="metric-value mono">${stats.totalMessages.toLocaleString()}</div>
-          <div class="metric-sub">${stats.totalSessions > 0 ? '~' + Math.round(stats.totalMessages / stats.totalSessions) + ' per session' : '—'}</div>
-        </div>
-        <div class="metric-card">
-          <span class="metric-help" data-tooltip="Raw token volume across all sessions: input + output + cache writes + cache reads. This is not your billed amount — billing applies different per-token rates to each category.">?</span>
-          <div class="metric-label">Total Tokens</div>
-          <div class="metric-value mono">${fmtTokens(stats.totalTokens)}</div>
-          <div class="metric-sub">across all sessions</div>
-        </div>
-        <div class="metric-card">
-          <span class="metric-help" data-tooltip="Percentage of input tokens served from Claude&#39;s prompt cache instead of being re-processed. Calculated as cache_read ÷ (input + cache_write + cache_read). Higher means more savings.">?</span>
-          <div class="metric-label">Cache Hit Rate</div>
-          <div class="metric-value mono">${fmtPct(stats.cacheHitRate)}</div>
-          <div class="metric-sub">${fmtTokens(stats.cacheReadTokens)} read tokens</div>
-        </div>
-      </div>
+      <div class="overview-panels">
 
-      <div class="chart-row-2">
-        <div class="chart-wrap">
-          <div class="chart-title">Daily Cost</div>
-          <div class="chart-svg-wrap">${renderBarChart(daily, { valueKey: 'cost', fmt: fmtCost, color: 'green' })}</div>
+        <div class="overview-panel" data-panel-id="metrics">
+          ${panelHtml('metrics')}
+          <div class="overview-top">
+            <div class="metric-card accent-left" data-card-id="metric-cost">
+              <span class="metric-help" data-tooltip="Estimated API-rate equivalent for the selected period. Calculated from input, output, cache write, and cache read tokens using configured model pricing; subscription plans may bill differently.">?</span>
+              <div class="metric-label">Est. API Costs</div>
+              <div class="metric-value mono">${fmtCost(stats.totalCost)}</div>
+              <div class="metric-sub">${planSavings}</div>
+            </div>
+            <div class="metric-card accent-left" data-card-id="metric-avg-cost">
+              <span class="metric-help" data-tooltip="Total cost divided by sessions that used a paid model. Sessions using local or custom models (which report $0) are excluded from the denominator.">?</span>
+              <div class="metric-label">Avg Cost / Session</div>
+              <div class="metric-value mono">${stats.totalSessions > 0 ? fmtCost(stats.totalCost / stats.totalSessions) : '—'}</div>
+              <div class="metric-sub">per paid session</div>
+            </div>
+            <div class="metric-card" data-card-id="metric-sessions">
+              <span class="metric-help" data-tooltip="Number of Claude Code and Codex sessions in the selected period. Each session is one local conversation log.">?</span>
+              <div class="metric-label">Sessions</div>
+              <div class="metric-value mono">${stats.totalSessions.toLocaleString()}</div>
+              <div class="metric-sub">${stats.projectCount} project${stats.projectCount !== 1 ? 's' : ''}</div>
+            </div>
+            <div class="metric-card overview-activity" data-card-id="metric-activity">
+              ${renderUsageGrid(dailyAll)}
+            </div>
+            <div class="metric-card" data-card-id="metric-prompts">
+              <span class="metric-help" data-tooltip="Number of user messages sent across all sessions in the selected period. Each time you send a prompt to an agent counts as one.">?</span>
+              <div class="metric-label">Total Prompts</div>
+              <div class="metric-value mono">${stats.totalMessages.toLocaleString()}</div>
+              <div class="metric-sub">${stats.totalSessions > 0 ? '~' + Math.round(stats.totalMessages / stats.totalSessions) + ' per session' : '—'}</div>
+            </div>
+            <div class="metric-card" data-card-id="metric-tokens">
+              <span class="metric-help" data-tooltip="Raw token volume across all sessions: input + output + cache writes + cache reads. This is not your billed amount — billing applies different per-token rates to each category.">?</span>
+              <div class="metric-label">Total Tokens</div>
+              <div class="metric-value mono">${fmtTokens(stats.totalTokens)}</div>
+              <div class="metric-sub">across all sessions</div>
+            </div>
+            <div class="metric-card" data-card-id="metric-cache">
+              <span class="metric-help" data-tooltip="Percentage of input tokens served from Claude&#39;s prompt cache instead of being re-processed. Calculated as cache_read ÷ (input + cache_write + cache_read). Higher means more savings.">?</span>
+              <div class="metric-label">Cache Hit Rate</div>
+              <div class="metric-value mono">${fmtPct(stats.cacheHitRate)}</div>
+              <div class="metric-sub">${fmtTokens(stats.cacheReadTokens)} read tokens</div>
+            </div>
+          </div>
         </div>
-        <div class="chart-wrap">
-          <div class="chart-title">Daily Sessions</div>
-          <div class="chart-svg-wrap">${renderBarChart(daily, { valueKey: 'sessions', fmt: n => `${n} sessions`, color: 'blue' })}</div>
-        </div>
-      </div>
 
-      <div class="chart-row-2">
-        <div class="chart-wrap">
-          <div class="chart-title">Usage by Model</div>
-          <div class="hbar-wrap">${renderHorizBars(modelRows, { fmtVal: n => `${n}` })}</div>
+        <div class="overview-panel" data-panel-id="charts-1">
+          ${panelHtml('charts-1')}
+          <div class="chart-row-2">
+            <div class="chart-wrap">
+              <div class="chart-title">Daily Cost</div>
+              <div class="chart-svg-wrap">${renderBarChart(daily, { valueKey: 'cost', fmt: fmtCost, color: 'green' })}</div>
+            </div>
+            <div class="chart-wrap">
+              <div class="chart-title">Daily Sessions</div>
+              <div class="chart-svg-wrap">${renderBarChart(daily, { valueKey: 'sessions', fmt: n => `${n} sessions`, color: 'blue' })}</div>
+            </div>
+          </div>
         </div>
-        <div class="chart-wrap">
-          <div class="chart-title">Last 6 Projects: Input vs Output</div>
-          ${renderProjectTokenComparison(projects, 6)}
-        </div>
-      </div>
 
-      ${entrypointRows.length > 1 ? `
-      <div class="chart-row-2">
-        <div class="chart-wrap">
-          <div class="chart-title">Sessions by Entrypoint</div>
-          <div class="hbar-wrap">${renderHorizBars(entrypointRows, { fmtVal: n => `${n} sessions` })}</div>
+        <div class="overview-panel" data-panel-id="charts-2">
+          ${panelHtml('charts-2')}
+          <div class="chart-row-2">
+            <div class="chart-wrap">
+              <div class="chart-title">Usage by Model</div>
+              <div class="hbar-wrap">${renderHorizBars(modelRows, { fmtVal: n => `${n}` })}</div>
+            </div>
+            <div class="chart-wrap">
+              <div class="chart-title">Last 6 Projects: Input vs Output</div>
+              ${renderProjectTokenComparison(projects, 6)}
+            </div>
+          </div>
         </div>
-        <div class="chart-wrap">
-          <div class="chart-title">Thinking Sessions</div>
-          <div class="hbar-wrap">${renderHorizBars([
+
+        ${hasEntryCharts ? `
+        <div class="overview-panel" data-panel-id="charts-3">
+          ${panelHtml('charts-3')}
+          <div class="chart-row-2">
+            <div class="chart-wrap">
+              <div class="chart-title">Sessions by Entrypoint</div>
+              <div class="hbar-wrap">${renderHorizBars(entrypointRows, { fmtVal: n => `${n} sessions` })}</div>
+            </div>
+            <div class="chart-wrap">
+              <div class="chart-title">Thinking Sessions</div>
+              <div class="hbar-wrap">${renderHorizBars([
       { label: 'With thinking', value: stats.thinkingSessionCount, color: 'violet', sub: fmtPct(stats.thinkingSessionCount / (stats.totalSessions || 1)) },
       { label: 'Without thinking', value: stats.totalSessions - stats.thinkingSessionCount, color: 'border', sub: fmtPct((stats.totalSessions - stats.thinkingSessionCount) / (stats.totalSessions || 1)) },
     ].filter(r => r.value > 0), { fmtVal: n => `${n} sessions` })}</div>
-        </div>
-      </div>` : ''}
+            </div>
+          </div>
+        </div>` : ''}
 
-      <div class="section">
-        <div class="section-header">
-          <select id="overview-session-sort" class="section-title-select" aria-label="Dashboard sessions list">
-            <option value="cost" ${state.overviewSessionSort === 'cost' ? 'selected' : ''}>Most Expensive Sessions</option>
-            <option value="recent" ${state.overviewSessionSort === 'recent' ? 'selected' : ''}>Recent Sessions</option>
-          </select>
-          <a href="#sessions" class="secondary" style="font-size:12px;text-decoration:none">View all →</a>
+        <div class="overview-panel" data-panel-id="sessions">
+          ${panelHtml('sessions')}
+          <div class="overview-sessions-card">
+            <div class="section-header">
+              <select id="overview-session-sort" class="section-title-select" aria-label="Dashboard sessions list">
+                <option value="cost" ${state.overviewSessionSort === 'cost' ? 'selected' : ''}>Most Expensive Sessions</option>
+                <option value="recent" ${state.overviewSessionSort === 'recent' ? 'selected' : ''}>Recent Sessions</option>
+              </select>
+              <a href="#sessions" class="secondary" style="font-size:12px;text-decoration:none">View all →</a>
+            </div>
+            <div id="recent-sessions-wrap">
+              <div class="loading-state"><div class="spinner"></div></div>
+            </div>
+          </div>
         </div>
-        <div id="recent-sessions-wrap">
-          <div class="loading-state"><div class="spinner"></div></div>
-        </div>
+
       </div>
     `;
 
-    initDraggableCards(content);
+    applyOverviewVisibility(content);
+    initOverviewPanelDrag(content);
+    wireFieldsBtn('overview-cards-btn', cardDefs, state.overviewHiddenCards, 'overview-hidden-cards', () => {
+      applyOverviewVisibility(content);
+    });
     animateHbars(content);
     animateProjectTokenBars(content);
     requestAnimationFrame(() => {
@@ -2486,13 +2550,13 @@ function wireFieldsBtn(btnId, defs, hiddenSet, storageKey, onchange) {
   });
 }
 
-function fieldsButtonHtml(btnId, hiddenSet, totalCount) {
+function fieldsButtonHtml(btnId, hiddenSet, totalCount, label = 'Fields') {
   const hc = hiddenSet.size;
   const badge = hc > 0 ? ` <span class="sc-fields-count">${totalCount - hc}/${totalCount}</span>` : '';
   return `
     <button class="sc-view-btn sc-fields-btn${hc > 0 ? ' sc-fields-btn--filtered' : ''}" id="${escHtml(btnId)}">
       <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M1 3h12M3 7h8M5 11h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-      Fields${badge} <span class="sc-dropdown-chevron">▾</span>
+      ${escHtml(label)}${badge} <span class="sc-dropdown-chevron">▾</span>
     </button>`;
 }
 
@@ -4374,6 +4438,14 @@ function init() {
   try {
     const savedProjHidden = localStorage.getItem('proj-hidden-stats');
     if (savedProjHidden) JSON.parse(savedProjHidden).forEach(k => state.projHiddenStats.add(k));
+  } catch { }
+  try {
+    const savedOverviewHidden = localStorage.getItem('overview-hidden-cards');
+    if (savedOverviewHidden) JSON.parse(savedOverviewHidden).forEach(k => state.overviewHiddenCards.add(k));
+  } catch { }
+  try {
+    const savedPanelOrder = localStorage.getItem('overview-panel-order');
+    if (savedPanelOrder) state.overviewPanelOrder = JSON.parse(savedPanelOrder);
   } catch { }
   renderCompareBar();
   renderPromptCompareBar();

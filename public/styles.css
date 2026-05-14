@@ -557,6 +557,81 @@ html[data-size="large"]  { font-size: 19px; }
 .overview-activity .usage-grid-right::-webkit-scrollbar { height: 3px; }
 .overview-activity .usage-grid-right::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
 
+/* ── Overview panels ── */
+.overview-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.overview-panels {
+  display: flex;
+  flex-direction: column;
+}
+
+.overview-panel {
+  position: relative;
+  padding-top: 10px;
+}
+
+.overview-panel-drag {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 34px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 150ms;
+  z-index: 10;
+  user-select: none;
+  border-radius: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.overview-panel:hover > .overview-panel-drag {
+  opacity: 1;
+}
+
+.overview-panel-drag:active {
+  cursor: grabbing;
+}
+
+.overview-panel--dragging {
+  opacity: 0.35;
+}
+
+.overview-panel--drag-over::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.overview-card--hidden {
+  display: none !important;
+}
+
+/* ── Sessions card (overview) ── */
+.overview-sessions-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  margin-bottom: 20px;
+}
+
 /* ── Metric cards ── */
 .metric-grid {
   display: grid;
