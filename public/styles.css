@@ -3195,28 +3195,13 @@ td.msg-prompt {
   padding: 8px 18px;
 }
 
-/* ── Rank badge ── */
-.sc-card-rank {
-  margin-left: auto;
-  font-size: 0.75rem;
-  font-weight: 800;
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-  background: var(--surface);
-  border: 1px solid var(--border-2);
-  border-radius: 4px;
-  padding: 2px 7px;
-  align-self: flex-start;
-  flex-shrink: 0;
-}
-
 /* ── Session compare card view ── */
 .sc-cards-grid {
   display: flex;
   gap: 20px;
   overflow-x: auto;
   padding-bottom: 8px;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .sc-card {
@@ -3252,9 +3237,9 @@ td.msg-prompt {
 }
 
 .sc-card-remove {
-  position: relative;
-  top: auto;
-  right: auto;
+  position: absolute;
+  top: 12px;
+  right: 12px;
   margin-left: 0;
   flex-shrink: 0;
 }
@@ -3265,7 +3250,7 @@ td.msg-prompt {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 20px 20px 18px;
+  padding: 20px 48px 18px 20px;
   background: linear-gradient(135deg, var(--surface-3) 0%, var(--surface-2) 100%);
   border-bottom: 1px solid var(--border);
   overflow: hidden;
@@ -3314,20 +3299,42 @@ td.msg-prompt {
 
 .sc-card-model-row {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sc-card-model-row .model-badge {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Prompt strip */
 .sc-card-prompt {
+  --prompt-line-height: 1.35em;
   padding: 10px 20px;
+  height: calc((var(--prompt-line-height) * 2) + 20px);
+  min-height: calc((var(--prompt-line-height) * 2) + 20px);
+  max-height: calc((var(--prompt-line-height) * 2) + 20px);
+  box-sizing: border-box;
   font-size: 0.78rem;
   color: var(--text-muted);
-  line-height: 1.5;
+  line-height: var(--prompt-line-height);
   border-bottom: 1px solid var(--border);
   overflow: hidden;
+  display: block;
+  background: var(--surface-2);
+}
+
+.sc-card-prompt-text {
   display: -webkit-box;
+  max-height: calc(var(--prompt-line-height) * 2);
+  overflow: hidden;
+  text-overflow: ellipsis;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  background: var(--surface-2);
+  line-clamp: 2;
 }
 
 /* Metric tiles grid */

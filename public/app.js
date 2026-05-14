@@ -48,16 +48,17 @@ function modelBadgeHtml(model, isLocal) {
   if (!model || model === 'unknown') {
     return `<span class="model-badge unknown">unknown</span>`;
   }
+  const safeModel = escHtml(model);
   if (isLocal) {
-    return `<span class="model-badge local">${model}</span>`;
+    return `<span class="model-badge local" title="${safeModel}">${safeModel}</span>`;
   }
   if (/^(claude-|anthropic\/)/i.test(model)) {
-    return `<span class="model-badge claude">${model}</span>`;
+    return `<span class="model-badge claude" title="${safeModel}">${safeModel}</span>`;
   }
   if (/^(gpt-|openai\/|codex-|o[1345])/i.test(model)) {
-    return `<span class="model-badge codex">${model}</span>`;
+    return `<span class="model-badge codex" title="${safeModel}">${safeModel}</span>`;
   }
-  return `<span class="model-badge unknown">${model}</span>`;
+  return `<span class="model-badge unknown" title="${safeModel}">${safeModel}</span>`;
 }
 
 function sourceMeta(source) {
@@ -1933,9 +1934,10 @@ function renderSessionComparisonTable() {
 
   const colHeaders = selected.map((s, i) => {
     const local = isLocal(s);
+    const label = state.scOrder === 'ranked' ? String(i + 1) : COMP_LETTERS[i];
     return `<th class="sc-col-header">
       <button class="sc-remove-session-btn" data-remove-session="${escHtml(s.id)}" title="Remove session">×</button>
-      <div class="sc-col-letter">${COMP_LETTERS[i]}</div>
+      <div class="sc-col-letter">${label}</div>
       <div class="sc-col-project">${escHtml(s.projectName)}</div>
       <div class="sc-col-date">${fmtDateTime(s.startTime)}</div>
       <div style="margin-top:5px">${modelBadgeHtml(s.primaryModel, local)}</div>
@@ -2052,6 +2054,7 @@ function renderSessionComparisonCards() {
     const local = isLocal(s);
     const revealed = state.scRevealed.has(s.id);
     const presentCls = state.scPresent ? (revealed ? ' sc-card--present sc-card--revealed' : ' sc-card--present') : '';
+    const label = state.scOrder === 'ranked' ? String(i + 1) : COMP_LETTERS[i];
 
     const tiles = metrics.map(m => {
       const v = m.val(s);
@@ -2068,24 +2071,21 @@ function renderSessionComparisonCards() {
         </div>`;
     }).join('');
 
-    const rankBadge = state.scOrder === 'ranked'
-      ? `<div class="sc-card-rank">#${i + 1}</div>`
-      : '';
-
     return `
       <div class="sc-card${presentCls}" data-present-id="${escHtml(s.id)}">
         <div class="sc-card-inner">
           <div class="sc-card-hero">
-            <div class="sc-card-hero-letter">${COMP_LETTERS[i]}</div>
+            <div class="sc-card-hero-letter">${label}</div>
             <div class="sc-card-hero-info">
               <div class="sc-card-project">${escHtml(s.projectName)}</div>
               <div class="sc-card-date">${fmtDateTime(s.startTime)}</div>
               <div class="sc-card-model-row">${modelBadgeHtml(s.primaryModel, local)}</div>
             </div>
-            ${rankBadge}
             <button class="sc-remove-session-btn sc-card-remove" data-remove-session="${escHtml(s.id)}" title="Remove session">×</button>
           </div>
-          <div class="sc-card-prompt" title="${escHtml(s.firstPrompt)}">${escHtml(s.firstPrompt.slice(0, 80))}${s.firstPrompt.length > 80 ? '…' : ''}</div>
+          <div class="sc-card-prompt" title="${escHtml(s.firstPrompt)}">
+            <span class="sc-card-prompt-text">${escHtml(s.firstPrompt.slice(0, 80))}${s.firstPrompt.length > 80 ? '…' : ''}</span>
+          </div>
           <div class="sc-card-tiles">${tiles}</div>
         </div>
         ${state.scPresent && !revealed ? `<div class="sc-card-veil"><span class="sc-veil-label">Click to reveal</span></div>` : ''}
