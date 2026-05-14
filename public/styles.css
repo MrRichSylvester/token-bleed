@@ -3404,10 +3404,6 @@ td.msg-prompt {
   grid-column: 1 / -1;
 }
 
-.sc-tile--best {
-  background: linear-gradient(160deg, rgba(0,255,135,0.1) 0%, rgba(0,255,135,0.04) 100%);
-}
-
 .sc-tile--best .sc-tile-label {
   color: rgba(0,255,135,0.6);
 }
@@ -3415,10 +3411,6 @@ td.msg-prompt {
 .sc-tile--best .sc-tile-value {
   color: var(--accent);
   text-shadow: 0 0 22px rgba(0,255,135,0.6), 0 0 50px rgba(0,255,135,0.25);
-}
-
-.sc-tile--worst {
-  background: linear-gradient(160deg, rgba(255,90,90,0.09) 0%, rgba(255,90,90,0.03) 100%);
 }
 
 .sc-tile--worst .sc-tile-label {
@@ -3431,8 +3423,8 @@ td.msg-prompt {
 }
 
 /* legend swatches for card view */
-.sc-legend-swatch.sc-tile--best  { background: rgba(0,255,135,0.45); }
-.sc-legend-swatch.sc-tile--worst { background: rgba(255,90,90,0.45); }
+.sc-legend-swatch.sc-tile--best  { background: rgba(0,255,135,0.5); }
+.sc-legend-swatch.sc-tile--worst { background: rgba(255,90,90,0.5); }
 
 /* ── Onboarding modal ── */
 .onboarding-overlay {
