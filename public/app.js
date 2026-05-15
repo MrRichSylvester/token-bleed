@@ -403,7 +403,7 @@ const state = {
   projectsFilter: {},
   projectsSort: { key: 'lastActivity', dir: 'desc' },
   promptCompSelection: [], // [{id, label}] max 6
-  pcView: 'table',
+  pcView: 'card',
   pcOrder: 'added',
   pcHiddenMetrics: new Set(),
   pcMetricsOrder: null,    // null = default; array of keys when user has reordered
@@ -419,7 +419,7 @@ const state = {
   compSession2Id: '',
   compSelection: [], // [{id, label}] max 6
   scHiddenMetrics: new Set(),
-  scView: 'table',
+  scView: 'card',
   scOrder: 'added',        // 'added' | 'ranked'
   scMetricsOrder: null,   // null = default; array of keys when user has reordered
   scPresent: false,
@@ -1065,8 +1065,7 @@ async function renderOverview() {
     const hasEntryCharts = entrypointRows.length > 1;
     const cardDefs = [
       ...OVERVIEW_CARD_DEFS_BASE,
-      ...(hasEntryCharts ? [{ key: 'chart-entrypoints', label: 'Entrypoints' }, { key: 'chart-thinking', label: 'Thinking Sessions' }] : []),
-    ];
+      ];
 
     const panelHtml = id => `<div class="overview-panel-drag" title="Drag to reorder"></div>`;
 
@@ -4525,9 +4524,9 @@ function init() {
     const savedPromptSel = localStorage.getItem('pc-selection');
     if (savedPromptSel) state.promptCompSelection = JSON.parse(savedPromptSel);
   } catch { }
-  if (localStorage.getItem('sc-view') === 'card') state.scView = 'card';
+  if (localStorage.getItem('sc-view') === 'table') state.scView = 'table';
   if (localStorage.getItem('sc-order') === 'ranked') state.scOrder = 'ranked';
-  if (localStorage.getItem('pc-view') === 'card') state.pcView = 'card';
+  if (localStorage.getItem('pc-view') === 'table') state.pcView = 'table';
   if (localStorage.getItem('pc-order') === 'ranked') state.pcOrder = 'ranked';
   try {
     const savedPcHidden = localStorage.getItem('pc-hidden-metrics');

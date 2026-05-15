@@ -59,17 +59,16 @@ Total spend, daily trends, average session cost, and per-message breakdowns. Fil
 
 ### When you shipped
 
-Your Claude Code and Codex sessions rendered as a contribution-style heatmap. See your build cadence at a glance, not just what you spent.
+Your Claude Code and Codex sessions rendered as a contribution-style heatmap, with colors blending between the two based on your daily usage. See your build cadence at a glance, not just what you spent.
 
 ![Activity Heatmap](images/activity.png)
 
-### Project and model breakdown
+### Project, session and prompt breakdown
 
 See which projects are burning the most and which models you're actually using. Drill down from project to session to individual message. Every number is traceable.
 
-|                 Project Breakdown                  |                 Model Usage                  |
-| :------------------------------------------------: | :------------------------------------------: |
-| ![Project Hierarchy](images/project-hierarchy.png) | ![Usage by Model](images/usage-by-model.png) |
+
+![Project Hierarchy](images/project-hierarchy.png)
 
 ### Session Compare
 
@@ -125,11 +124,11 @@ Built-in pricing for Claude and Codex models. Prefix matching handles future ver
 
 ### OpenAI (Codex)
 
-| Model       | Input  | Output | Cache Read |
-| ----------- | ------ | ------ | ---------- |
-| gpt-5.5     | $5     | $30    | $0.50      |
-| gpt-5.4     | $2.50  | $15    | $0.25      |
-| gpt-5.4-mini| $0.75  | $4.50  | $0.075     |
+| Model        | Input | Output | Cache Read |
+| ------------ | ----- | ------ | ---------- |
+| gpt-5.5      | $5    | $30    | $0.50      |
+| gpt-5.4      | $2.50 | $15    | $0.25      |
+| gpt-5.4-mini | $0.75 | $4.50  | $0.075     |
 
 ### Custom Models & Pricing
 
@@ -151,19 +150,19 @@ One thing to know: local model servers do not implement prompt caching, so they 
 
 The server exposes a REST API if you want to build on top of it.
 
-| Method | Path                         | Description                                             |
-| ------ | ---------------------------- | ------------------------------------------------------- |
-| GET    | `/api/stats`                 | Global totals and summary                               |
-| GET    | `/api/projects`              | Per-project cost and usage                              |
+| Method | Path                         | Description                                                   |
+| ------ | ---------------------------- | ------------------------------------------------------------- |
+| GET    | `/api/stats`                 | Global totals and summary                                     |
+| GET    | `/api/projects`              | Per-project cost and usage                                    |
 | GET    | `/api/sessions`              | Paginated session list (filterable by source, project, model) |
-| GET    | `/api/sessions/:id`          | Single session detail                                   |
-| GET    | `/api/sessions/:id/messages` | Per-message breakdown for a session                     |
-| GET    | `/api/models`                | Per-model aggregated stats                              |
-| GET    | `/api/models/comparison`     | Side-by-side stats for two models                       |
-| GET    | `/api/daily`                 | Daily cost and activity over time                       |
-| GET    | `/api/meta`                  | Date range and cleanup period from your Claude settings |
-| GET    | `/api/refresh`               | Invalidate the in-memory cache                          |
-| POST   | `/api/settings`              | Update `cleanupPeriodDays` in `~/.claude/settings.json` |
+| GET    | `/api/sessions/:id`          | Single session detail                                         |
+| GET    | `/api/sessions/:id/messages` | Per-message breakdown for a session                           |
+| GET    | `/api/models`                | Per-model aggregated stats                                    |
+| GET    | `/api/models/comparison`     | Side-by-side stats for two models                             |
+| GET    | `/api/daily`                 | Daily cost and activity over time                             |
+| GET    | `/api/meta`                  | Date range and cleanup period from your Claude settings       |
+| GET    | `/api/refresh`               | Invalidate the in-memory cache                                |
+| POST   | `/api/settings`              | Update `cleanupPeriodDays` in `~/.claude/settings.json`       |
 
 All list endpoints accept a `?since=YYYY-MM-DD` query param to filter by date.
 
