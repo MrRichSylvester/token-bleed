@@ -55,6 +55,10 @@ html[data-size="small"]  { font-size: 15px; }
 html[data-size="medium"] { font-size: 17px; }
 html[data-size="large"]  { font-size: 19px; }
 
+@media (min-width: 1281px) {
+  html[data-size="large"] { --sidebar-width: 248px; }
+}
+
 /* ── App shell ── */
 #app {
   display: flex;
@@ -919,6 +923,7 @@ td.right { text-align: right; }
 td.muted { color: var(--text-secondary); }
 td.prompt { color: var(--text-secondary); max-width: 280px; }
 td.prompt span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sess-project-col { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Expandable session rows ── */
 .session-row { cursor: pointer; }
@@ -1038,6 +1043,7 @@ td.prompt span { display: block; overflow: hidden; text-overflow: ellipsis; whit
 .messages-table tbody td {
   padding: 7px 12px;
   vertical-align: top;
+  font-size: 0.8rem;
 }
 
 td.msg-prompt {

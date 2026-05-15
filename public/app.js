@@ -1563,16 +1563,16 @@ function renderSessionsTable(sessions, opts = {}) {
       data-cache5m="${s.usage.cache5mTokens || 0}"
       data-cache1h="${s.usage.cache1hTokens || 0}">
       ${checkCell}
-      <td class="muted nowrap" style="font-size:12px">${fmtDateTime(s.startTime)}</td>
-      ${opts.compact ? '' : `<td class="secondary" style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(s.projectName)}</td>`}
+      <td class="muted nowrap">${fmtDateTime(s.startTime)}</td>
+      ${opts.compact ? '' : `<td class="secondary sess-project-col">${escHtml(s.projectName)}</td>`}
       <td class="prompt">${thinkingBadge}${subagentBadge}<span title="${escHtml(s.firstPrompt)}">${escHtml(displayTitle)}</span></td>
       ${show('agent') ? `<td>${agentBadgeHtml(s.source || 'claude', { short: opts.compact })}</td>` : ''}
       ${show('model') ? `<td>${modelBadgeHtml(s.primaryModel, local)}</td>` : ''}
-      ${show('totalTokens') ? `<td class="right mono" style="font-size:12px">${fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens)}</td>` : ''}
+      ${show('totalTokens') ? `<td class="right mono">${fmtTokens(s.usage.inputTokens + s.usage.outputTokens + s.usage.cacheCreationTokens + s.usage.cacheReadTokens)}</td>` : ''}
       ${show('cost') ? `<td class="right">${costCell}</td>` : ''}
-      ${show('cacheHitRate') ? `<td class="right muted" style="font-size:12px">${fmtPct(s.cacheHitRate)}</td>` : ''}
-      ${show('messageCount') ? `<td class="right muted" style="font-size:12px">${s.messageCount}</td>` : ''}
-      ${show('duration') ? `<td class="right muted" style="font-size:12px">${fmtDuration(sessionDuration(s))}</td>` : ''}
+      ${show('cacheHitRate') ? `<td class="right muted">${fmtPct(s.cacheHitRate)}</td>` : ''}
+      ${show('messageCount') ? `<td class="right muted">${s.messageCount}</td>` : ''}
+      ${show('duration') ? `<td class="right muted">${fmtDuration(sessionDuration(s))}</td>` : ''}
     </tr>
     <tr class="session-detail-row" data-for="${escHtml(s.id)}">
       <td colspan="${colCount}" class="session-detail-cell">
@@ -1940,8 +1940,8 @@ function renderMessagesTable(messages, opts = {}) {
   const rows = messages.map((m, i) => {
     const totalTok = m.inputTokens + m.outputTokens + m.cacheCreationTokens + m.cacheReadTokens;
     const thinkCell = m.hasThinking
-      ? `<td class="right" style="font-size:11px" title="Extended thinking">💭</td>`
-      : `<td class="right muted" style="font-size:11px">—</td>`;
+      ? `<td class="right" title="Extended thinking">💭</td>`
+      : `<td class="right muted">—</td>`;
     const TRUNC = 120;
     const prompt = m.prompt || '';
     let promptCell;
@@ -1962,14 +1962,14 @@ function renderMessagesTable(messages, opts = {}) {
       : '';
     return `<tr>
       ${checkCell}
-      <td class="muted" style="font-size:11px;width:24px;text-align:right">${i + 1}</td>
-      <td class="muted nowrap" style="font-size:11px">${fmtDateTime(m.timestamp)}</td>
+      <td class="muted" style="width:24px;text-align:right">${i + 1}</td>
+      <td class="muted nowrap">${fmtDateTime(m.timestamp)}</td>
       <td class="msg-prompt">${promptCell}</td>
-      <td style="font-size:11px">${modelBadgeHtml(m.model, false)}</td>
-      <td class="right mono muted" style="font-size:11px">${totalTok ? fmtTokens(totalTok) : '—'}</td>
-      <td class="right mono" style="font-size:11px">${m.cost ? fmtCost(m.cost) : '—'}</td>
-      <td class="right muted" style="font-size:11px">${m.toolCalls || '—'}</td>
-      <td class="right muted" style="font-size:11px">${m.responseTimeMs ? fmtDuration(m.responseTimeMs) : '—'}</td>
+      <td>${modelBadgeHtml(m.model, false)}</td>
+      <td class="right mono muted">${totalTok ? fmtTokens(totalTok) : '—'}</td>
+      <td class="right mono">${m.cost ? fmtCost(m.cost) : '—'}</td>
+      <td class="right muted">${m.toolCalls || '—'}</td>
+      <td class="right muted">${m.responseTimeMs ? fmtDuration(m.responseTimeMs) : '—'}</td>
       ${thinkCell}
     </tr>`;
   }).join('');
