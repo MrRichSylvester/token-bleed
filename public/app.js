@@ -384,7 +384,7 @@ const OVERVIEW_CARD_DEFS_BASE = [
   { key: 'sessions',           label: 'Recent Sessions' },
 ];
 
-const DRAG_DOTS = `<svg width="12" height="14" viewBox="0 0 12 14" fill="none"><circle cx="3" cy="2" r="1.3" fill="currentColor"/><circle cx="9" cy="2" r="1.3" fill="currentColor"/><circle cx="3" cy="6" r="1.3" fill="currentColor"/><circle cx="9" cy="6" r="1.3" fill="currentColor"/><circle cx="3" cy="10" r="1.3" fill="currentColor"/><circle cx="9" cy="10" r="1.3" fill="currentColor"/></svg>`;
+const DRAG_DOTS = `<svg width="10" height="14" viewBox="0 0 10 14" fill="none"><circle cx="2.5" cy="2.5" r="1.5" fill="currentColor"/><circle cx="7.5" cy="2.5" r="1.5" fill="currentColor"/><circle cx="2.5" cy="7" r="1.5" fill="currentColor"/><circle cx="7.5" cy="7" r="1.5" fill="currentColor"/><circle cx="2.5" cy="11.5" r="1.5" fill="currentColor"/><circle cx="7.5" cy="11.5" r="1.5" fill="currentColor"/></svg>`;
 
 const state = {
   view: 'overview',
@@ -393,6 +393,7 @@ const state = {
   overviewSessionSort: 'cost',
   overviewHiddenCards: new Set(),
   overviewPanelOrder: null,
+  overviewEditMode: false,
   agentSources: ['claude', 'codex'],
   overviewFilter: {},
   sessionsPage: 0,
@@ -623,6 +624,15 @@ function animateProjectTokenBars(container) {
 
 // ── Overview panel drag-and-drop ──────────────────────────────
 
+function applyOverviewEditMode(container) {
+  const wrap = container.querySelector('.overview-panels');
+  if (wrap) wrap.classList.toggle('overview-panels--edit', state.overviewEditMode);
+  container.querySelector('.overview-top')?.querySelectorAll('.metric-card[data-card-id]').forEach(card => {
+    card.draggable = state.overviewEditMode;
+    card.style.cursor = state.overviewEditMode ? 'grab' : '';
+  });
+}
+
 function applyOverviewVisibility(container) {
   const hidden = state.overviewHiddenCards;
   container.querySelectorAll('[data-card-id]').forEach(el => {
@@ -643,7 +653,7 @@ function initOverviewPanelDrag(container) {
     const handle = panel.querySelector('.overview-panel-drag');
     if (!handle) return;
 
-    handle.addEventListener('mousedown', () => { panel.draggable = true; });
+    handle.addEventListener('mousedown', () => { if (state.overviewEditMode) panel.draggable = true; });
     handle.addEventListener('mouseleave', () => { if (!dragSrc) panel.draggable = false; });
 
     panel.addEventListener('dragstart', e => {
@@ -691,6 +701,66 @@ function initOverviewPanelDrag(container) {
       if (panel) wrap.appendChild(panel);
     });
   }
+
+  // Metric cards — draggable within the .overview-top block
+  const grid = container.querySelector('.overview-top');
+  if (grid) {
+    let cardDragSrc = null;
+    grid.querySelectorAll('.metric-card[data-card-id]').forEach(card => {
+      card.draggable = state.overviewEditMode;
+      card.style.cursor = state.overviewEditMode ? 'grab' : '';
+
+      card.addEventListener('dragstart', e => {
+        cardDragSrc = card;
+        card.classList.add('overview-panel--dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.stopPropagation();
+      });
+
+      card.addEventListener('dragend', e => {
+        cardDragSrc = null;
+        grid.querySelectorAll('.metric-card').forEach(c => c.classList.remove('overview-panel--dragging', 'overview-panel--drag-over'));
+        const order = [...grid.querySelectorAll('.metric-card[data-card-id]')].map(c => c.dataset.cardId);
+        localStorage.setItem('metric-card-order', JSON.stringify(order));
+        e.stopPropagation();
+      });
+
+      card.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        if (cardDragSrc && card !== cardDragSrc) {
+          grid.querySelectorAll('.metric-card').forEach(c => c.classList.remove('overview-panel--drag-over'));
+          card.classList.add('overview-panel--drag-over');
+        }
+      });
+
+      card.addEventListener('dragleave', e => { card.classList.remove('overview-panel--drag-over'); e.stopPropagation(); });
+
+      card.addEventListener('drop', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!cardDragSrc || cardDragSrc === card) return;
+        const cards = [...grid.querySelectorAll('.metric-card')];
+        const srcIdx = cards.indexOf(cardDragSrc);
+        const tgtIdx = cards.indexOf(card);
+        grid.insertBefore(cardDragSrc, srcIdx < tgtIdx ? card.nextSibling : card);
+      });
+    });
+
+    // Restore saved metric card order
+    const savedCardOrder = localStorage.getItem('metric-card-order');
+    if (savedCardOrder) {
+      try {
+        JSON.parse(savedCardOrder).forEach(id => {
+          const card = grid.querySelector(`[data-card-id="${id}"]`);
+          if (card) grid.appendChild(card);
+        });
+      } catch { }
+    }
+  }
+
+  applyOverviewEditMode(container);
 }
 
 // ── Usage Grid (GitHub-style) ──────────────────────────────────
@@ -998,7 +1068,7 @@ async function renderOverview() {
       ...(hasEntryCharts ? [{ key: 'chart-entrypoints', label: 'Entrypoints' }, { key: 'chart-thinking', label: 'Thinking Sessions' }] : []),
     ];
 
-    const panelHtml = id => `<div class="overview-panel-drag" title="Drag to reorder">${DRAG_DOTS}</div>`;
+    const panelHtml = id => `<div class="overview-panel-drag" title="Drag to reorder"></div>`;
 
     const content = document.getElementById('content');
     content.innerHTML = `
@@ -1134,9 +1204,39 @@ async function renderOverview() {
 
     applyOverviewVisibility(content);
     initOverviewPanelDrag(content);
-    wireFieldsBtn('overview-cards-btn', cardDefs, state.overviewHiddenCards, 'overview-hidden-cards', () => {
-      applyOverviewVisibility(content);
-    });
+    wireFieldsBtn('overview-cards-btn', cardDefs, state.overviewHiddenCards, 'overview-hidden-cards',
+      () => { applyOverviewVisibility(content); },
+      () => {
+        // Reset positions: clear panel order and metric card order
+        state.overviewPanelOrder = null;
+        localStorage.removeItem('overview-panel-order');
+        localStorage.removeItem('metric-card-order');
+        renderOverview();
+      },
+      {
+        extraFooter: `
+          <div class="sc-fields-divider"></div>
+          <button class="sc-fields-arrange-btn${state.overviewEditMode ? ' sc-fields-arrange-btn--on' : ''}" id="overview-edit-toggle">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12M4 4L1 7l3 3M10 4l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Arrange panels
+            <span class="sc-fields-arrange-indicator">${state.overviewEditMode ? 'on' : 'off'}</span>
+          </button>`,
+        onWire: (panel) => {
+          panel.querySelector('#overview-edit-toggle')?.addEventListener('click', e => {
+            e.stopPropagation();
+            state.overviewEditMode = !state.overviewEditMode;
+            localStorage.setItem('overview-edit-mode', state.overviewEditMode ? '1' : '');
+            applyOverviewEditMode(content);
+            const btn = panel.querySelector('#overview-edit-toggle');
+            if (btn) {
+              btn.classList.toggle('sc-fields-arrange-btn--on', state.overviewEditMode);
+              const ind = btn.querySelector('.sc-fields-arrange-indicator');
+              if (ind) ind.textContent = state.overviewEditMode ? 'on' : 'off';
+            }
+          });
+        }
+      }
+    );
     animateHbars(content);
     animateProjectTokenBars(content);
     requestAnimationFrame(() => {
@@ -2467,7 +2567,8 @@ function buildFieldsPanel(panel) {
 const EYE_ON = '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 7C2 7 4 3 7 3C10 3 12 7 12 7C12 7 10 11 7 11C4 11 2 7 2 7Z" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="1.8" fill="currentColor"/></svg>';
 const EYE_OFF = '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 2L12 12M3.5 4.5C2.7 5.3 2 6.2 2 7C2 7 4 11 7 11C8.1 11 9.1 10.5 9.9 9.8M5.1 2.2C5.7 2.1 6.4 2 7 2C10 2 12 7 12 7C11.6 7.7 11.1 8.4 10.5 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
 
-function buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, onchange) {
+function buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, onchange, onReset, options = {}) {
+  const { extraFooter = '', onWire } = options;
   panel.innerHTML = `
     <div class="sc-fields-list">
       ${defs.map(d => {
@@ -2482,6 +2583,7 @@ function buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, oncha
   }).join('')}
     </div>
     <div class="sc-fields-footer">
+      ${extraFooter}
       <button class="sc-fields-reset" id="${escHtml(btnId)}-reset">Reset defaults</button>
     </div>
   `;
@@ -2494,7 +2596,7 @@ function buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, oncha
       else hiddenSet.add(key);
       localStorage.setItem(storageKey, JSON.stringify([...hiddenSet]));
       updateFieldsBadge(btnId, hiddenSet.size, defs.length);
-      buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, onchange);
+      buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, onchange, onReset);
       onchange();
     });
   });
@@ -2504,9 +2606,12 @@ function buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, oncha
     hiddenSet.clear();
     localStorage.removeItem(storageKey);
     updateFieldsBadge(btnId, 0, defs.length);
-    buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, onchange);
-    onchange();
+    buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, onchange, onReset, options);
+    if (onReset) onReset();
+    else onchange();
   });
+
+  if (onWire) onWire(panel);
 }
 
 function updateFieldsBadge(btnId, hiddenCount, totalCount) {
@@ -2524,7 +2629,7 @@ function updateFieldsBadge(btnId, hiddenCount, totalCount) {
   }
 }
 
-function wireFieldsBtn(btnId, defs, hiddenSet, storageKey, onchange) {
+function wireFieldsBtn(btnId, defs, hiddenSet, storageKey, onchange, onReset, options = {}) {
   const fieldsBtn = document.getElementById(btnId);
   if (!fieldsBtn) return;
   fieldsBtn.addEventListener('click', e => {
@@ -2540,7 +2645,7 @@ function wireFieldsBtn(btnId, defs, hiddenSet, storageKey, onchange) {
     panel.id = panelId;
     panel.className = 'sc-dropdown-panel';
     document.body.appendChild(panel);
-    buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, onchange);
+    buildSimpleFieldsPanel(panel, defs, hiddenSet, storageKey, btnId, onchange, onReset, options);
     const r = fieldsBtn.getBoundingClientRect();
     panel.style.top = `${r.bottom + 6}px`;
     panel.style.left = `${r.left}px`;
@@ -4455,6 +4560,7 @@ function init() {
     const savedPanelOrder = localStorage.getItem('overview-panel-order');
     if (savedPanelOrder) state.overviewPanelOrder = JSON.parse(savedPanelOrder);
   } catch { }
+  state.overviewEditMode = localStorage.getItem('overview-edit-mode') === '1';
   renderCompareBar();
   renderPromptCompareBar();
   try {
