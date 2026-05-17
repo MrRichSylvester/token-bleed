@@ -2204,11 +2204,6 @@ td.msg-prompt {
   gap: 9px;
 }
 
-.project-sort-agent-label {
-  width: 70px;
-  flex-shrink: 0;
-}
-
 .project-sort-meta {
   display: grid;
   grid-template-columns: 280px 100px 88px 84px 96px 104px 22px;
@@ -2348,6 +2343,9 @@ td.msg-prompt {
 
 .project-title-block {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .project-title-row {
@@ -2364,8 +2362,8 @@ td.msg-prompt {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 90px;
-  max-width: 460px;
+  min-width: 0;
+  max-width: 560px;
 }
 
 .project-meta {
@@ -2390,7 +2388,7 @@ td.msg-prompt {
   flex-wrap: wrap;
   justify-content: flex-start;
   max-width: 190px;
-  flex-shrink: 0;
+  flex: 0 0 auto;
 }
 
 .project-stat {

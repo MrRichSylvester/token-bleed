@@ -401,7 +401,7 @@ const state = {
   sessionsFilter: { projectId: '', model: '' },
   sessionsSort: { key: 'startTime', dir: 'desc' },
   projectsFilter: {},
-  projectRollupByName: false,
+  projectRollupByName: true,
   projectsSort: { key: 'lastActivity', dir: 'desc' },
   promptCompSelection: [], // [{id, label}] max 6
   pcView: 'card',
@@ -959,7 +959,6 @@ function renderProjectSortHeader() {
   return `
     <div class="project-list-sort-header" aria-label="Project sort controls">
       <div class="project-sort-title-cell">
-        ${!state.projHiddenStats.has('agent') ? sortButtonHtml('project', 'source', 'Agent', state.projectsSort, 'project-sort-agent-label') : ''}
         ${sortButtonHtml('project', 'name', 'Project', state.projectsSort)}
       </div>
       <div class="project-sort-meta" style="grid-template-columns:${projectMetaGridCols()}">
@@ -1403,10 +1402,10 @@ function renderProjectCard(p) {
       <div class="project-card-header">
         <div class="project-title-block">
           <div class="project-title-row">
-            ${!state.projHiddenStats.has('agent') ? `<div class="project-agent-stack">${agentBadges}</div>` : ''}
             <div class="project-name">${escHtml(p.name)}</div>
-            <div class="project-path">${escHtml(p.path)}</div>
+            ${!state.projHiddenStats.has('agent') ? `<div class="project-agent-stack">${agentBadges}</div>` : ''}
           </div>
+          <div class="project-path">${escHtml(p.path)}</div>
         </div>
         <div class="project-meta" style="grid-template-columns:${projectMetaGridCols()}">
           ${!state.projHiddenStats.has('topModel') ? modelBadgeHtml(p.topModel, isLocal) : ''}
@@ -4581,7 +4580,8 @@ function init() {
     if (savedPanelOrder) state.overviewPanelOrder = JSON.parse(savedPanelOrder);
   } catch { }
   state.overviewEditMode = localStorage.getItem('overview-edit-mode') === '1';
-  state.projectRollupByName = localStorage.getItem('project-rollup-by-name') === '1';
+  const savedProjectRollup = localStorage.getItem('project-rollup-by-name');
+  if (savedProjectRollup !== null) state.projectRollupByName = savedProjectRollup === '1';
   renderCompareBar();
   renderPromptCompareBar();
   try {
