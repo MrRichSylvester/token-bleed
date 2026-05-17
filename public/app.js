@@ -370,18 +370,18 @@ function selectedPlanSavingsText(totalCost, daily, appSettings, activeSources, s
 // ── State ──────────────────────────────────────────────────────
 
 const OVERVIEW_CARD_DEFS_BASE = [
-  { key: 'metric-cost',        label: 'Est. API Costs' },
-  { key: 'metric-avg-cost',    label: 'Avg Cost / Session' },
-  { key: 'metric-sessions',    label: 'Sessions' },
-  { key: 'metric-activity',    label: 'Activity Grid' },
-  { key: 'metric-prompts',     label: 'Total Prompts' },
-  { key: 'metric-tokens',      label: 'Total Tokens' },
-  { key: 'metric-cache',       label: 'Cache Hit Rate' },
-  { key: 'chart-cost',         label: 'Daily Cost' },
-  { key: 'chart-sessions',     label: 'Daily Sessions' },
-  { key: 'chart-models',       label: 'Usage by Model' },
-  { key: 'chart-projects',     label: 'Project Comparison' },
-  { key: 'sessions',           label: 'Recent Sessions' },
+  { key: 'metric-cost', label: 'Est. API Costs' },
+  { key: 'metric-avg-cost', label: 'Avg Cost / Session' },
+  { key: 'metric-sessions', label: 'Sessions' },
+  { key: 'metric-activity', label: 'Activity Grid' },
+  { key: 'metric-prompts', label: 'Total Prompts' },
+  { key: 'metric-tokens', label: 'Total Tokens' },
+  { key: 'metric-cache', label: 'Cache Hit Rate' },
+  { key: 'chart-cost', label: 'Daily Cost' },
+  { key: 'chart-sessions', label: 'Daily Sessions' },
+  { key: 'chart-models', label: 'Usage by Model' },
+  { key: 'chart-projects', label: 'Project Comparison' },
+  { key: 'sessions', label: 'Recent Sessions' },
 ];
 
 const DRAG_DOTS = `<svg width="10" height="14" viewBox="0 0 10 14" fill="none"><circle cx="2.5" cy="2.5" r="1.5" fill="currentColor"/><circle cx="7.5" cy="2.5" r="1.5" fill="currentColor"/><circle cx="2.5" cy="7" r="1.5" fill="currentColor"/><circle cx="7.5" cy="7" r="1.5" fill="currentColor"/><circle cx="2.5" cy="11.5" r="1.5" fill="currentColor"/><circle cx="7.5" cy="11.5" r="1.5" fill="currentColor"/></svg>`;
@@ -792,7 +792,7 @@ function renderUsageGrid(dailyAll) {
 
   // Claude orange: rgb(217,119,87)  Codex blue: rgb(91,141,239)
   const CLAUDE_RGB = [217, 119, 87];
-  const CODEX_RGB  = [91, 141, 239];
+  const CODEX_RGB = [91, 141, 239];
   const LEVEL_OPACITY = [0, 0.32, 0.52, 0.72, 0.92];
 
   function getLevel(cost) {
@@ -1066,7 +1066,7 @@ async function renderOverview() {
     const hasEntryCharts = entrypointRows.length > 1;
     const cardDefs = [
       ...OVERVIEW_CARD_DEFS_BASE,
-      ];
+    ];
 
     const panelHtml = id => `<div class="overview-panel-drag" title="Drag to reorder"></div>`;
 
@@ -1309,7 +1309,7 @@ async function renderProjects() {
           ${fieldsButtonHtml('proj-fields-btn', state.projHiddenStats, PROJECT_STAT_DEFS.length)}
           <div class="sc-view-toggle project-rollup-toggle" aria-label="Project rollup mode">
             <button class="sc-view-btn${!state.projectRollupByName ? ' sc-view-btn--on' : ''}" data-project-rollup="separate">Separate</button>
-            <button class="sc-view-btn${state.projectRollupByName ? ' sc-view-btn--on' : ''}" data-project-rollup="name">Combine Names</button>
+            <button class="sc-view-btn${state.projectRollupByName ? ' sc-view-btn--on' : ''}" data-project-rollup="name">Group Projects</button>
           </div>
           <div class="sc-view-toggle agent-source-toggle" aria-label="Project agent filter">
             <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-project-source="claude">Claude Code</button>
@@ -4414,7 +4414,7 @@ function showAboutModal(options = {}) {
         const el = document.querySelector('#about-stat-stars .about-stat-val');
         if (el) el.textContent = stargazers_count?.toLocaleString() ?? '—';
       }
-    } catch {}
+    } catch { }
   })();
 
   function dismiss(runAfterGotIt = false) {
