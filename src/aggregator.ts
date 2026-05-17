@@ -29,16 +29,23 @@ export function sessionDuration(s: Session, mode: DurationMode): number {
   return mode === 'active' ? s.activeDuration : s.duration;
 }
 
-export function computeProjects(sessions: Session[]): ProjectSummary[] {
+export type ProjectRollupMode = 'id' | 'name';
+
+function normalizedProjectName(session: Session): string {
+  return (session.projectName.trim() || session.projectPath.trim() || session.projectId).toLowerCase();
+}
+
+export function computeProjects(sessions: Session[], rollupMode: ProjectRollupMode = 'id'): ProjectSummary[] {
   const map = new Map<string, Session[]>();
   for (const s of sessions) {
-    const list = map.get(s.projectId) ?? [];
+    const key = rollupMode === 'name' ? normalizedProjectName(s) : s.projectId;
+    const list = map.get(key) ?? [];
     list.push(s);
-    map.set(s.projectId, list);
+    map.set(key, list);
   }
 
   const projects: ProjectSummary[] = [];
-  for (const [projectId, pSessions] of map.entries()) {
+  for (const [projectKey, pSessions] of map.entries()) {
     const usage = emptyUsage();
     let cost = 0;
     const modelCounts: Record<string, number> = {};
@@ -56,20 +63,27 @@ export function computeProjects(sessions: Session[]): ProjectSummary[] {
       .filter(([, count]) => count > 0)
       .sort((a, b) => b[1] - a[1])
       .map(([source]) => source);
-    const first = pSessions[0];
+    const sortedSessions = [...pSessions].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
+    const first = sortedSessions[0];
+    const projectIds = [...new Set(pSessions.map((s) => s.projectId))];
+    const projectPaths = [...new Set(pSessions.map((s) => s.projectPath).filter(Boolean))];
+    const isNameRollup = rollupMode === 'name';
 
     projects.push({
-      id: projectId,
+      id: isNameRollup ? `name:${projectKey}` : projectKey,
       source: sources[0] ?? first?.source ?? 'claude',
       sources,
-      path: first?.projectPath ?? projectId,
-      name: first?.projectName ?? projectId,
+      projectIds,
+      projectName: first?.projectName ?? projectKey,
+      rollupMode,
+      path: isNameRollup && projectPaths.length > 1 ? `${projectPaths.length} project paths` : first?.projectPath ?? projectKey,
+      name: first?.projectName ?? projectKey,
       sessionCount: pSessions.length,
       totalCost: cost,
       totalTokens: totalTokens(usage),
       cacheHitRate: cacheHitRate(usage),
       topModel,
-      lastActivity: pSessions[0]?.endTime ?? '',
+      lastActivity: first?.endTime ?? '',
       usage,
     });
   }

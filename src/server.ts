@@ -218,8 +218,8 @@ app.get('/api/daily', async (req) => {
 });
 
 app.get('/api/projects', async (req) => {
-  const { since, source } = req.query as Record<string, string>;
-  return computeProjects(getSessions(since, source));
+  const { since, source, rollup } = req.query as Record<string, string>;
+  return computeProjects(getSessions(since, source), rollup === 'name' ? 'name' : 'id');
 });
 
 app.get('/api/sessions', async (req) => {
@@ -235,6 +235,7 @@ app.get('/api/sessions', async (req) => {
   if (!includeNoPrompt) filtered = filtered.filter((s) => !isNoPromptSession(s));
   if (query.source) filtered = filtered.filter((s) => s.source === query.source);
   if (query.projectId) filtered = filtered.filter((s) => s.projectId === query.projectId);
+  if (query.projectName) filtered = filtered.filter((s) => s.projectName.localeCompare(query.projectName, undefined, { sensitivity: 'base' }) === 0);
   if (query.model) filtered = filtered.filter((s) => s.primaryModel === query.model);
 
   const sort = query.sort ?? 'startTime';

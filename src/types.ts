@@ -37,6 +37,9 @@ export interface ProjectSummary {
   id: string;
   source: 'claude' | 'codex';
   sources: Array<'claude' | 'codex'>;
+  projectIds: string[];
+  projectName: string;
+  rollupMode: 'id' | 'name';
   path: string;
   name: string;
   sessionCount: number;

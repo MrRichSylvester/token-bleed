@@ -401,6 +401,7 @@ const state = {
   sessionsFilter: { projectId: '', model: '' },
   sessionsSort: { key: 'startTime', dir: 'desc' },
   projectsFilter: {},
+  projectRollupByName: false,
   projectsSort: { key: 'lastActivity', dir: 'desc' },
   promptCompSelection: [], // [{id, label}] max 6
   pcView: 'card',
@@ -1293,6 +1294,7 @@ async function renderProjects() {
   try {
     const activeSources = state.agentSources;
     const projectParams = activeSources.length === 1 ? { source: activeSources[0] } : {};
+    if (state.projectRollupByName) projectParams.rollup = 'name';
     const projects = await api.projects(projectParams);
     const sortedProjects = sortProjects(projects);
     state.data.projects = sortedProjects;
@@ -1303,8 +1305,12 @@ async function renderProjects() {
       <h1 class="page-title">Projects</h1>
       <div class="page-subtitle-row">
         <p class="page-subtitle">${periodLabel()} · ${sortedProjects.length} project${sortedProjects.length !== 1 ? 's' : ''}</p>
-        <div style="display:flex;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap">
           ${fieldsButtonHtml('proj-fields-btn', state.projHiddenStats, PROJECT_STAT_DEFS.length)}
+          <div class="sc-view-toggle project-rollup-toggle" aria-label="Project rollup mode">
+            <button class="sc-view-btn${!state.projectRollupByName ? ' sc-view-btn--on' : ''}" data-project-rollup="separate">Separate</button>
+            <button class="sc-view-btn${state.projectRollupByName ? ' sc-view-btn--on' : ''}" data-project-rollup="name">Combine Names</button>
+          </div>
           <div class="sc-view-toggle agent-source-toggle" aria-label="Project agent filter">
             <button class="sc-view-btn agent-source-btn${activeSources.includes('claude') ? ' sc-view-btn--on' : ''}" data-project-source="claude">Claude Code</button>
             <button class="sc-view-btn agent-source-btn${activeSources.includes('codex') ? ' sc-view-btn--on' : ''}" data-project-source="codex">Codex</button>
@@ -1317,6 +1323,16 @@ async function renderProjects() {
 
     content.querySelectorAll('[data-project-sort]').forEach(btn => {
       btn.addEventListener('click', () => setProjectSort(btn.dataset.projectSort));
+    });
+
+    content.querySelectorAll('[data-project-rollup]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const enabled = btn.dataset.projectRollup === 'name';
+        if (state.projectRollupByName === enabled) return;
+        state.projectRollupByName = enabled;
+        localStorage.setItem('project-rollup-by-name', enabled ? '1' : '');
+        renderProjects();
+      });
     });
 
     content.querySelectorAll('[data-project-source]').forEach(btn => {
@@ -1337,7 +1353,7 @@ async function renderProjects() {
 
     content.querySelectorAll('.project-card[data-project]').forEach(el => {
       el.querySelector('.project-card-header').addEventListener('click', () => {
-        toggleProject(el.dataset.project, el);
+        toggleProject(el);
       });
     });
   } catch (e) {
@@ -1345,7 +1361,7 @@ async function renderProjects() {
   }
 }
 
-async function toggleProject(projectId, cardEl) {
+async function toggleProject(cardEl) {
   const inner = cardEl.querySelector('.project-sessions-panel-inner');
   const isOpen = cardEl.classList.contains('expanded');
 
@@ -1360,7 +1376,12 @@ async function toggleProject(projectId, cardEl) {
   inner.innerHTML = '<div class="loading-state" style="min-height:80px"><div class="spinner"></div></div>';
 
   try {
-    const { sessions } = await api.sessions({ projectId, limit: 50, offset: 0 });
+    const activeSources = state.agentSources;
+    const sourceParams = activeSources.length === 1 ? { source: activeSources[0] } : {};
+    const projectParams = cardEl.dataset.projectRollupMode === 'name'
+      ? { projectName: cardEl.dataset.projectName || '' }
+      : { projectId: cardEl.dataset.project || '' };
+    const { sessions } = await api.sessions({ ...projectParams, ...sourceParams, limit: 50, offset: 0 });
     inner.dataset.loaded = '1';
     if (sessions.length === 0) {
       inner.innerHTML = '<div class="empty-state" style="min-height:60px"><div class="empty-msg">No sessions found</div></div>';
@@ -1378,7 +1399,7 @@ function renderProjectCard(p) {
   const isLocal = !p.totalCost && !isRemoteModelName(p.topModel);
   const agentBadges = (p.sources && p.sources.length ? p.sources : [p.source]).map(source => agentBadgeHtml(source, { short: true })).join('');
   return `
-    <div class="project-card" data-project="${escHtml(p.id)}">
+    <div class="project-card" data-project="${escHtml(p.id)}" data-project-name="${escHtml(p.projectName || p.name)}" data-project-rollup-mode="${escHtml(p.rollupMode || 'id')}">
       <div class="project-card-header">
         <div class="project-title-block">
           <div class="project-title-row">
@@ -4560,6 +4581,7 @@ function init() {
     if (savedPanelOrder) state.overviewPanelOrder = JSON.parse(savedPanelOrder);
   } catch { }
   state.overviewEditMode = localStorage.getItem('overview-edit-mode') === '1';
+  state.projectRollupByName = localStorage.getItem('project-rollup-by-name') === '1';
   renderCompareBar();
   renderPromptCompareBar();
   try {
