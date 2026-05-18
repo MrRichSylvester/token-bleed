@@ -55,7 +55,7 @@ Token Bleed fixes that. It reads your local Claude Code, Codex, and OpenCode ses
 
 ### Cost visibility, not estimates
 
-Total spend, daily trends, average session cost, and per-message breakdowns. Filtered by time period. Accurate to Anthropic's published pricing including cache write and cache read rates.
+Total spend, daily trends, average session cost, and per-message breakdowns. Filtered by time period and agent: Claude Code, Codex, or OpenCode. Accurate to configured model pricing including cache write and cache read rates.
 
 ### When you shipped
 
@@ -98,17 +98,25 @@ Token Bleed isn't just a dashboard—it helps you connect Claude Code to non-Ant
 
 ## How it works
 
-Claude Code writes a `.jsonl` file for every session to `~/.claude/projects/`. Codex writes rollout logs to `~/.codex/sessions/`. OpenCode stores session data in `~/.local/share/opencode/opencode.db`. Token Bleed reads those local sources on startup, parses token usage and model info, and computes cost using built-in model pricing or OpenCode's recorded cost where available.
+Token Bleed reads local usage data from the tools you already run:
+
+| Agent | Local source |
+| ----- | ------------ |
+| Claude Code | `~/.claude/projects/**/*.jsonl` |
+| Codex | `~/.codex/sessions/**/*.jsonl` |
+| OpenCode | `~/.local/share/opencode/opencode.db` |
+
+It parses token usage and model info, then computes cost using built-in pricing, custom pricing from Settings, or OpenCode's recorded cost where no Token Bleed pricing is configured.
 
 No network requests. No accounts. Runs at `localhost:3847`.
 
-Data refreshes from disk every 5 minutes or on demand via the Refresh button. When an OpenCode server is reachable, Token Bleed also listens for OpenCode events and refreshes live as sessions change.
+Data refreshes from disk every 5 minutes or on demand via the Refresh button.
 
 ---
 
 ## Models supported
 
-Built-in pricing for Claude and Codex models. OpenCode sessions use the costs recorded by OpenCode when available. Prefix matching handles future versioned IDs automatically.
+Built-in pricing for Claude and Codex models. OpenCode models and other custom/local models can be priced in Settings; if no custom price exists, OpenCode sessions fall back to the cost recorded by OpenCode. Prefix matching handles future versioned IDs automatically.
 
 ### Claude (Claude Code)
 
@@ -164,7 +172,7 @@ The server exposes a REST API if you want to build on top of it.
 | GET    | `/api/refresh`               | Invalidate the in-memory cache                                |
 | POST   | `/api/settings`              | Update `cleanupPeriodDays` in `~/.claude/settings.json`       |
 
-All list endpoints accept a `?since=YYYY-MM-DD` query param to filter by date.
+All list endpoints accept a `?since=YYYY-MM-DD` query param to filter by date. Endpoints that return sessions, projects, prompts, models, stats, or daily activity also accept `?source=claude`, `?source=codex`, `?source=opencode`, or comma-separated combinations.
 
 ---
 
