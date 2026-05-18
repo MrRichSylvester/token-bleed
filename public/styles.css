@@ -1190,6 +1190,8 @@ td.msg-prompt {
 .agent-badge--claude .agent-badge-icon { background: var(--anthropic-dim); color: var(--anthropic); }
 .agent-badge--codex { border-color: rgba(91, 141, 239, 0.24); }
 .agent-badge--codex .agent-badge-icon { background: var(--blue-dim); color: var(--blue); }
+.agent-badge--opencode { border-color: rgba(0, 194, 129, 0.24); }
+.agent-badge--opencode .agent-badge-icon { background: var(--accent-dim); color: var(--accent); }
 
 .agent-source-toggle {
   margin-left: auto;
@@ -1215,6 +1217,13 @@ td.msg-prompt {
 .agent-source-btn[data-session-source="codex"].sc-view-btn--on {
   background: var(--blue-dim);
   color: var(--blue);
+}
+
+.agent-source-btn[data-project-source="opencode"].sc-view-btn--on,
+.agent-source-btn[data-overview-source="opencode"].sc-view-btn--on,
+.agent-source-btn[data-session-source="opencode"].sc-view-btn--on {
+  background: var(--accent-dim);
+  color: var(--accent);
 }
 
 /* ── Badges ── */
@@ -2353,6 +2362,7 @@ td.msg-prompt {
   align-items: center;
   gap: 9px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .project-path {
@@ -2385,10 +2395,21 @@ td.msg-prompt {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-start;
-  max-width: 190px;
-  flex: 0 0 auto;
+  max-width: min(320px, 46%);
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.project-agent-stack .agent-badge {
+  flex: 0 1 auto;
+  max-width: 116px;
+}
+
+.project-agent-stack .agent-badge-label {
+  min-width: 0;
 }
 
 .project-stat {

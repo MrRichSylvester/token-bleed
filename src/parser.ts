@@ -5,6 +5,7 @@ import type { Session, ParsedData, RawEntry, TokenUsage, SessionMessage } from '
 import { calculateCost } from './pricing.js';
 import { computeProjects, computeStats, computeDaily, computeModelStats } from './aggregator.js';
 import { parseCodexSessionMessages, parseCodexSessions } from './codexParser.js';
+import { parseOpenCodeSessionMessages, parseOpenCodeSessions } from './opencodeParser.js';
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
@@ -255,7 +256,7 @@ function parseClaudeSessions(): Session[] {
 }
 
 function parseAll(): ParsedData {
-  const sessions = [...parseClaudeSessions(), ...parseCodexSessions()];
+  const sessions = [...parseClaudeSessions(), ...parseCodexSessions(), ...parseOpenCodeSessions()];
 
   sessions.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
@@ -292,6 +293,7 @@ type PendingResponse = {
 
 export function parseSessionMessages(sessionId: string, projectId: string, source: Session['source'] = 'claude'): SessionMessage[] {
   if (source === 'codex') return parseCodexSessionMessages(sessionId);
+  if (source === 'opencode') return parseOpenCodeSessionMessages(sessionId);
 
   const filePath = path.join(CLAUDE_PROJECTS_DIR, projectId, `${sessionId}.jsonl`);
   let raw: string;

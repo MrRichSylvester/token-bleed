@@ -9,7 +9,7 @@ export interface TokenUsage {
 
 export interface Session {
   id: string;
-  source: 'claude' | 'codex';
+  source: AgentSource;
   projectId: string;
   projectName: string;
   projectPath: string;
@@ -35,8 +35,8 @@ export interface Session {
 
 export interface ProjectSummary {
   id: string;
-  source: 'claude' | 'codex';
-  sources: Array<'claude' | 'codex'>;
+  source: AgentSource;
+  sources: AgentSource[];
   projectIds: string[];
   projectName: string;
   rollupMode: 'id' | 'name';
@@ -94,6 +94,7 @@ export interface DailyActivity {
   tokens: number;
   claudeCost: number;
   codexCost: number;
+  opencodeCost: number;
 }
 
 export interface ParsedData {
@@ -125,7 +126,7 @@ export interface PromptTurn extends SessionMessage {
   sessionId: string;
   projectId: string;
   projectName: string;
-  source: 'claude' | 'codex';
+  source: AgentSource;
   sessionStartTime: string;
   totalTokens: number;
   cacheHitRate: number;
@@ -146,6 +147,8 @@ export interface Tip {
   body: string;
   value?: number;
 }
+
+export type AgentSource = 'claude' | 'codex' | 'opencode';
 
 export interface RawEntry {
   type?: string;

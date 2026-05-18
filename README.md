@@ -1,6 +1,6 @@
 # Token Bleed
 
-**See exactly what Claude Code and Codex are costing you. Per session. Per project. Per prompt.**
+**See exactly what Claude Code, Codex, and OpenCode are costing you. Per session. Per project. Per prompt.**
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/built_with-TypeScript-3178c6.svg)](https://www.typescriptlang.org/)
@@ -43,11 +43,11 @@ token-bleed fix-retention
 
 ## The problem
 
-Claude Code and Codex are productive. They're also expensive when you're not watching.
+Claude Code, Codex, and OpenCode are productive. They're also expensive when you're not watching.
 
 They manage context automatically, fire tool calls in the background, and read files you didn't ask them to read. By the time your bill lands, you have no idea which project burned $40 or which prompt pattern is costing you three times what it should.
 
-Token Bleed fixes that. It reads your local Claude Code and Codex session logs and turns them into a real cost dashboard. No API key, no cloud, no telemetry. Your data never leaves your machine.
+Token Bleed fixes that. It reads your local Claude Code, Codex, and OpenCode session data and turns it into a real cost dashboard. No API key, no cloud, no telemetry. Your data never leaves your machine.
 
 ---
 
@@ -59,7 +59,7 @@ Total spend, daily trends, average session cost, and per-message breakdowns. Fil
 
 ### When you shipped
 
-Your Claude Code and Codex sessions rendered as a contribution-style heatmap, with colors blending between the two based on your daily usage. See your build cadence at a glance, not just what you spent.
+Your coding-agent sessions rendered as a contribution-style heatmap, with colors blending by agent based on your daily usage. See your build cadence at a glance, not just what you spent.
 
 ![Activity Heatmap](images/activity.png)
 
@@ -98,17 +98,17 @@ Token Bleed isn't just a dashboard—it helps you connect Claude Code to non-Ant
 
 ## How it works
 
-Claude Code writes a `.jsonl` file for every session to `~/.claude/projects/`. Codex writes rollout logs to `~/.codex/sessions/`. Token Bleed reads those files on startup, parses token usage and model info from each assistant turn, and computes cost using built-in model pricing where available.
+Claude Code writes a `.jsonl` file for every session to `~/.claude/projects/`. Codex writes rollout logs to `~/.codex/sessions/`. OpenCode stores session data in `~/.local/share/opencode/opencode.db`. Token Bleed reads those local sources on startup, parses token usage and model info, and computes cost using built-in model pricing or OpenCode's recorded cost where available.
 
 No network requests. No accounts. Runs at `localhost:3847`.
 
-Data refreshes from disk every 5 minutes or on demand via the Refresh button.
+Data refreshes from disk every 5 minutes or on demand via the Refresh button. When an OpenCode server is reachable, Token Bleed also listens for OpenCode events and refreshes live as sessions change.
 
 ---
 
 ## Models supported
 
-Built-in pricing for Claude and Codex models. Prefix matching handles future versioned IDs automatically.
+Built-in pricing for Claude and Codex models. OpenCode sessions use the costs recorded by OpenCode when available. Prefix matching handles future versioned IDs automatically.
 
 ### Claude (Claude Code)
 
@@ -140,7 +140,7 @@ By default, local and custom models show usage data but report $0 cost until the
 
 ## Local model quirks
 
-Token Bleed works with any model Claude Code or Codex connects to, including local models via Ollama or similar.
+Token Bleed works with any model Claude Code, Codex, or OpenCode connects to, including local models via Ollama or similar.
 
 One thing to know: local model servers do not implement prompt caching, so they report the full conversation context as `input_tokens` on every turn instead of incremental deltas. This means input token totals for local model sessions will be significantly higher than equivalent Claude sessions and are not directly comparable. Session Compare and Model Compare flag this when a local model is present.
 
