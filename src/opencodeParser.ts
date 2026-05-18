@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import type { Session, SessionMessage, TokenUsage } from './types.js';
+import { calculateCost, getModelPricing } from './pricing.js';
 
 const OPENCODE_HOME = path.join(os.homedir(), '.local', 'share', 'opencode');
 const OPENCODE_DB = path.join(OPENCODE_HOME, 'opencode.db');
@@ -164,6 +165,10 @@ function totalInput(usage: TokenUsage): number {
   return usage.inputTokens + usage.cacheCreationTokens + usage.cacheReadTokens;
 }
 
+function costWithPricingFallback(model: string, usage: TokenUsage, recordedCost: unknown): number {
+  return getModelPricing(model) ? calculateCost(model, usage) : asNumber(recordedCost);
+}
+
 function textFromParts(parts: OpenCodePartRow[]): string {
   return parts
     .map((part) => {
@@ -258,6 +263,7 @@ function parseOpenCodeSessionRow(row: OpenCodeSessionRow): Session | null {
   const primaryModel = modelName(row.model);
   if (primaryModel !== 'unknown') models.add(primaryModel);
   const usage = usageFromSession(row);
+  const cost = costWithPricingFallback(primaryModel, usage, row.cost);
   const projectPath = asString(row.directory) || asString(row.project_worktree) || 'OpenCode';
   const startTime = isoFromMs(row.time_created);
   const endTime = isoFromMs(row.time_updated) || startTime;
@@ -275,7 +281,7 @@ function parseOpenCodeSessionRow(row: OpenCodeSessionRow): Session | null {
     models: [...models],
     primaryModel,
     usage,
-    cost: asNumber(row.cost),
+    cost,
     messageCount,
     toolCallCount,
     firstPrompt: firstPrompt || asString(row.title) || '(no prompt)',
@@ -340,7 +346,7 @@ export function parseOpenCodeSessionMessages(sessionId: string): SessionMessage[
     turn.outputTokens += usage.outputTokens;
     turn.cacheCreationTokens += usage.cacheCreationTokens;
     turn.cacheReadTokens += usage.cacheReadTokens;
-    turn.cost += asNumber(data.cost);
+    turn.cost += costWithPricingFallback(turn.model, usage, data.cost);
 
     const msgParts = partsByMessage.get(id) ?? [];
     turn.toolCalls += msgParts.filter((part) => parseJsonObject(part.data).type === 'tool').length;

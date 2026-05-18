@@ -42,15 +42,23 @@ export function setCustomPricing(overrides: Record<string, ModelPricing>): void 
   _customPricing = { ...overrides };
 }
 
+function pricingAliases(model: string): string[] {
+  const stripped = model.replace(/^opencode\//i, '');
+  return stripped === model ? [model, `opencode/${model}`] : [model, stripped];
+}
+
 export function getModelPricing(model: string): ModelPricing | null {
-  if (_customPricing[model]) return _customPricing[model];
-  if (PRICING[model]) return PRICING[model];
+  const aliases = pricingAliases(model);
+  for (const alias of aliases) {
+    if (_customPricing[alias]) return _customPricing[alias];
+    if (PRICING[alias]) return PRICING[alias];
+  }
   // Prefix match for future versioned models
   for (const [key, pricing] of Object.entries(_customPricing)) {
-    if (model.startsWith(key) || key.startsWith(model)) return pricing;
+    if (aliases.some((alias) => alias.startsWith(key) || key.startsWith(alias))) return pricing;
   }
   for (const [key, pricing] of Object.entries(PRICING)) {
-    if (model.startsWith(key) || key.startsWith(model)) return pricing;
+    if (aliases.some((alias) => alias.startsWith(key) || key.startsWith(alias))) return pricing;
   }
   return null;
 }

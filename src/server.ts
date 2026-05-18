@@ -11,7 +11,6 @@ import { getData, invalidateCache, parseSessionMessages } from './parser.js';
 import { filterByDate, computeProjects, computeStats, computeDaily, computeModelStats, sessionDuration } from './aggregator.js';
 import { PRICING, LEGACY_MODEL_KEYS, setCustomPricing } from './pricing.js';
 import { computeTips } from './tips.js';
-import { openCodeServerStatus, proxyOpenCodeEvents } from './opencodeServer.js';
 import type { AppSettings, PromptTurn, Session } from './types.js';
 import {
   readProviders, writeProviders,
@@ -340,12 +339,6 @@ app.get('/api/meta', async () => {
   const settings = readClaudeSettings();
   const cleanupPeriodDays = typeof settings.cleanupPeriodDays === 'number' ? settings.cleanupPeriodDays : 30;
   return { earliestDate, latestDate, cleanupPeriodDays, codexHistory: readCodexHistorySettings() };
-});
-
-app.get('/api/opencode/status', async () => openCodeServerStatus());
-
-app.get('/api/opencode/events', async (req, reply) => {
-  return proxyOpenCodeEvents(req, reply, invalidateCache);
 });
 
 app.post('/api/settings', async (req, reply) => {

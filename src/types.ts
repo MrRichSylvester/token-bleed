@@ -95,6 +95,9 @@ export interface DailyActivity {
   claudeCost: number;
   codexCost: number;
   opencodeCost: number;
+  claudeTokens: number;
+  codexTokens: number;
+  opencodeTokens: number;
 }
 
 export interface ParsedData {

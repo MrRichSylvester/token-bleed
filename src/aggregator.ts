@@ -25,6 +25,15 @@ function totalTokens(u: TokenUsage): number {
   return u.inputTokens + u.outputTokens + u.cacheCreationTokens + u.cacheReadTokens;
 }
 
+function localDateKey(iso: string): string {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return iso.slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function sessionDuration(s: Session, mode: DurationMode): number {
   return mode === 'active' ? s.activeDuration : s.duration;
 }
@@ -133,15 +142,35 @@ export function computeStats(sessions: Session[], projects: ProjectSummary[]): G
 export function computeDaily(sessions: Session[]): DailyActivity[] {
   const map = new Map<string, DailyActivity>();
   for (const s of sessions) {
-    const date = s.startTime.slice(0, 10);
-    const entry = map.get(date) ?? { date, cost: 0, sessions: 0, messages: 0, tokens: 0, claudeCost: 0, codexCost: 0, opencodeCost: 0 };
+    const date = localDateKey(s.startTime);
+    const entry = map.get(date) ?? {
+      date,
+      cost: 0,
+      sessions: 0,
+      messages: 0,
+      tokens: 0,
+      claudeCost: 0,
+      codexCost: 0,
+      opencodeCost: 0,
+      claudeTokens: 0,
+      codexTokens: 0,
+      opencodeTokens: 0,
+    };
+    const tokens = totalTokens(s.usage);
     entry.cost += s.cost;
     entry.sessions += 1;
     entry.messages += s.messageCount;
-    entry.tokens += totalTokens(s.usage);
-    if (s.source === 'claude') entry.claudeCost += s.cost;
-    else if (s.source === 'codex') entry.codexCost += s.cost;
-    else if (s.source === 'opencode') entry.opencodeCost += s.cost;
+    entry.tokens += tokens;
+    if (s.source === 'claude') {
+      entry.claudeCost += s.cost;
+      entry.claudeTokens += tokens;
+    } else if (s.source === 'codex') {
+      entry.codexCost += s.cost;
+      entry.codexTokens += tokens;
+    } else if (s.source === 'opencode') {
+      entry.opencodeCost += s.cost;
+      entry.opencodeTokens += tokens;
+    }
     map.set(date, entry);
   }
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));

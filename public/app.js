@@ -62,6 +62,13 @@ function fmtDateTime(iso) {
   return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function localDateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function displayModelName(model) {
   return String(model || '').replace(/^opencode\//i, '');
 }
@@ -73,16 +80,13 @@ function modelBadgeHtml(model, isLocal) {
   const displayModel = displayModelName(model);
   const safeModel = escHtml(model);
   const safeDisplayModel = escHtml(displayModel);
-  if (isLocal) {
-    return `<span class="model-badge local" title="${safeModel}">${safeDisplayModel}</span>`;
-  }
   if (/^(claude-|anthropic\/)/i.test(model)) {
     return `<span class="model-badge claude" title="${safeModel}">${safeDisplayModel}</span>`;
   }
   if (/^(gpt-|openai\/|codex-|o[1345])/i.test(model)) {
     return `<span class="model-badge codex" title="${safeModel}">${safeDisplayModel}</span>`;
   }
-  if (/^opencode\//i.test(model)) {
+  if (isLocal || /^opencode\//i.test(model) || !isRemoteModelName(model)) {
     return `<span class="model-badge local" title="${safeModel}">${safeDisplayModel}</span>`;
   }
   return `<span class="model-badge unknown" title="${safeModel}">${safeDisplayModel}</span>`;
@@ -194,7 +198,6 @@ const api = {
   providerStopProxy: (provider) => api.fetch('/api/providers/stop-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider }) }),
   providerRestartProxy: (provider) => api.fetch('/api/providers/restart-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider }) }),
   ollamaModels: () => api.fetch('/api/providers/ollama-models'),
-  opencodeStatus: () => api.fetch('/api/opencode/status'),
   openFile: () => api.fetch('/api/open-file'),
 };
 
@@ -812,8 +815,8 @@ function renderUsageGrid(dailyAll) {
   const byDate = {};
   for (const d of dailyAll) byDate[d.date] = d;
 
-  const maxCost = Math.max(...dailyAll.map(d => d.cost), 0.001);
-  const activeDays = dailyAll.filter(d => d.cost > 0).length;
+  const maxTokens = Math.max(...dailyAll.map(d => d.tokens || 0), 1);
+  const activeDays = dailyAll.filter(d => (d.sessions || 0) > 0 || (d.tokens || 0) > 0).length;
 
   // Align back to the Sunday of the week containing gridStart
   const alignedStart = new Date(gridStart);
@@ -829,22 +832,22 @@ function renderUsageGrid(dailyAll) {
   };
   const LEVEL_OPACITY = [0, 0.32, 0.52, 0.72, 0.92];
 
-  function getLevel(cost) {
-    if (cost === 0) return 0;
-    const pct = cost / maxCost;
+  function getLevel(data) {
+    if (!data || ((data.sessions || 0) === 0 && (data.tokens || 0) === 0)) return 0;
+    const pct = (data.tokens || 0) / maxTokens;
     if (pct < 0.1) return 1;
     if (pct < 0.3) return 2;
     if (pct < 0.6) return 3;
     return 4;
   }
 
-  function blendCellColor(sourceCosts, level) {
-    const entries = Object.entries(sourceCosts).filter(([, cost]) => cost > 0);
-    const total = entries.reduce((sum, [, cost]) => sum + cost, 0);
+  function blendCellColor(sourceAmounts, level) {
+    const entries = Object.entries(sourceAmounts).filter(([, amount]) => amount > 0);
+    const total = entries.reduce((sum, [, amount]) => sum + amount, 0);
     if (total === 0 || level === 0) return null;
-    const [r, g, b] = entries.reduce((acc, [source, cost]) => {
+    const [r, g, b] = entries.reduce((acc, [source, amount]) => {
       const rgb = SOURCE_RGB[source] || SOURCE_RGB.codex;
-      const weight = cost / total;
+      const weight = amount / total;
       return [acc[0] + rgb[0] * weight, acc[1] + rgb[1] * weight, acc[2] + rgb[2] * weight];
     }, [0, 0, 0]);
     return `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${LEVEL_OPACITY[level]})`;
@@ -860,7 +863,7 @@ function renderUsageGrid(dailyAll) {
       const date = new Date(alignedStart);
       date.setDate(alignedStart.getDate() + w * 7 + d);
       const isFuture = date > today;
-      const dateStr = date.toISOString().slice(0, 10);
+      const dateStr = localDateKey(date);
 
       if (d === 0 && !isFuture && date.getMonth() !== lastMonth) {
         lastMonth = date.getMonth();
@@ -874,14 +877,15 @@ function renderUsageGrid(dailyAll) {
         const data = byDate[dateStr];
         const cost = data?.cost || 0;
         const sessions = data?.sessions || 0;
-        const tip = cost > 0
-          ? `${dateStr}  ${fmtCost(cost)}  ${sessions} session${sessions !== 1 ? 's' : ''}`
+        const tokens = data?.tokens || 0;
+        const tip = sessions > 0 || tokens > 0
+          ? `${dateStr}  ${fmtCost(cost)}  ${sessions} session${sessions !== 1 ? 's' : ''}  ${fmtTokens(tokens)} tokens`
           : `${dateStr}  no activity`;
-        const level = getLevel(cost);
+        const level = getLevel(data);
         const blended = blendCellColor({
-          claude: data?.claudeCost || 0,
-          codex: data?.codexCost || 0,
-          opencode: data?.opencodeCost || 0,
+          claude: data?.claudeTokens || 0,
+          codex: data?.codexTokens || 0,
+          opencode: data?.opencodeTokens || 0,
         }, level);
         const styleVal = level > 0
           ? `--cd:${Math.floor(Math.random() * 2400)}ms${blended ? `;--cell-color:${blended}` : ''}`
@@ -3483,8 +3487,10 @@ async function renderSettings() {
       try {
         const cp = collectCustomPricing();
         await api.saveAppSettings({ customPricing: cp });
+        await api.refresh();
         state.appSettings.customPricing = cp;
-        status.textContent = 'Saved — refresh data to apply';
+        state.data.allSessions = null;
+        status.textContent = 'Saved — dashboard updated';
         setTimeout(() => { status.textContent = ''; }, 3000);
       } catch {
         status.textContent = 'Error saving';
@@ -4532,35 +4538,6 @@ function initAppearancePanel() {
   });
 }
 
-function initOpenCodeLiveUpdates() {
-  if (!window.EventSource) return;
-
-  let refreshTimer = null;
-  let refreshing = false;
-  const source = new EventSource('/api/opencode/events');
-
-  const scheduleRefresh = () => {
-    clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(async () => {
-      if (refreshing) return;
-      refreshing = true;
-      try {
-        await api.refresh();
-        await renderView();
-      } catch {
-        // Live updates are opportunistic; manual refresh still works.
-      } finally {
-        refreshing = false;
-      }
-    }, 700);
-  };
-
-  source.addEventListener('message', scheduleRefresh);
-  source.addEventListener('storage.write', scheduleRefresh);
-  source.addEventListener('session.updated', scheduleRefresh);
-  source.addEventListener('message.updated', scheduleRefresh);
-}
-
 // ── Bootstrap ──────────────────────────────────────────────────
 
 function init() {
@@ -4583,7 +4560,6 @@ function init() {
   renderPeriodSelector();
   renderCompareBar();
   renderPromptCompareBar();
-  initOpenCodeLiveUpdates();
   updateProviderIndicator();
 
   // Nav clicks
